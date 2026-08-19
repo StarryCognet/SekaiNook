@@ -90,18 +90,29 @@ export default function FamilyDashboard() {
   /** 提交任务打卡：上传图片（如有）→ 写入流水 */
   const handleTaskSubmit = async () => {
     if (!activeTask) return;
-    try {
-      let imageUrl: string | undefined;
-      if (imageFile) {
-        setUploading(true);
+    let imageUrl: string | undefined;
+    let uploadFailed = false;
+
+    // 上传图片（失败不阻断打卡，仅提示）
+    if (imageFile) {
+      setUploading(true);
+      try {
         const result = await uploadImage(imageFile);
         if (result) imageUrl = result.url;
+      } catch (e) {
+        uploadFailed = true;
       }
+    }
+
+    try {
       await addLedgerRecord(activeTask, { note: note.trim() || undefined, imageUrl });
       await refreshBalance();
       await loadLedger();
       const sign = activeTask.value > 0 ? '+' : '';
       message.success(`${sign}${activeTask.value} 积分！${activeTask.name}${activeTask.value > 0 ? '真棒' : ''}`);
+      if (uploadFailed) {
+        message.warning('图片上传失败，但打卡已成功');
+      }
       closeTaskModal();
     } catch (e) {
       message.error('操作失败，请重试');
