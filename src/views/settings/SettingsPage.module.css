@@ -1,0 +1,128 @@
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+
+/* ===== 应用信息卡片 ===== */
+.infoCard {
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(26, 26, 46, 0.06);
+}
+
+.infoHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.infoIcon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #1a1a2e, #2a2a4a);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  flex-shrink: 0;
+}
+
+.infoText {
+  display: flex;
+  flex-direction: column;
+}
+
+.appName {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.appDesc {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.versionRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.versionLabel {
+  font-size: 14px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.versionTag {
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0 12px;
+}
+
+/* ===== 版本日志卡片 ===== */
+.logCard {
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(26, 26, 46, 0.06);
+}
+
+.logTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a2e;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.logEntry {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 4px;
+}
+
+.logHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logVersion {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.logDate {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.logTitleText {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.logChanges {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.7;
+}
+
+.logChanges li {
+  margin-bottom: 2px;
+}
