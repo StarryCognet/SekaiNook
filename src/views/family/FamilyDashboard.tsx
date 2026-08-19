@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Modal, message } from 'antd';
+import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Modal, Image, message } from 'antd';
 import {
   PlusOutlined,
   MinusOutlined,
@@ -13,6 +13,7 @@ import {
   AppstoreOutlined,
   CameraOutlined,
   PictureOutlined,
+  EyeOutlined,
 } from '@ant-design/icons';
 import { addLedgerRecord } from '../../api/familyLedger';
 import { uploadImage } from '../../api/upload';
@@ -283,15 +284,30 @@ export default function FamilyDashboard() {
                 title={record.task_name}
                 description={formatTime(record.created_at)}
               />
-              <span
-                className={`num ${styles.recordAmount}`}
-                style={{
-                  color: record.amount >= 0 ? designTokens.colors.success : designTokens.colors.danger,
-                }}
-              >
-                {record.amount >= 0 ? '+' : ''}
-                {record.amount}
-              </span>
+              <div className={styles.recordRight}>
+                <span
+                  className={`num ${styles.recordAmount}`}
+                  style={{
+                    color: record.amount >= 0 ? designTokens.colors.success : designTokens.colors.danger,
+                  }}
+                >
+                  {record.amount >= 0 ? '+' : ''}
+                  {record.amount}
+                </span>
+                {/* 备注 */}
+                {record.note && <div className={styles.recordNote}>{record.note}</div>}
+                {/* 图片缩略图（点击查看大图） */}
+                {record.image_url && (
+                  <Image
+                    src={record.image_url}
+                    alt={record.task_name}
+                    width={48}
+                    height={48}
+                    className={styles.recordImage}
+                    preview={{ mask: <EyeOutlined /> }}
+                  />
+                )}
+              </div>
             </List.Item>
           )}
         />
