@@ -1,15 +1,15 @@
 /**
  * Cloudflare Pages Function：图片上传到 R2。
- * 需要在 Pages 项目 Settings → Bindings → R2 中绑定 bucket，绑定名 SEKAINOOK_BUCKET。
+ * 需要在 Pages 项目 Settings → Bindings → R2 中绑定 bucket，绑定名 STARRYMIKU_BUCKET。
  * 路由：POST /api/upload
  */
 
 interface Env {
-  SEKAINOOK_BUCKET: R2Bucket;
+  STARRYMIKU_BUCKET: R2Bucket;
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const bucket = context.env.SEKAINOOK_BUCKET;
+  const bucket = context.env.STARRYMIKU_BUCKET;
 
   // CORS 预检
   if (context.request.method === 'OPTIONS') {
