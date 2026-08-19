@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, message } from 'antd';
+import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Modal, message } from 'antd';
 import {
   PlusOutlined,
   MinusOutlined,
@@ -11,8 +11,11 @@ import {
   FallOutlined,
   HistoryOutlined,
   AppstoreOutlined,
+  CameraOutlined,
+  PictureOutlined,
 } from '@ant-design/icons';
 import { addLedgerRecord } from '../../api/familyLedger';
+import { uploadImage } from '../../api/upload';
 import { getTasksByType } from '../../config/familyRules';
 import { useFamilyStore } from '../../store/useFamilyStore';
 import { PageLoading, EmptyState, ErrorState } from '../../components/StateViews';
@@ -35,6 +38,13 @@ export default function FamilyDashboard() {
   const [activeTab, setActiveTab] = useState('tasks');
   const [form] = Form.useForm<CustomTaskForm>();
 
+  // 任务打卡弹窗状态
+  const [activeTask, setActiveTask] = useState<TaskConfig | null>(null);
+  const [note, setNote] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
   const earningTasks = getTasksByType('earning');
   const spendingTasks = getTasksByType('spending');
 
@@ -51,6 +61,54 @@ export default function FamilyDashboard() {
 
   const hour = now.getHours();
   const isLate = hour >= 21;
+
+  /** 打开任务打卡弹窗 */
+  const openTaskModal = (task: TaskConfig) => {
+    setActiveTask(task);
+    setNote('');
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
+  /** 关闭任务打卡弹窗 */
+  const closeTaskModal = () => {
+    setActiveTask(null);
+    setNote('');
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
+  /** 选择图片（相机或相册） */
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    e.target.value = '';
+  };
+
+  /** 提交任务打卡：上传图片（如有）→ 写入流水 */
+  const handleTaskSubmit = async () => {
+    if (!activeTask) return;
+    try {
+      let imageUrl: string | undefined;
+      if (imageFile) {
+        setUploading(true);
+        const result = await uploadImage(imageFile);
+        if (result) imageUrl = result.url;
+      }
+      await addLedgerRecord(activeTask, { note: note.trim() || undefined, imageUrl });
+      await refreshBalance();
+      await loadLedger();
+      const sign = activeTask.value > 0 ? '+' : '';
+      message.success(`${sign}${activeTask.value} 积分！${activeTask.name}${activeTask.value > 0 ? '真棒' : ''}`);
+      closeTaskModal();
+    } catch (e) {
+      message.error('操作失败，请重试');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   /** 打卡：写入流水并刷新余额 */
   const handleTask = async (task: TaskConfig) => {
@@ -127,7 +185,7 @@ export default function FamilyDashboard() {
                   borderColor: designTokens.colors.success,
                 }}
                 icon={<PlusOutlined />}
-                onClick={() => handleTask(task)}
+                onClick={() => openTaskModal(task)}
               >
                 <span className={styles.actionBtnText}>{task.name}</span>
                 <span className={`num ${styles.actionBtnValue}`}>+{task.value}</span>
@@ -145,7 +203,7 @@ export default function FamilyDashboard() {
                 danger
                 className={`${styles.actionBtn} btn-press`}
                 icon={<MinusOutlined />}
-                onClick={() => handleTask(task)}
+                onClick={() => openTaskModal(task)}
               >
                 <span className={styles.actionBtnText}>{task.name}</span>
                 <span className={`num ${styles.actionBtnValue}`}>{task.value}</span>
@@ -341,6 +399,69 @@ export default function FamilyDashboard() {
           </div>
         </Card>
       </div>
+
+      {/* ===== 任务打卡弹窗 ===== */}
+      <Modal
+        open={!!activeTask}
+        title={activeTask ? `打卡：${activeTask.name}` : ''}
+        onCancel={closeTaskModal}
+        onOk={handleTaskSubmit}
+        okText="确认打卡"
+        cancelText="取消"
+        confirmLoading={uploading}
+        destroyOnClose
+      >
+        {/* 上方：拍照上传 */}
+        <div className={styles.modalSection}>
+          <div className={styles.modalLabel}>
+            <CameraOutlined /> 拍照上传
+          </div>
+          <div className={styles.uploadArea}>
+            {imagePreview ? (
+              <div className={styles.imagePreviewWrap}>
+                <img src={imagePreview} alt="任务照片" className={styles.imagePreview} />
+                <Button
+                  size="small"
+                  className={styles.imageRemove}
+                  onClick={() => {
+                    setImageFile(null);
+                    setImagePreview(null);
+                  }}
+                >
+                  移除
+                </Button>
+              </div>
+            ) : (
+              <label className={styles.uploadBtn}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleImageChange}
+                  style={{ display: 'none' }}
+                />
+                <CameraOutlined />
+                <span>点击拍照</span>
+              </label>
+            )}
+          </div>
+        </div>
+
+        {/* 下方：备注 */}
+        <div className={styles.modalSection}>
+          <div className={styles.modalLabel}>
+            <PictureOutlined /> 备注
+          </div>
+          <Input.TextArea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="填写任务备注（可选）"
+            rows={3}
+            maxLength={200}
+            showCount
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

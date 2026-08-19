@@ -11,10 +11,22 @@ export interface ChangelogEntry {
 }
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '1.7.2';
+export const APP_VERSION = '1.8.0';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.8.0',
+    date: '2026-08-19 18:40:00',
+    title: '任务打卡弹窗：拍照上传 + 备注',
+    changes: [
+      '任务区点击任务弹出打卡弹窗',
+      '弹窗上方：相机按钮调用系统相机，图片上传 Cloudflare R2',
+      '弹窗下方：备注输入框，可填写任务备注',
+      '通过 Cloudflare Pages Functions 直接绑定 R2，无需单独 Worker',
+      '流水记录新增备注与图片字段',
+    ],
+  },
   {
     version: '1.7.2',
     date: '2026-08-19 18:20:00',

@@ -19,6 +19,10 @@ export interface LedgerRecord {
   type: TaskType;
   amount: number;
   created_at: string;
+  /** 任务备注（可选） */
+  note?: string | null;
+  /** 任务图片 URL（可选，来自 R2） */
+  image_url?: string | null;
 }
 
 /** 每周学习计划 */

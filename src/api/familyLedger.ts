@@ -11,13 +11,18 @@ export async function fetchLedgerRecords(): Promise<LedgerRecord[]> {
   return (data ?? []) as LedgerRecord[];
 }
 
-/** 插入一条积分流水，amount 取 task.value */
-export async function addLedgerRecord(task: TaskConfig): Promise<boolean> {
+/** 插入一条积分流水，amount 取 task.value，可附带备注与图片 */
+export async function addLedgerRecord(
+  task: TaskConfig,
+  extra?: { note?: string; imageUrl?: string }
+): Promise<boolean> {
   const { error } = await supabase.from('family_ledger').insert({
     task_id: task.id,
     task_name: task.name,
     type: task.type,
     amount: task.value,
+    note: extra?.note ?? null,
+    image_url: extra?.imageUrl ?? null,
   });
   if (error) throw error;
   return true;
