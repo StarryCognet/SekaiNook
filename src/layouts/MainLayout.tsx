@@ -3,7 +3,6 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Layout, Menu, Drawer, Button, Breadcrumb } from "antd";
 import { HomeOutlined, CalendarOutlined, MenuOutlined, BookOutlined, SunOutlined, SettingOutlined } from "@ant-design/icons";
 import { isMobile } from "../utils/device";
-import { getCurrentWeekLabel } from "../utils/week";
 import { designTokens } from "../theme/tokens";
 import styles from "./MainLayout.module.css";
 
@@ -81,10 +80,6 @@ export default function MainLayout() {
         <Header className={styles.header}>
           {mobile && <Button type="text" icon={<MenuOutlined />} onClick={() => setDrawerOpen(true)} />}
           <Breadcrumb items={[{ title: "SekaiNook" }, { title: currentLabel }]} />
-          <div style={{ flex: 1 }} />
-          <span className={`num ${styles.weekLabel}`} style={{ color: designTokens.colors.primary }}>
-            {getCurrentWeekLabel()}
-          </span>
         </Header>
 
         <Content className={styles.content}>

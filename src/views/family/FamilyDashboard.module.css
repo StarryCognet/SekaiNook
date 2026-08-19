@@ -256,6 +256,7 @@
 @media (max-width: 768px) {
   .dashboard {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .actionGrid {
@@ -264,5 +265,20 @@
 
   .customRow {
     grid-template-columns: 1fr;
+  }
+
+  /* 余额数字缩小，适配窄屏 */
+  .balanceValue {
+    font-size: 40px;
+  }
+
+  /* 任务按钮高度略增，方便触控 */
+  .actionBtn {
+    height: 48px;
+  }
+
+  /* 时钟缩小 */
+  .clock {
+    font-size: 36px;
   }
 }

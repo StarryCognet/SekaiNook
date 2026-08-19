@@ -11,10 +11,20 @@ export interface ChangelogEntry {
 }
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '1.7.1';
+export const APP_VERSION = '1.7.2';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.7.2',
+    date: '2026-08-19 18:20:00',
+    title: '手机端优化',
+    changes: [
+      '家庭工作台：余额数字缩小、任务按钮增高方便触控、时钟缩小',
+      '阳光花园：品牌区移动端紧凑化（标题、副标题、太阳图标适配）',
+      '移除顶栏右上角周标签',
+    ],
+  },
   {
     version: '1.7.1',
     date: '2026-08-19 18:10:00',

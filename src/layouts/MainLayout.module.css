@@ -74,16 +74,6 @@
   letter-spacing: 0.5px;
 }
 
-.weekLabel {
-  font-size: 13px;
-  font-weight: 600;
-  padding: 5px 14px;
-  border-radius: 999px;
-  background: rgba(26, 26, 46, 0.06);
-  color: #1a1a2e;
-  white-space: nowrap;
-}
-
 /* ===== 移动端优化 ===== */
 @media (max-width: 768px) {
   .header {
@@ -98,11 +88,5 @@
   /* 移动端隐藏面包屑中的 "SekaiNook" 前缀，只保留当前页名 */
   .header :global(.ant-breadcrumb li:first-child) {
     display: none;
-  }
-
-  /* 移动端周标签缩小 */
-  .weekLabel {
-    font-size: 11px;
-    padding: 4px 10px;
   }
 }
