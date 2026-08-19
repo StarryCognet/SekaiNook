@@ -1,0 +1,157 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.headerCard {
+  padding: 4px 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.weekLabel {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1a2e;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: rgba(26, 26, 46, 0.06);
+}
+
+.headerTitle {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.overall {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.overallLabel {
+  font-size: 14px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.overallBar {
+  flex: 1;
+  margin: 0;
+}
+
+.subjectCard {
+  margin-bottom: 0;
+}
+
+.subjectTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.subjectIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(26, 26, 46, 0.06);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #1a1a2e;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 12px;
+  border-radius: 10px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.2s ease;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row:hover {
+  background: rgba(26, 26, 46, 0.02);
+}
+
+.rowDone {
+  background: rgba(15, 155, 108, 0.06);
+}
+
+.rowDone:hover {
+  background: rgba(15, 155, 108, 0.1);
+}
+
+.rowInfo {
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.rowName {
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.doneIcon {
+  color: #0f9b6c;
+}
+
+.rowMeta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rowBar {
+  flex: 1;
+  margin: 0;
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.noData {
+  font-size: 12px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+/* 移动端 */
+@media (max-width: 768px) {
+  .row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .rowInfo {
+    width: 100%;
+  }
+
+  .rowBar {
+    width: 100%;
+    flex: none;
+  }
+
+  .rowActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

@@ -1,0 +1,99 @@
+.garden {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #3a3a5c;
+}
+
+.gardenStatus {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #e8f8e8, #f3edff);
+}
+
+.gardenSun {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #ffc53d;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  flex-shrink: 0;
+}
+
+.gardenInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.gardenTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #3a3a5c;
+  margin-bottom: 4px;
+}
+
+.gardenDesc {
+  font-size: 12px;
+  color: #8a8aa8;
+  margin-top: 4px;
+}
+
+.plantGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.plantCard {
+  border-radius: 16px;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(183, 145, 250, 0.12);
+  transition: all 0.25s ease;
+}
+
+.plantCard:hover {
+  box-shadow: 0 8px 24px rgba(183, 145, 250, 0.2);
+  transform: translateY(-2px);
+}
+
+.plantIcon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f3edff, #e8f8e8);
+  color: #b791fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  margin: 0 auto 8px;
+}
+
+.plantName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3a3a5c;
+}
+
+.plantDesc {
+  font-size: 12px;
+  color: #8a8aa8;
+  margin-top: 4px;
+}
+
+@media (max-width: 768px) {
+  .plantGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

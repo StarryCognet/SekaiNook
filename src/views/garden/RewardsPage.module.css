@@ -1,0 +1,208 @@
+.rewards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ===== 成就面板（淡黄色） ===== */
+.achievement {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: #fff7e0;
+  border-radius: 16px;
+  border: 2px solid #ffe9b8;
+}
+
+.achievementIcon {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffc53d, #ffb020);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  flex-shrink: 0;
+  box-shadow: 0 6px 18px rgba(255, 197, 61, 0.45);
+  position: relative;
+}
+
+.achievementIcon::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 197, 61, 0.4);
+}
+
+.achievementInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.achievementTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #3a3a5c;
+}
+
+.achievementDesc {
+  font-size: 13px;
+  color: #8a8aa8;
+  margin-top: 2px;
+}
+
+.achievementNum {
+  color: #ffc53d;
+  font-weight: 700;
+}
+
+.achievementBar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 197, 61, 0.2);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.achievementBarFill {
+  height: 100%;
+  border-radius: 999px;
+  background: #ffc53d;
+  transition: width 0.3s ease;
+}
+
+.achievementProgress {
+  font-size: 12px;
+  color: #8a8aa8;
+  margin-top: 6px;
+}
+
+/* ===== 勋章墙 ===== */
+.badgeSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #3a3a5c;
+}
+
+.badgeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.badgeCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 12px;
+  border-radius: 16px;
+  text-align: center;
+  transition: all 0.25s ease;
+}
+
+.badgeEarned {
+  background: linear-gradient(180deg, #ffffff, #f8f4ff);
+  border: 2px solid #b791fa;
+  box-shadow: 0 6px 20px rgba(183, 145, 250, 0.2);
+}
+
+.badgeEarned:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(183, 145, 250, 0.3);
+}
+
+.badgeLocked {
+  background: #f5f5f8;
+  border: 2px solid #e5e5ec;
+  opacity: 0.85;
+}
+
+.badgeIcon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  position: relative;
+}
+
+.badgeEarned .badgeIcon {
+  background: linear-gradient(135deg, #b791fa, #9d7bf0);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(183, 145, 250, 0.4);
+}
+
+.badgeEarned .badgeIcon::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid rgba(183, 145, 250, 0.3);
+}
+
+.badgeLocked .badgeIcon {
+  background: #e5e5ec;
+  color: #c0c0d0;
+}
+
+.badgeName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3a3a5c;
+}
+
+.badgeLocked .badgeName {
+  color: #c0c0d0;
+}
+
+.badgeDesc {
+  font-size: 11px;
+  color: #8a8aa8;
+}
+
+.badgeStatus {
+  font-size: 12px;
+  color: #52c41a;
+  font-weight: 600;
+}
+
+.badgeStatusLocked {
+  font-size: 12px;
+  color: #c0c0d0;
+}
+
+/* ===== 移动端 ===== */
+@media (max-width: 768px) {
+  .achievement {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .achievementIcon {
+    width: 52px;
+    height: 52px;
+    font-size: 24px;
+  }
+
+  .achievementTitle {
+    font-size: 17px;
+  }
+
+  .badgeGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+}

@@ -1,0 +1,268 @@
+.dashboard {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
+  align-items: start;
+}
+
+.leftCol {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.rightCol {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ===== 余额卡片 ===== */
+.balanceCard {
+  text-align: center;
+  padding: 8px 0;
+  background: linear-gradient(135deg, #1a1a2e 0%, #2a2a4a 100%);
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+}
+
+.balanceCard::after {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.balanceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.balanceLabel {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.balanceTrend {
+  border: none;
+}
+
+.balanceValue {
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+.balanceSub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 4px;
+}
+
+/* ===== 快捷操作 ===== */
+.actionSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.actionTitle {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.actionGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.actionGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.actionGroupLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.actionBtn {
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.actionBtnText {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actionBtnValue {
+  font-weight: 700;
+  margin-left: 8px;
+  font-size: 14px;
+}
+
+/* ===== Tab 切换 ===== */
+.tabs {
+  background: #fff;
+  border-radius: 16px;
+  padding: 8px 16px 16px;
+  box-shadow: 0 4px 16px rgba(26, 26, 46, 0.06);
+}
+
+.tabLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tasksArea {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ===== 自定义任务卡片 ===== */
+.customCard {
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8faff 0%, #f0f4ff 100%);
+  border: 1px solid #e3e9f5;
+}
+
+.customTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.customForm {
+  display: flex;
+  flex-direction: column;
+}
+
+.customRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.customSubmit {
+  height: 40px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+/* ===== 流水卡片 ===== */
+.recordsCard {
+  min-height: 200px;
+}
+
+.recordItem {
+  padding: 8px 0;
+}
+
+.recordIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.recordAmount {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+/* ===== 今日任务与作息 ===== */
+.todayCard {
+  text-align: center;
+  padding: 8px 0;
+}
+
+.todayTitle {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.clock {
+  font-size: 44px;
+  font-weight: 600;
+  color: #1a1a2e;
+  line-height: 1.1;
+}
+
+.dateText {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.lateWarning,
+.lateOk {
+  margin: 16px 0;
+}
+
+.quickActions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.quickBtn {
+  width: 100%;
+  height: 44px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+/* ===== 移动端：上下堆叠 ===== */
+@media (max-width: 768px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .actionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .customRow {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,290 @@
+.garden {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ===== 品牌区 ===== */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #b791fa 0%, #9d7bf0 50%, #c8a9fc 100%);
+  border-radius: 18px;
+  color: #ffffff;
+  position: relative;
+  overflow: hidden;
+}
+
+.brandDecor {
+  position: absolute;
+  top: -30px;
+  right: 60px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.brandDecor::after {
+  content: '';
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.logo {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  position: relative;
+  z-index: 1;
+}
+
+.logoText {
+  font-size: 18px;
+  font-weight: 700;
+  color: #b791fa;
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
+  z-index: 1;
+}
+
+.title {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.brandSun {
+  margin-left: auto;
+  font-size: 40px;
+  color: rgba(255, 255, 255, 0.35);
+  position: relative;
+  z-index: 1;
+}
+
+/* ===== 导航 ===== */
+.nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s ease;
+}
+
+.navItem:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.navItemActive {
+  background: #dcc9fd;
+  color: #3a3a5c;
+  font-weight: 600;
+}
+
+.navIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(200, 169, 252, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.navItemActive .navIcon {
+  background: rgba(183, 145, 250, 0.25);
+}
+
+/* ===== 顶部信息栏 ===== */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(183, 145, 250, 0.12);
+}
+
+.topbarLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pageTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #3a3a5c;
+}
+
+.date {
+  font-size: 12px;
+  color: #8a8aa8;
+}
+
+.topbarRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.userChip,
+.balanceChip,
+.streakChip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #f3edff;
+  font-size: 13px;
+  color: #3a3a5c;
+}
+
+.userAvatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #b791fa;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.balanceNum,
+.streakNum {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.balanceLabel,
+.streakLabel {
+  font-size: 12px;
+  color: #8a8aa8;
+}
+
+.progressChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #e8f8e8;
+}
+
+.progressLabel {
+  font-size: 12px;
+  color: #3a3a5c;
+}
+
+.progressBar {
+  width: 80px;
+  margin: 0;
+}
+
+.progressText {
+  font-size: 12px;
+  font-weight: 600;
+  color: #52c41a;
+}
+
+.resetBtn {
+  border-radius: 999px;
+}
+
+/* ===== 移动端 ===== */
+@media (max-width: 768px) {
+  .brand {
+    padding: 12px;
+  }
+
+  .logo {
+    width: 44px;
+    height: 44px;
+  }
+
+  .logoText {
+    font-size: 15px;
+  }
+
+  .title {
+    font-size: 17px;
+  }
+
+  .nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .navItem {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  .navIcon {
+    width: 24px;
+    height: 24px;
+    font-size: 13px;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .topbarRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .progressChip {
+    flex: 1;
+    min-width: 160px;
+  }
+}

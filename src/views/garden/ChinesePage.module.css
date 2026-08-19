@@ -1,0 +1,71 @@
+.chinese {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #3a3a5c;
+}
+
+.previewList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.previewCard {
+  border-radius: 16px;
+  border: 2px solid transparent;
+  box-shadow: 0 4px 16px rgba(183, 145, 250, 0.12);
+  transition: all 0.25s ease;
+}
+
+.previewCard:hover {
+  box-shadow: 0 8px 24px rgba(183, 145, 250, 0.2);
+  transform: translateY(-1px);
+}
+
+.previewDone {
+  background: #e8f8e8;
+  border-color: #52c41a;
+  box-shadow: 0 4px 16px rgba(82, 196, 26, 0.15);
+}
+
+.previewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.previewTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #3a3a5c;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.previewDesc {
+  font-size: 13px;
+  color: #8a8aa8;
+  margin-bottom: 8px;
+}
+
+.previewProgress {
+  margin-bottom: 10px;
+}
+
+.previewBtn {
+  border-radius: 999px;
+}
+
+@media (max-width: 768px) {
+  .previewList {
+    grid-template-columns: 1fr;
+  }
+}

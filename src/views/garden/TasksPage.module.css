@@ -1,0 +1,256 @@
+.tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ===== 顶部统计 ===== */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.statCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 4px 16px rgba(183, 145, 250, 0.12);
+}
+
+.statIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.statInfo {
+  min-width: 0;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: #8a8aa8;
+}
+
+.statValue {
+  font-size: 22px;
+  font-weight: 700;
+  color: #3a3a5c;
+  line-height: 1.2;
+}
+
+.statSub {
+  font-size: 11px;
+  color: #8a8aa8;
+}
+
+.statBar {
+  height: 6px;
+  border-radius: 999px;
+  background: #f0f0f5;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.statBarFill {
+  height: 100%;
+  border-radius: 999px;
+  background: #52c41a;
+  transition: width 0.3s ease;
+}
+
+/* ===== 任务列表 ===== */
+.taskList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.taskCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: #ffffff;
+  border: 2px solid transparent;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(183, 145, 250, 0.12);
+  transition: all 0.25s ease;
+}
+
+.taskCard:hover {
+  box-shadow: 0 8px 24px rgba(183, 145, 250, 0.2);
+  transform: translateY(-1px);
+}
+
+.taskCardDone {
+  background: #e8f8e8;
+  border-color: #52c41a;
+  box-shadow: 0 4px 16px rgba(82, 196, 26, 0.15);
+}
+
+/* 完成按钮（空心圆） */
+.taskCheck {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #c0c0d0;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 14px;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.taskCheck:hover {
+  border-color: #b791fa;
+  background: rgba(183, 145, 250, 0.1);
+}
+
+.taskCheckDone {
+  background: #52c41a;
+  border-color: #52c41a;
+  animation: pop 0.3s ease;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 任务图标 */
+.taskIcon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+}
+
+/* 任务信息 */
+.taskInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.taskName {
+  font-size: 15px;
+  font-weight: 600;
+  color: #3a3a5c;
+}
+
+.taskDesc {
+  font-size: 12px;
+  color: #8a8aa8;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskMeta {
+  margin-top: 6px;
+}
+
+.taskDuration {
+  font-size: 12px;
+  color: #8a8aa8;
+  background: #f5f5f8;
+  padding: 3px 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 奖励徽章 */
+.taskReward {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #fff7e0;
+  flex-shrink: 0;
+}
+
+.taskRewardDone {
+  background: rgba(255, 197, 61, 0.2);
+}
+
+.taskRewardNum {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffc53d;
+}
+
+.taskRewardLabel {
+  font-size: 12px;
+  color: #b8860b;
+}
+
+/* ===== 移动端 ===== */
+@media (max-width: 768px) {
+  .stats {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .statCard {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .statIcon {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+
+  .statValue {
+    font-size: 18px;
+  }
+
+  .taskCard {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .taskIcon {
+    width: 38px;
+    height: 38px;
+    font-size: 18px;
+  }
+
+  .taskReward {
+    padding: 4px 8px;
+  }
+
+  .taskRewardNum {
+    font-size: 14px;
+  }
+}
