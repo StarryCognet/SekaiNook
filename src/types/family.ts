@@ -1,6 +1,9 @@
 /** 任务类型：赚钱（earning，正数）/ 花钱与罚款（spending，负数） */
 export type TaskType = 'earning' | 'spending';
 
+/** 流水审批状态：待审批 / 已审批入账 / 已驳回 */
+export type LedgerStatus = 'pending' | 'approved' | 'rejected';
+
 /** 任务配置（来自 config/familyRules.ts 的唯一数据源） */
 export interface TaskConfig {
   id: string;
@@ -23,6 +26,8 @@ export interface LedgerRecord {
   note?: string | null;
   /** 任务图片 URL（可选，来自 R2） */
   image_url?: string | null;
+  /** 审批状态（缺省视为已入账，兼容存量数据） */
+  status?: LedgerStatus;
 }
 
 /** 每周学习计划 */

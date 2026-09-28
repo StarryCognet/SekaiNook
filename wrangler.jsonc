@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sekainook",
+  // 前端静态产物目录（Vite 构建输出），Cloudflare Pages 从这里发布
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2025-09-01",
+  // D1 数据库绑定：函数内通过 env.DB 访问
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sekainook",
+      "database_id": "bef627b5-9c70-42ae-b8ec-7f51d6edb7b8"
+    }
+  ],
+  // R2 对象存储绑定：图片上传/读取使用
+  "r2_buckets": [
+    {
+      "binding": "STARRYMIKU_BUCKET",
+      "bucket_name": "starrymiku"
+    }
+  ]
+}

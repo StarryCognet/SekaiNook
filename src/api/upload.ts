@@ -1,7 +1,7 @@
 /**
  * 图片上传 API —— 通过 Cloudflare Pages Functions 上传到 R2。
  * 前端部署到 Cloudflare Pages 后，/api/upload 由 Pages Functions 处理，
- * 直接访问绑定的 R2 bucket（绑定名 SEKAINOOK_BUCKET）。
+ * 直接访问绑定的 R2 bucket（绑定名 STARRYMIKU_BUCKET）。
  */
 
 /** 上传结果 */
@@ -18,7 +18,9 @@ export interface UploadResult {
 export async function uploadImage(file: File): Promise<UploadResult> {
   const res = await fetch('/api/upload', {
     method: 'POST',
-    headers: { 'Content-Type': file.type || 'image/jpeg' },
+    headers: {
+      'Content-Type': file.type || 'image/jpeg',
+    },
     body: file,
   });
 

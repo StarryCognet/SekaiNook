@@ -1,20 +1,13 @@
 import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Layout, Menu, Drawer, Button, Breadcrumb } from "antd";
+import { Layout, Menu, Drawer, Button, Breadcrumb, Badge } from "antd";
 import { HomeOutlined, CalendarOutlined, MenuOutlined, BookOutlined, SunOutlined, SettingOutlined } from "@ant-design/icons";
 import { isMobile } from "../utils/device";
+import { useFamilyStore } from "../store/useFamilyStore";
 import { designTokens } from "../theme/tokens";
 import styles from "./MainLayout.module.css";
 
 const { Sider, Header, Content } = Layout;
-
-/** 侧边栏菜单项 */
-const MENU_ITEMS = [
-  { key: "/family", icon: <HomeOutlined />, label: "家庭工作台" },
-  { key: "/family/plan", icon: <CalendarOutlined />, label: "学习计划" },
-  { key: "/garden", icon: <SunOutlined />, label: "阳光花园" },
-  { key: "/settings", icon: <SettingOutlined />, label: "设置" },
-];
 
 /** 面包屑映射 */
 const BREADCRUMB_MAP: Record<string, string> = {
@@ -28,6 +21,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
 export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { role, pendingCount } = useFamilyStore();
   const [mobile, setMobile] = useState(isMobile());
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -46,7 +40,26 @@ export default function MainLayout() {
     setDrawerOpen(false);
   };
 
-  const menu = <Menu theme="dark" mode="inline" selectedKeys={[currentKey]} items={MENU_ITEMS} onClick={({ key }) => handleMenuClick(key)} style={{ background: "transparent" }} />;
+  /** 侧边栏菜单项（家长端「家庭工作台」显示待审批角标） */
+  const menuItems = [
+    {
+      key: "/family",
+      icon: <HomeOutlined />,
+      label:
+        role === "parent" && pendingCount > 0 ? (
+          <Badge count={pendingCount} size="small" offset={[8, 0]}>
+            家庭工作台
+          </Badge>
+        ) : (
+          "家庭工作台"
+        ),
+    },
+    { key: "/family/plan", icon: <CalendarOutlined />, label: "学习计划" },
+    { key: "/garden", icon: <SunOutlined />, label: "阳光花园" },
+    { key: "/settings", icon: <SettingOutlined />, label: "设置" },
+  ];
+
+  const menu = <Menu theme="dark" mode="inline" selectedKeys={[currentKey]} items={menuItems} onClick={({ key }) => handleMenuClick(key)} style={{ background: "transparent" }} />;
 
   const logo = (
     <div className={`${styles.logo} ${collapsed ? styles.logoCollapsed : ""}`}>

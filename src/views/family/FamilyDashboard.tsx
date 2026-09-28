@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Modal, Image, message } from 'antd';
+import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Modal, Image, message, Badge } from 'antd';
 import {
   PlusOutlined,
   MinusOutlined,
@@ -14,14 +14,16 @@ import {
   CameraOutlined,
   PictureOutlined,
   EyeOutlined,
+  AuditOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons';
-import { addLedgerRecord } from '../../api/familyLedger';
+import { addLedgerRecord, resubmitRequest } from '../../api/familyLedger';
 import { uploadImage } from '../../api/upload';
 import { getTasksByType } from '../../config/familyRules';
 import { useFamilyStore } from '../../store/useFamilyStore';
 import { PageLoading, EmptyState, ErrorState } from '../../components/StateViews';
 import { designTokens } from '../../theme/tokens';
-import type { TaskConfig, TaskType } from '../../types/family';
+import type { LedgerRecord, TaskConfig, TaskType } from '../../types/family';
 import styles from './FamilyDashboard.module.css';
 
 /** 自定义任务表单值 */
@@ -31,13 +33,15 @@ interface CustomTaskForm {
   value: number;
 }
 
-/** 核心仪表盘：积分银行 + 任务区 / 历史记录区 */
+/** 核心仪表盘：积分银行 + 任务区 / 待审批区 / 历史记录区 */
 export default function FamilyDashboard() {
-  const { balance, records, loading, loadLedger, refreshBalance } = useFamilyStore();
+  const { balance, records, pendingRecords, pendingCount, loading, role, loadLedger, refreshPending, approve, reject } = useFamilyStore();
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
   const [activeTab, setActiveTab] = useState('tasks');
   const [form] = Form.useForm<CustomTaskForm>();
+
+  const isParent = role === 'parent';
 
   // 任务打卡弹窗状态
   const [activeTask, setActiveTask] = useState<TaskConfig | null>(null);
@@ -59,6 +63,30 @@ export default function FamilyDashboard() {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // 家长端：轮询待审批数量（角标实时性），10s 间隔 + 页面重新可见时立即刷新
+  useEffect(() => {
+    if (!isParent) return;
+    const refresh = () => refreshPending().catch(() => undefined);
+    const timer = setInterval(refresh, 10000);
+    const onVisible = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [isParent, refreshPending]);
+
+  // 小孩端：放宽到 15s 轮询流水，感知审批结果
+  useEffect(() => {
+    if (isParent) return;
+    const timer = setInterval(() => loadLedger().catch(() => undefined), 15000);
+    return () => clearInterval(timer);
+  }, [isParent, loadLedger]);
 
   const hour = now.getHours();
   const isLate = hour >= 21;
@@ -106,13 +134,20 @@ export default function FamilyDashboard() {
     }
 
     try {
-      await addLedgerRecord(activeTask, { note: note.trim() || undefined, imageUrl });
-      await refreshBalance();
+      await addLedgerRecord(
+        activeTask,
+        { note: note.trim() || undefined, imageUrl },
+        { status: isParent ? 'approved' : 'pending' }
+      );
       await loadLedger();
-      const sign = activeTask.value > 0 ? '+' : '';
-      message.success(`${sign}${activeTask.value} 积分！${activeTask.name}${activeTask.value > 0 ? '真棒' : ''}`);
+      if (isParent) {
+        const sign = activeTask.value > 0 ? '+' : '';
+        message.success(`${sign}${activeTask.value} 积分！${activeTask.name}${activeTask.value > 0 ? '真棒' : ''}`);
+      } else {
+        message.success(`已提交打卡「${activeTask.name}」，等待家长审批`);
+      }
       if (uploadFailed) {
-        message.warning('图片上传失败，但打卡已成功');
+        message.warning(isParent ? '图片上传失败，但打卡已成功' : '图片上传失败，但申请已提交');
       }
       closeTaskModal();
     } catch (e) {
@@ -122,14 +157,17 @@ export default function FamilyDashboard() {
     }
   };
 
-  /** 打卡：写入流水并刷新余额 */
+  /** 打卡：写入流水（小孩端为待审批申请）并刷新余额 */
   const handleTask = async (task: TaskConfig) => {
     try {
-      await addLedgerRecord(task);
-      await refreshBalance();
+      await addLedgerRecord(task, undefined, { status: isParent ? 'approved' : 'pending' });
       await loadLedger();
-      const sign = task.value > 0 ? '+' : '';
-      message.success(`${sign}${task.value} 积分！${task.name}${task.value > 0 ? '真棒' : ''}`);
+      if (isParent) {
+        const sign = task.value > 0 ? '+' : '';
+        message.success(`${sign}${task.value} 积分！${task.name}${task.value > 0 ? '真棒' : ''}`);
+      } else {
+        message.success(`已提交打卡「${task.name}」，等待家长审批`);
+      }
     } catch (e) {
       message.error('操作失败，请重试');
     }
@@ -145,11 +183,14 @@ export default function FamilyDashboard() {
       unit: '积分',
     };
     try {
-      await addLedgerRecord(task);
-      await refreshBalance();
+      await addLedgerRecord(task, undefined, { status: isParent ? 'approved' : 'pending' });
       await loadLedger();
       form.resetFields();
-      message.success(`已添加自定义任务「${task.name}」`);
+      if (isParent) {
+        message.success(`已添加自定义任务「${task.name}」`);
+      } else {
+        message.success(`已提交「${task.name}」，等待家长审批`);
+      }
     } catch (e) {
       message.error('添加失败，请重试');
     }
@@ -173,6 +214,49 @@ export default function FamilyDashboard() {
     const sameDay = d.toDateString() === nowD.toDateString();
     const time = d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     return sameDay ? `今天 ${time}` : `${d.getMonth() + 1}/${d.getDate()} ${time}`;
+  };
+
+  /** 审批通过 */
+  const handleApprove = async (id: string) => {
+    try {
+      await approve(id);
+      message.success('已审批通过，积分已入账');
+    } catch (e) {
+      message.error('操作失败，请重试');
+    }
+  };
+
+  /** 审批驳回 */
+  const handleReject = async (id: string) => {
+    try {
+      await reject(id);
+      message.success('已驳回该申请');
+    } catch (e) {
+      message.error('操作失败，请重试');
+    }
+  };
+
+  /** 驳回后重新提交 */
+  const handleResubmit = async (id: string) => {
+    try {
+      await resubmitRequest(id);
+      await loadLedger();
+      message.success('已重新提交，等待家长审批');
+    } catch (e) {
+      message.error('操作失败，请重试');
+    }
+  };
+
+  /** 流水状态标签 */
+  const renderStatusTag = (record: LedgerRecord) => {
+    const status = record.status;
+    if (status === 'pending') {
+      return <Tag color="processing">待审批</Tag>;
+    }
+    if (status === 'rejected') {
+      return <Tag color="error">已驳回</Tag>;
+    }
+    return <Tag color="success">已入账</Tag>;
   };
 
   /** 任务区内容 */
@@ -225,34 +309,36 @@ export default function FamilyDashboard() {
         </div>
       </div>
 
-      {/* 自定义任务 */}
-      <Card className={styles.customCard} variant="borderless">
-        <div className={styles.customTitle}>
-          <PlusOutlined /> 自定义任务
-        </div>
-        <Form form={form} layout="vertical" onFinish={handleCustomTask} className={styles.customForm}>
-          <div className={styles.customRow}>
-            <Form.Item name="type" label="类型" rules={[{ required: true, message: '请选择类型' }]}>
-              <Select
-                placeholder="选择类型"
-                options={[
-                  { value: 'earning', label: '赚钱' },
-                  { value: 'spending', label: '消费 / 罚款' },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item name="value" label="价格" rules={[{ required: true, message: '请输入价格' }]}>
-              <InputNumber min={1} placeholder="积分" style={{ width: '100%' }} />
-            </Form.Item>
+      {/* 自定义任务（仅家长：任务由家长定义，小孩只需打卡） */}
+      {isParent && (
+        <Card className={styles.customCard} variant="borderless">
+          <div className={styles.customTitle}>
+            <PlusOutlined /> 自定义任务
           </div>
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入任务名称' }]}>
-            <Input placeholder="例如：帮忙浇花" maxLength={20} />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" block className={styles.customSubmit}>
-            添加任务
-          </Button>
-        </Form>
-      </Card>
+          <Form form={form} layout="vertical" onFinish={handleCustomTask} className={styles.customForm}>
+            <div className={styles.customRow}>
+              <Form.Item name="type" label="类型" rules={[{ required: true, message: '请选择类型' }]}>
+                <Select
+                  placeholder="选择类型"
+                  options={[
+                    { value: 'earning', label: '赚钱' },
+                    { value: 'spending', label: '消费 / 罚款' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="value" label="价格" rules={[{ required: true, message: '请输入价格' }]}>
+                <InputNumber min={1} placeholder="积分" style={{ width: '100%' }} />
+              </Form.Item>
+            </div>
+            <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入任务名称' }]}>
+              <Input placeholder="例如：帮忙浇花" maxLength={20} />
+            </Form.Item>
+            <Button type="primary" htmlType="submit" block className={styles.customSubmit}>
+              添加任务
+            </Button>
+          </Form>
+        </Card>
+      )}
     </div>
   );
 
@@ -285,6 +371,8 @@ export default function FamilyDashboard() {
                 description={formatTime(record.created_at)}
               />
               <div className={styles.recordRight}>
+                {/* 审批状态 */}
+                {renderStatusTag(record)}
                 <span
                   className={`num ${styles.recordAmount}`}
                   style={{
@@ -307,6 +395,84 @@ export default function FamilyDashboard() {
                     preview={{ mask: <EyeOutlined /> }}
                   />
                 )}
+                {/* 驳回后重新提交 */}
+                {record.status === 'rejected' && (
+                  <Button size="small" className={styles.resubmitBtn} onClick={() => handleResubmit(record.id)}>
+                    重新提交
+                  </Button>
+                )}
+              </div>
+            </List.Item>
+          )}
+        />
+      )}
+    </Card>
+  );
+
+  /** 待审批区内容（仅家长可见） */
+  const renderPending = () => (
+    <Card className={styles.recordsCard} variant="borderless">
+      {pendingRecords.length === 0 ? (
+        <EmptyState description="暂无待审批申请" />
+      ) : (
+        <List
+          dataSource={pendingRecords}
+          renderItem={(record) => (
+            <List.Item className={styles.recordItem}>
+              <List.Item.Meta
+                avatar={
+                  <div
+                    className={styles.recordIcon}
+                    style={{
+                      background: 'rgba(22, 119, 255, 0.12)',
+                      color: designTokens.colors.primary,
+                    }}
+                  >
+                    <AuditOutlined />
+                  </div>
+                }
+                title={record.task_name}
+                description={formatTime(record.created_at)}
+              />
+              <div className={styles.recordRight}>
+                <span
+                  className={`num ${styles.recordAmount}`}
+                  style={{
+                    color: record.amount >= 0 ? designTokens.colors.success : designTokens.colors.danger,
+                  }}
+                >
+                  {record.amount >= 0 ? '+' : ''}
+                  {record.amount}
+                </span>
+                {record.note && <div className={styles.recordNote}>{record.note}</div>}
+                {record.image_url && (
+                  <Image
+                    src={record.image_url}
+                    alt={record.task_name}
+                    width={48}
+                    height={48}
+                    className={styles.recordImage}
+                    preview={{ mask: <EyeOutlined /> }}
+                  />
+                )}
+                <div className={styles.approveActions}>
+                  <Button
+                    size="small"
+                    type="primary"
+                    className={styles.approveBtn}
+                    style={{
+                      background: record.amount >= 0 ? designTokens.colors.success : designTokens.colors.danger,
+                      borderColor: record.amount >= 0 ? designTokens.colors.success : designTokens.colors.danger,
+                    }}
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => handleApprove(record.id)}
+                  >
+                    通过
+                  </Button>
+                  <Button size="small" icon={<CloseCircleOutlined />} onClick={() => handleReject(record.id)}>
+                    驳回
+                  </Button>
+                </div>
               </div>
             </List.Item>
           )}
@@ -337,6 +503,11 @@ export default function FamilyDashboard() {
             {balance}
           </div>
           <div className={styles.balanceSub}>可用余额</div>
+          {isParent && pendingCount > 0 && (
+            <div className={styles.pendingHint}>
+              <AuditOutlined /> 待审批 {pendingCount} 项
+            </div>
+          )}
         </Card>
 
         {/* Tab 切换：任务区 / 历史记录区 */}
@@ -354,6 +525,21 @@ export default function FamilyDashboard() {
               ),
               children: renderTasks(),
             },
+            // 家长端：待审批 Tab（带数量角标）
+            ...(isParent
+              ? [
+                  {
+                    key: 'pending',
+                    label: (
+                      <span className={styles.tabLabel}>
+                        <AuditOutlined /> 待审批
+                        {pendingCount > 0 && <Badge count={pendingCount} size="small" offset={[6, -2]} />}
+                      </span>
+                    ),
+                    children: renderPending(),
+                  },
+                ]
+              : []),
             {
               key: 'records',
               label: (
@@ -430,10 +616,10 @@ export default function FamilyDashboard() {
       {/* ===== 任务打卡弹窗 ===== */}
       <Modal
         open={!!activeTask}
-        title={activeTask ? `打卡：${activeTask.name}` : ''}
+        title={activeTask ? `${isParent ? '打卡' : '申请打卡'}：${activeTask.name}` : ''}
         onCancel={closeTaskModal}
         onOk={handleTaskSubmit}
-        okText="确认打卡"
+        okText={isParent ? '确认打卡' : '提交申请'}
         cancelText="取消"
         confirmLoading={uploading}
         destroyOnClose

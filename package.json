@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "dev:api": "wrangler pages dev public --port 8788",
+    "build": "wrangler types && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "deploy": "npm run build && wrangler pages deploy",
+    "db:migrate:local": "wrangler d1 migrations apply sekainook --local",
+    "db:migrate:remote": "wrangler d1 migrations apply sekainook --remote"
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.0",
-    "@supabase/supabase-js": "^2.45.4",
     "antd": "^6.5.1",
     "antd-mobile": "^5.38.1",
     "echarts": "^5.5.1",
@@ -25,6 +28,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "typescript": "^5.5.4",
-    "vite": "^5.4.2"
+    "vite": "^5.4.2",
+    "wrangler": "^4.142.0"
   }
 }

@@ -70,6 +70,28 @@
   padding: 0 12px;
 }
 
+.roleSwitch {
+  margin-top: 4px;
+}
+
+.roleHint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.changePinBtn {
+  margin-top: 12px;
+  border-radius: 10px;
+}
+
+.pinHint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
 /* ===== 版本日志卡片 ===== */
 .logCard {
   border-radius: 16px;

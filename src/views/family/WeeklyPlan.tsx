@@ -8,8 +8,7 @@ import {
   HomeOutlined,
   CheckCircleFilled,
 } from '@ant-design/icons';
-import { fetchWeeklyPlans, updateWeeklyPlan } from '../../api/familyTasks';
-import { ensureLocalWeeklyPlans } from '../../api/supabaseClient';
+import { ensureWeeklyPlans, updateWeeklyPlan } from '../../api/familyTasks';
 import { WEEKLY_PLAN_TEMPLATE } from '../../config/familyRules';
 import { getCurrentWeekLabel } from '../../utils/week';
 import { PageLoading, EmptyState, ErrorState } from '../../components/StateViews';
@@ -34,11 +33,10 @@ export default function WeeklyPlan() {
   const [inputs, setInputs] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    // 本地数据库模式下，先初始化本周计划数据
+    // 先幂等初始化本周计划（已有则原样返回），再渲染
     (async () => {
       try {
-        await ensureLocalWeeklyPlans();
-        const data = await fetchWeeklyPlans(weekLabel);
+        const data = await ensureWeeklyPlans(weekLabel);
         setPlans(data);
         const init: Record<string, number> = {};
         data.forEach((p) => {
@@ -75,8 +73,13 @@ export default function WeeklyPlan() {
   const totalCurrent = plans.reduce((s, p) => s + p.current, 0);
   const overallPercent = totalTarget > 0 ? Math.round((totalCurrent / totalTarget) * 100) : 0;
 
-  const handleAdd = async (plan: WeeklyPlan) => {
-    const next = (inputs[plan.id] ?? plan.current) + 1;
+  /** 落库某条计划的进度（值未变则跳过；失败回滚输入框） */
+  const persistPlan = async (plan: WeeklyPlan, value: number) => {
+    const next = Math.max(0, Math.floor(value));
+    if (next === plan.current) {
+      setInputs((prev) => ({ ...prev, [plan.id]: next }));
+      return;
+    }
     try {
       await updateWeeklyPlan(plan.id, next);
       setInputs((prev) => ({ ...prev, [plan.id]: next }));
@@ -84,7 +87,18 @@ export default function WeeklyPlan() {
       message.success('进度已更新');
     } catch (e) {
       message.error('更新失败');
+      setInputs((prev) => ({ ...prev, [plan.id]: plan.current }));
     }
+  };
+
+  /** 打卡 +1：以输入框当前值为基准递增并落库 */
+  const handleAdd = (plan: WeeklyPlan) => {
+    persistPlan(plan, (inputs[plan.id] ?? plan.current) + 1);
+  };
+
+  /** 输入框编辑：失焦 / 回车时落库 */
+  const handleCommit = (plan: WeeklyPlan) => {
+    persistPlan(plan, inputs[plan.id] ?? plan.current);
   };
 
   if (error) {
@@ -102,7 +116,7 @@ export default function WeeklyPlan() {
           <span className={`num ${styles.weekLabel}`}>{weekLabel}</span>
           <span className={styles.headerTitle}>本周学习计划</span>
         </div>
-        <EmptyState description="本周暂无学习计划，请先在 Supabase 中初始化数据" />
+        <EmptyState description="本周暂无学习计划" />
       </div>
     );
   }
@@ -171,6 +185,8 @@ export default function WeeklyPlan() {
                       min={0}
                       value={inputs[plan.id] ?? plan.current}
                       onChange={(v) => setInputs((prev) => ({ ...prev, [plan.id]: v ?? 0 }))}
+                      onBlur={() => handleCommit(plan)}
+                      onPressEnter={() => handleCommit(plan)}
                       size="small"
                       style={{ width: 72 }}
                     />

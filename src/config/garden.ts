@@ -12,11 +12,11 @@ export const GARDEN_TASKS: GardenTask[] = [
   { id: 'chore', name: '做一件家务', duration: 15, description: '帮助家人做家务', reward: 15, icon: 'home', done: false },
 ];
 
-/** 勋章列表 */
+/** 勋章列表（初始均为未获得，达成条件后由 useGardenStore 解锁） */
 export const GARDEN_BADGES: Badge[] = [
-  { id: 'sunrise', name: '第一缕阳光', description: '完成第一个任务', icon: 'sun', earned: true },
-  { id: 'gardener', name: '小园丁', description: '累计完成 10 个任务', icon: 'flower', earned: true },
-  { id: 'streak3', name: '坚持 3 天', description: '连续学习 3 天', icon: 'calendar', earned: true },
+  { id: 'sunrise', name: '第一缕阳光', description: '完成第一个任务', icon: 'sun', earned: false },
+  { id: 'gardener', name: '小园丁', description: '累计完成 10 个任务', icon: 'flower', earned: false },
+  { id: 'streak3', name: '坚持 3 天', description: '连续学习 3 天', icon: 'calendar', earned: false },
   { id: 'week_champ', name: '一周冠军', description: '连续学习 7 天', icon: 'trophy', earned: false },
   { id: 'poet', name: '小诗人', description: '背诵 10 首古诗', icon: 'feather', earned: false },
   { id: 'plant_warrior', name: '植物战士', description: '照顾花园植物 7 天', icon: 'leaf', earned: false },
