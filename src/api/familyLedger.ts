@@ -50,6 +50,12 @@ export function resubmitRequest(id: string): Promise<boolean> {
   return updateStatus(id, 'pending');
 }
 
+/** 删除一条流水（仅家长）；若含图片，后端会一并删除 R2 中的图片 */
+export async function deleteLedgerRecord(id: string): Promise<boolean> {
+  await http.delete<{ ok: true }>(`/api/ledger/${encodeURIComponent(id)}`);
+  return true;
+}
+
 /** 计算已入账余额：仅统计无状态（存量）或已审批的记录 */
 export function calcApprovedBalance(records: LedgerRecord[]): number {
   return records.reduce(

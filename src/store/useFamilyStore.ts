@@ -4,6 +4,7 @@ import {
   fetchPendingRequests,
   approveRequest,
   rejectRequest,
+  deleteLedgerRecord,
   calcApprovedBalance,
 } from '../api/familyLedger';
 import type { LedgerRecord } from '../types/family';
@@ -46,6 +47,8 @@ interface FamilyState {
   approve: (id: string) => Promise<void>;
   /** 审批驳回 */
   reject: (id: string) => Promise<void>;
+  /** 删除一条流水（仅家长），后端会一并删除关联图片 */
+  removeRecord: (id: string) => Promise<void>;
 }
 
 /** 家庭积分银行全局状态 */
@@ -103,6 +106,11 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
 
   reject: async (id) => {
     await rejectRequest(id);
+    await get().loadLedger();
+  },
+
+  removeRecord: async (id) => {
+    await deleteLedgerRecord(id);
     await get().loadLedger();
   },
 }));

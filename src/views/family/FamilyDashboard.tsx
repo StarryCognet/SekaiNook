@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Modal, Image, message, Badge } from 'antd';
+import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Modal, Image, message, Badge, Popconfirm } from 'antd';
 import {
   PlusOutlined,
   MinusOutlined,
@@ -16,6 +16,7 @@ import {
   EyeOutlined,
   AuditOutlined,
   CloseCircleOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { addLedgerRecord, resubmitRequest } from '../../api/familyLedger';
 import { uploadImage } from '../../api/upload';
@@ -35,7 +36,7 @@ interface CustomTaskForm {
 
 /** 核心仪表盘：积分银行 + 任务区 / 待审批区 / 历史记录区 */
 export default function FamilyDashboard() {
-  const { balance, records, pendingRecords, pendingCount, loading, role, loadLedger, refreshPending, approve, reject } = useFamilyStore();
+  const { balance, records, pendingRecords, pendingCount, loading, role, loadLedger, refreshPending, approve, reject, removeRecord } = useFamilyStore();
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
   const [activeTab, setActiveTab] = useState('tasks');
@@ -247,6 +248,16 @@ export default function FamilyDashboard() {
     }
   };
 
+  /** 删除流水（仅家长），含图片时后端会一并删除 R2 中的图片 */
+  const handleDelete = async (id: string) => {
+    try {
+      await removeRecord(id);
+      message.success('已删除该记录');
+    } catch (e) {
+      message.error('删除失败，请重试');
+    }
+  };
+
   /** 流水状态标签 */
   const renderStatusTag = (record: LedgerRecord) => {
     const status = record.status;
@@ -400,6 +411,21 @@ export default function FamilyDashboard() {
                   <Button size="small" className={styles.resubmitBtn} onClick={() => handleResubmit(record.id)}>
                     重新提交
                   </Button>
+                )}
+                {/* 删除（仅家长）：含图片时后端一并删除 R2 图片 */}
+                {isParent && (
+                  <Popconfirm
+                    title="确认删除该记录？"
+                    description={record.image_url ? '关联图片也会一并删除，且不可恢复' : '删除后不可恢复'}
+                    okText="删除"
+                    okButtonProps={{ danger: true }}
+                    cancelText="取消"
+                    onConfirm={() => handleDelete(record.id)}
+                  >
+                    <Button size="small" danger icon={<DeleteOutlined />} className={styles.resubmitBtn}>
+                      删除
+                    </Button>
+                  </Popconfirm>
                 )}
               </div>
             </List.Item>

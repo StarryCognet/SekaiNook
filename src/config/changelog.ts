@@ -11,10 +11,20 @@ export interface ChangelogEntry {
 }
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '1.9.0';
+export const APP_VERSION = '1.10.0';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.10.0',
+    date: '2026-09-28 17:30:00',
+    title: '历史记录支持家长删除',
+    changes: [
+      '历史记录每条新增「删除」按钮，仅家长身份可见',
+      '删除前二次确认，避免误删',
+      '删除带图片的记录时，一并清理 Cloudflare R2 中的对应图片',
+    ],
+  },
   {
     version: '1.9.0',
     date: '2026-09-15 00:00:00',
