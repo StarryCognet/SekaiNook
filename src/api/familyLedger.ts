@@ -7,12 +7,12 @@ export async function fetchLedgerRecords(): Promise<LedgerRecord[]> {
 }
 
 /**
- * 插入一条积分流水，amount 取 task.value，可附带备注、图片、成员与审批状态。
+ * 插入一条积分流水，amount 取 task.value，可附带备注、图片与审批状态。
  * @returns 新记录 id（用于「撤销」等回滚操作）
  */
 export async function addLedgerRecord(
   task: TaskConfig,
-  extra?: { note?: string; imageUrl?: string; member?: string | null },
+  extra?: { note?: string; imageUrl?: string },
   opts?: { status?: LedgerStatus }
 ): Promise<string> {
   const result = await http.post<{ id: string }>('/api/ledger', {
@@ -22,7 +22,6 @@ export async function addLedgerRecord(
     amount: task.value,
     note: extra?.note ?? null,
     image_url: extra?.imageUrl ?? null,
-    member: extra?.member ?? null,
     status: opts?.status ?? 'approved',
   });
   return result.id;

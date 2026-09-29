@@ -371,11 +371,6 @@
   right: 8px;
 }
 
-.uploadHint {
-  font-size: 12px;
-  color: #9ca3af;
-}
-
 /* ===== 移动端：上下堆叠 ===== */
 @media (max-width: 768px) {
   .dashboard {
@@ -441,12 +436,6 @@
   width: 100%;
 }
 
-/* 历史记录里的成员标签（多孩子家庭才出现） */
-.recordMember {
-  margin-left: 6px;
-  font-size: 12px;
-}
-
 /* ===== 历史记录：状态筛选 + 导出 + 加载更多 ===== */
 .recordToolbar {
   display: flex;
@@ -467,27 +456,6 @@
   height: 40px;
   margin-top: 12px;
   border-radius: 10px;
-}
-
-/* ===== 成员选择（添加家庭成员后才出现，单孩子家庭看不到） ===== */
-.memberRow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.memberLabel {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.memberSelect {
-  min-width: 120px;
 }
 
 /* ===== 趋势图容器（手机端靠 order 排到 Tab 之后） ===== */

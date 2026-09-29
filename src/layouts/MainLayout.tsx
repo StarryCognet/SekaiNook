@@ -1,14 +1,31 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Layout, Menu, Breadcrumb, Badge } from "antd";
-import { HomeOutlined, CalendarOutlined, BookOutlined, SunOutlined, SettingOutlined } from "@ant-design/icons";
+import { Badge, Breadcrumb, Layout, Menu } from "antd";
+import {
+  BookOutlined,
+  CalendarFilled,
+  CalendarOutlined,
+  HomeFilled,
+  HomeOutlined,
+  SettingFilled,
+  SettingOutlined,
+  SunFilled,
+  SunOutlined,
+} from "@ant-design/icons";
 import { isMobile } from "../utils/device";
+import {
+  getScroll,
+  getTabPath,
+  rememberScroll,
+  rememberTabPath,
+  resolveTabRoot,
+} from "../utils/tabMemory";
 import { useFamilyStore } from "../store/useFamilyStore";
 import styles from "./MainLayout.module.css";
 
 const { Sider, Header, Content } = Layout;
 
-/** 面包屑映射 */
+/** 面包屑尾项：按路径取名 */
 const BREADCRUMB_MAP: Record<string, string> = {
   "/family": "家庭工作台",
   "/family/plan": "学习计划",
@@ -16,32 +33,59 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/settings": "设置",
 };
 
-/** 导航项：PC 侧边栏与移动端底部 Tab 共用同一份数据 */
+/**
+ * 导航项：PC 侧边栏与手机底部 Tab 共用同一份数据。
+ * 图标备了线框（未选中）与实心（选中）两套 —— 苹果的 tab 语汇是
+ * 「未选中线框、选中实心」；Material 用背景药丸表示选中，不需要第二套图标。
+ */
 interface NavItem {
   key: string;
   icon: ReactNode;
-  /** 侧边栏用完整名称 */
+  iconActive: ReactNode;
   label: string;
-  /** 底部 Tab 用短名称（窄屏放不下完整名称） */
   shortLabel: string;
-  /** 是否展示待审批角标 */
   withBadge?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "/family", icon: <HomeOutlined />, label: "家庭工作台", shortLabel: "家庭", withBadge: true },
-  { key: "/family/plan", icon: <CalendarOutlined />, label: "学习计划", shortLabel: "计划" },
-  { key: "/garden", icon: <SunOutlined />, label: "阳光花园", shortLabel: "花园" },
-  { key: "/settings", icon: <SettingOutlined />, label: "设置", shortLabel: "设置" },
+  {
+    key: "/family",
+    icon: <HomeOutlined />,
+    iconActive: <HomeFilled />,
+    label: "家庭工作台",
+    shortLabel: "家庭",
+    withBadge: true,
+  },
+  {
+    key: "/family/plan",
+    icon: <CalendarOutlined />,
+    iconActive: <CalendarFilled />,
+    label: "学习计划",
+    shortLabel: "计划",
+  },
+  {
+    key: "/garden",
+    icon: <SunOutlined />,
+    iconActive: <SunFilled />,
+    label: "阳光花园",
+    shortLabel: "花园",
+  },
+  {
+    key: "/settings",
+    icon: <SettingOutlined />,
+    iconActive: <SettingFilled />,
+    label: "设置",
+    shortLabel: "设置",
+  },
 ];
 
-/** 主布局：PC 固定侧边栏 + 顶栏；移动端改为底部 Tab 栏 */
 export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { role, pendingCount } = useFamilyStore();
   const [mobile, setMobile] = useState(isMobile());
   const [collapsed, setCollapsed] = useState(false);
+  const contentRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const handle = () => setMobile(isMobile());
@@ -51,26 +95,101 @@ export default function MainLayout() {
 
   const currentKey = location.pathname;
   const currentLabel = BREADCRUMB_MAP[currentKey] ?? "家庭工作台";
+  /** 当前路径归属哪个 Tab（/garden 下的子页面也算在「花园」名下） */
+  const activeTab = resolveTabRoot(currentKey);
 
-  const handleMenuClick = (key: string) => {
-    navigate(key);
+  // 记住每个 Tab 最后停留的路径：切走再切回来能直接回到原处
+  useEffect(() => {
+    rememberTabPath(currentKey);
+  }, [currentKey]);
+
+  // 按路径记录滚动位置（这是「每个 Tab 独立栈」里最容易丢的那一半）
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        rememberScroll(location.pathname, el.scrollTop);
+      });
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [location.pathname, mobile]);
+
+  // 恢复滚动位置：页面是懒加载的，首帧还没有高度，所以重试几帧；
+  // 期间用户只要一动（触摸/滚轮）就立刻放弃，绝不跟人抢滚动条。
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const target = getScroll(location.pathname);
+    if (target <= 0) return;
+    let frames = 0;
+    let cancelled = false;
+    const cancel = () => {
+      cancelled = true;
+    };
+    el.addEventListener("wheel", cancel, { passive: true, once: true });
+    el.addEventListener("touchstart", cancel, { passive: true, once: true });
+    const step = () => {
+      if (cancelled) return;
+      el.scrollTop = target;
+      frames += 1;
+      if (Math.abs(el.scrollTop - target) > 1 && frames < 24) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    return () => {
+      cancelled = true;
+      el.removeEventListener("wheel", cancel);
+      el.removeEventListener("touchstart", cancel);
+    };
+  }, [location.pathname, mobile]);
+
+  /** 回到内容区顶部（顺手把该路径的记忆清零，免得恢复时又弹回去） */
+  const scrollToTop = (path: string) => {
+    rememberScroll(path, 0);
+    const el = contentRef.current;
+    if (el) el.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  /** 家长端「家庭工作台」显示待审批角标 */
+  /**
+   * 点击导航：
+   * - 点到别的 Tab → 回到它上次停留的路径（没有记录就回根路径）
+   * - 再点当前 Tab → 回到该 Tab 的根页面并滚到顶（iOS 惯例，符合肌肉记忆）
+   */
+  const handleNavClick = (key: string) => {
+    if (key === activeTab) {
+      if (currentKey !== key) navigate(key);
+      scrollToTop(key);
+      return;
+    }
+    navigate(getTabPath(key) ?? key);
+  };
+
+  /** 家长的待审批角标：角标要挂在图标上（挂文字上语义不对，也容易错位） */
   const showPendingBadge = (item: NavItem) =>
     Boolean(item.withBadge) && role === "parent" && pendingCount > 0;
 
-  /** 侧边栏菜单项 */
-  const menuItems = NAV_ITEMS.map((item) => ({
-    key: item.key,
-    icon: item.icon,
-    label: showPendingBadge(item) ? (
-      <Badge count={pendingCount} size="small" offset={[8, 0]}>
-        {item.label}
+  const renderIcon = (item: NavItem, active: boolean) => {
+    const node = active ? item.iconActive : item.icon;
+    return showPendingBadge(item) ? (
+      <Badge count={pendingCount} size="small" offset={[6, -2]}>
+        {node}
       </Badge>
     ) : (
-      item.label
-    ),
+      node
+    );
+  };
+
+  const menuItems = NAV_ITEMS.map((item) => ({
+    key: item.key,
+    icon: renderIcon(item, currentKey === item.key),
+    label: item.label,
   }));
 
   const menu = (
@@ -79,13 +198,13 @@ export default function MainLayout() {
       mode="inline"
       selectedKeys={[currentKey]}
       items={menuItems}
-      onClick={({ key }) => handleMenuClick(key)}
+      onClick={({ key }) => handleNavClick(key)}
       style={{ background: "transparent" }}
     />
   );
 
   const logo = (
-    <div className={`${styles.logo} ${collapsed ? styles.logoCollapsed : ""}`}>
+    <div className={styles.logo}>
       <span className={styles.logoIcon}>
         <BookOutlined />
       </span>
@@ -95,50 +214,43 @@ export default function MainLayout() {
 
   return (
     <Layout className={styles.rootLayout}>
-      {/* PC 固定侧边栏 */}
       {!mobile && (
-        <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed} width={220} theme="dark" className={styles.sider}>
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
+          width={220}
+          theme="dark"
+          className={styles.sider}
+        >
           {logo}
           {menu}
         </Sider>
       )}
-
-      {/* 右侧：固定顶栏 + 可滚动内容区 */}
       <Layout className={styles.mainLayout}>
         <Header className={styles.header}>
           <Breadcrumb items={[{ title: "SekaiNook" }, { title: currentLabel }]} />
         </Header>
-
-        <Content className={styles.content}>
+        <Content className={styles.content} ref={contentRef}>
           <div className="page-transition">
             <Outlet />
           </div>
         </Content>
       </Layout>
-
-      {/* 移动端底部 Tab 栏：拇指可达，比原来的汉堡菜单少一次点击 */}
       {mobile && (
-        <nav className={styles.bottomNav}>
+        <nav className={styles.bottomNav} aria-label="主导航">
           {NAV_ITEMS.map((item) => {
-            const active = currentKey === item.key;
+            const active = item.key === activeTab;
             return (
               <button
                 key={item.key}
                 type="button"
                 className={`${styles.bottomNavItem} ${active ? styles.bottomNavItemActive : ""}`}
-                onClick={() => handleMenuClick(item.key)}
+                onClick={() => handleNavClick(item.key)}
                 aria-label={item.label}
                 aria-current={active ? "page" : undefined}
               >
-                <span className={styles.bottomNavIcon}>
-                  {showPendingBadge(item) ? (
-                    <Badge count={pendingCount} size="small">
-                      {item.icon}
-                    </Badge>
-                  ) : (
-                    item.icon
-                  )}
-                </span>
+                <span className={styles.bottomNavIcon}>{renderIcon(item, active)}</span>
                 <span className={styles.bottomNavLabel}>{item.shortLabel}</span>
               </button>
             );

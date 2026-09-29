@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Progress, Button } from 'antd';
 import { SunOutlined, FireOutlined, ReloadOutlined } from '@ant-design/icons';
 import { GARDEN_MENUS } from '../config/garden';
@@ -6,6 +6,7 @@ import { useGardenStore } from '../store/useGardenStore';
 import { getGardenIcon } from '../components/garden/GardenIcon';
 import { gardenTokens } from '../theme/gardenTokens';
 import { PageLoading } from '../components/StateViews';
+import { useViewState } from '../utils/useViewState';
 import styles from './GardenLayout.module.css';
 
 /** 8 个子页面按需加载：切到哪个菜单才拉哪个页面的 chunk */
@@ -32,7 +33,8 @@ const PAGE_MAP: Record<string, React.ComponentType> = {
 
 /** 阳光花园・学习乐园 布局 */
 export default function GardenLayout() {
-  const [active, setActive] = useState('tasks');
+  // 花园里选的是哪个子页也要跨页面切换保留（切去「家庭」再回来还停在原处）
+  const [active, setActive] = useViewState('garden.activeMenu', 'tasks');
   const { balance, tasks, completedCount, streakDays, init, resetTasks } = useGardenStore();
 
   // 初始化状态

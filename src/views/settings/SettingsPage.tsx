@@ -10,15 +10,12 @@ import {
   Button,
   message,
   Popconfirm,
-  Empty,
 } from "antd";
 import {
   SettingOutlined,
   InfoCircleOutlined,
   UserSwitchOutlined,
   LockOutlined,
-  TeamOutlined,
-  PlusOutlined,
   DeleteOutlined,
   PictureOutlined,
 } from "@ant-design/icons";
@@ -30,17 +27,9 @@ import { useBackButton } from "../../utils/useBackButton";
 import { designTokens } from "../../theme/tokens";
 import styles from "./SettingsPage.module.css";
 
-/** 设置页：身份切换（切家长需口令）+ 家长口令管理 + 家庭成员 + 打卡图片清理 + 应用信息与版本日志 */
+/** 设置页：身份切换（切家长需口令）+ 家长口令管理 + 打卡图片清理 + 应用信息与版本日志 */
 export default function SettingsPage() {
-  const {
-    role,
-    setRole,
-    getParentPin,
-    setParentPin,
-    members,
-    addMember,
-    removeMember,
-  } = useFamilyStore();
+  const { role, setRole, getParentPin, setParentPin } = useFamilyStore();
 
   // 切家长口令验证弹窗
   const [pinModalOpen, setPinModalOpen] = useState(false);
@@ -52,14 +41,11 @@ export default function SettingsPage() {
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
 
-  // 家庭成员
-  const [newMemberName, setNewMemberName] = useState("");
-
   // 打卡图片清理（家长）
   const [scanning, setScanning] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [scanSummary, setScanSummary] = useState<string | null>(null);
-  const [orphanCount, setOrphanCount] = useState(0);
+  const [unusedCount, setUnusedCount] = useState(0);
 
   const isParent = role === "parent";
   // 弹窗打开时接管安卓返回键：返回键先关弹窗，而不是退出设置页
@@ -110,36 +96,16 @@ export default function SettingsPage() {
     message.success("家长口令已更新");
   };
 
-  /** 添加家庭成员（多孩子家庭用；不添加则界面与单孩子时完全一致） */
-  const handleAddMember = () => {
-    const name = newMemberName.trim();
-    if (!name) {
-      message.warning("请输入成员名字");
-      return;
-    }
-    if (members.includes(name)) {
-      message.warning("已经有这个名字啦");
-      return;
-    }
-    if (members.length >= 6) {
-      message.warning("最多 6 位成员");
-      return;
-    }
-    addMember(name);
-    setNewMemberName("");
-    message.success(`已添加成员「${name}」`);
-  };
-
-  /** 扫描孤儿图片（只读，不删除） */
+  /** 扫描闲置照片（只读，不删除） */
   const handleScan = async () => {
     setScanning(true);
     try {
       const result = await scanOrphanImages();
-      setOrphanCount(result.orphans);
+      setUnusedCount(result.orphans);
       setScanSummary(
         result.orphans > 0
-          ? `共 ${result.total} 张打卡图片，其中 ${result.referenced} 张仍被流水引用，发现 ${result.orphans} 张孤儿图片可以清理`
-          : `共 ${result.total} 张打卡图片，全部仍被流水引用，没有需要清理的图片`
+          ? `共 ${result.total} 张打卡照片，${result.referenced} 张还在用，有 ${result.orphans} 张闲置照片可以清理`
+          : `共 ${result.total} 张打卡照片，全部还在用，没有需要清理的`
       );
     } catch (e) {
       message.error(e instanceof Error ? e.message : "扫描失败，请重试");
@@ -148,18 +114,18 @@ export default function SettingsPage() {
     }
   };
 
-  /** 清理孤儿图片（危险操作，二次确认后执行） */
+  /** 清理闲置照片（危险操作，二次确认后执行） */
   const handleClean = async () => {
     setCleaning(true);
     try {
       const result = await deleteOrphanImages();
       setScanSummary(
         result.failed > 0
-          ? `已清理 ${result.deleted} 张孤儿图片，${result.failed} 张清理失败`
-          : `已清理 ${result.deleted} 张孤儿图片`
+          ? `已清理 ${result.deleted} 张闲置照片，${result.failed} 张没清掉`
+          : `已清理 ${result.deleted} 张闲置照片`
       );
-      setOrphanCount(0);
-      message.success(`已清理 ${result.deleted} 张孤儿图片`);
+      setUnusedCount(0);
+      message.success(`已清理 ${result.deleted} 张闲置照片`);
     } catch (e) {
       message.error(e instanceof Error ? e.message : "清理失败，请重试");
     } finally {
@@ -214,62 +180,7 @@ export default function SettingsPage() {
         )}
       </Card>
 
-      {/* 家庭成员（仅家长）：不添加成员时，打卡与余额都是「全家一本账」 */}
-      {isParent && (
-        <Card className={styles.infoCard} variant="borderless">
-          <div className={styles.infoHeader}>
-            <div className={styles.infoIcon}>
-              <TeamOutlined />
-            </div>
-            <div className={styles.infoText}>
-              <div className={styles.appName}>家庭成员</div>
-              <div className={styles.appDesc}>
-                多个孩子时可为每人单独记账；不添加则所有记录不区分成员
-              </div>
-            </div>
-          </div>
-          <div className={styles.memberAdd}>
-            <Input
-              placeholder="成员名字，例如：妹妹"
-              value={newMemberName}
-              maxLength={20}
-              onChange={(e) => setNewMemberName(e.target.value)}
-              onPressEnter={handleAddMember}
-            />
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddMember}>
-              添加
-            </Button>
-          </div>
-          {members.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有添加成员" />
-          ) : (
-            <div className={styles.memberList}>
-              {members.map((name) => (
-                <div key={name} className={styles.memberItem}>
-                  <span className={styles.memberName}>{name}</span>
-                  <Popconfirm
-                    title={`移除成员「${name}」？`}
-                    description="已有流水的成员标记会保留，仅从选择列表里移除"
-                    okText="移除"
-                    okButtonProps={{ danger: true }}
-                    cancelText="取消"
-                    onConfirm={() => {
-                      removeMember(name);
-                      message.success(`已移除成员「${name}」`);
-                    }}
-                  >
-                    <Button size="small" danger icon={<DeleteOutlined />}>
-                      移除
-                    </Button>
-                  </Popconfirm>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* 打卡图片清理（仅家长）：清理被删除流水遗留的 R2 孤儿图片 */}
+      {/* 打卡图片清理（仅家长）：清理被删除流水遗留的闲置照片 */}
       {isParent && (
         <Card className={styles.infoCard} variant="borderless">
           <div className={styles.infoHeader}>
@@ -277,28 +188,28 @@ export default function SettingsPage() {
               <PictureOutlined />
             </div>
             <div className={styles.infoText}>
-              <div className={styles.appName}>打卡图片清理</div>
+              <div className={styles.appName}>打卡照片清理</div>
               <div className={styles.appDesc}>
-                删除流水时图片会自动一起删除；这里清理历史遗留的孤儿图片
+                删除记录时照片会自动一起删掉；这里清理以前遗留下来、已经没人用的闲置照片
               </div>
             </div>
           </div>
           {scanSummary && <div className={styles.scanResult}>{scanSummary}</div>}
           <div className={styles.cleanupActions}>
             <Button icon={<PictureOutlined />} loading={scanning} onClick={handleScan}>
-              扫描孤儿图片
+              扫描闲置照片
             </Button>
-            {orphanCount > 0 && (
+            {unusedCount > 0 && (
               <Popconfirm
-                title={`确认清理 ${orphanCount} 张孤儿图片？`}
-                description="图片将从 R2 永久删除，且不可恢复"
+                title={`确认清理这 ${unusedCount} 张闲置照片？`}
+                description="照片将从云端永久删除，且不可恢复"
                 okText="清理"
                 okButtonProps={{ danger: true }}
                 cancelText="取消"
                 onConfirm={handleClean}
               >
                 <Button danger loading={cleaning} icon={<DeleteOutlined />}>
-                  清理 {orphanCount} 张
+                  清理 {unusedCount} 张
                 </Button>
               </Popconfirm>
             )}

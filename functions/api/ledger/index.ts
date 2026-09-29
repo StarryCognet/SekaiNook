@@ -2,7 +2,7 @@
  * 积分流水集合接口。
  * 路由：GET /api/ledger（支持 ?status= 与 ?member= 过滤）、POST /api/ledger
  *
- * 说明：member 列由 migrations/0002_ledger_member.sql 引入（可选，多孩子场景）。
+ * 说明：member 列由 migrations/0002_ledger_member.sql 引入（历史遗留：多成员功能已下线，前端不再传该字段，接口保留此列只为兼容老数据）。
  * 为了兼容尚未执行该迁移的库，GET 用 SELECT *（列不存在只是读不到该字段），
  * POST 仅在请求真的带了 member 时才写这一列。
  */

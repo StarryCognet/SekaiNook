@@ -5,6 +5,9 @@
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+  /* 底部导航占位高度（移动端 .content 用它给自己垫底）；
+     悬浮玻璃条是浮起来的，比贴底条更厚，所以让得更多一点 */
+  --bottom-nav-space: 92px;
 }
 
 /* ===== PC 侧边栏：固定，不随内容滚动 ===== */
@@ -90,8 +93,8 @@
 
   .content {
     padding: 12px;
-    /* 让出底部 Tab 栏高度（56px）+ 安全区 */
-    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+    /* 让出底部 Tab 栏高度（iOS 悬浮玻璃条更高）+ 安全区 */
+    padding-bottom: calc(var(--bottom-nav-space) + env(safe-area-inset-bottom));
   }
 
   /* 移动端隐藏面包屑中的 "SekaiNook" 前缀，只保留当前页名 */
@@ -100,24 +103,31 @@
   }
 }
 
-/* ===== 移动端底部 Tab 栏 ===== */
+/* ===== 移动端底部 Tab 栏：悬浮玻璃胶囊 =====
+   两个平台统一成苹果那套 —— 不是实心白板 + 分割线，而是浮在内容之上的一层材质，
+   底下的内容透出来（毛玻璃 + 高光描边 + 柔和投影），两端观感一致。 */
 .bottomNav {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 12px;
+  right: 12px;
+  bottom: calc(8px + env(safe-area-inset-bottom));
   z-index: 20;
   display: flex;
   align-items: stretch;
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-  padding-bottom: env(safe-area-inset-bottom);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.66);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow:
+    0 8px 28px rgba(26, 26, 46, 0.16),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.7);
 }
 
 .bottomNavItem {
   flex: 1;
   min-width: 0;
-  height: 56px;
+  /* 苹果的 tab 比 Material 的厚一点、标签小一点（10pt 量级） */
+  height: 58px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -128,7 +138,7 @@
   background: transparent;
   color: var(--color-text-secondary);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 10px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -141,10 +151,41 @@
 .bottomNavIcon {
   display: flex;
   align-items: center;
-  font-size: 20px;
+  /* 25pt 量级：图标比文字大得多，靠它撑住整条栏的识别度 */
+  font-size: 25px;
   line-height: 1;
+  transition: transform 0.16s ease;
+}
+
+/* 按下时图标轻微回缩：手机上没有 hover，靠这点反馈告诉手指「按到了」 */
+.bottomNavItem:active .bottomNavIcon {
+  transform: scale(0.9);
 }
 
 .bottomNavLabel {
   white-space: nowrap;
+}
+
+/* 无障碍降级：开了「降低透明度」「增强对比度」，或浏览器压根不支持毛玻璃时，
+   退回不透明底色 —— 半透明层上放文字，对比度不够就是不合格的界面。 */
+@media (prefers-reduced-transparency: reduce) {
+  .bottomNav {
+    background: var(--color-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .bottomNav {
+    background: var(--color-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bottomNav {
+    background: var(--color-surface);
+  }
 }

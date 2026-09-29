@@ -13,7 +13,6 @@
 - **历史记录区**：完整积分流水账本，按时间倒序展示，每条附审批状态（已入账 / 待审批 / 已驳回）与备注/图片；状态筛选 + 「加载更多」分页；家长可删除单条记录（连带清理 R2 中的图片）并一键导出 CSV，小孩可撤回待审批的申请
 - **结算兑现**：家长可在余额为正时一键「结算兑现（清零余额）」，写入一条现金兑现流水，让积分与现金形成闭环
 - **收支趋势**：近 14 天每日净积分柱状图（`echarts/core` 按需引入，切到家庭工作台才会下载）
-- **多成员（可选）**：设置页可添加家庭成员，之后打卡与余额可按成员分开记账；不添加时就是「全家一本账」
 - **今日任务与作息**：实时时钟 + 作息状态提醒
 
 ### 📅 每周学习计划
@@ -34,8 +33,8 @@
 - **双角色**：家长（可审批、可增删记录）/ 小孩（打卡后需家长审批）
 - **身份选择门**：新设备首次打开先选身份，不默认进家长模式（避免小孩自审自批）
 - **家长口令**：切换为家长需口令，出厂 `1234`，可在设置页改为 4-8 位
-- **设置页 `/settings`**：切换身份、修改家长口令、管理家庭成员（可选）、扫描并清理 R2 孤儿打卡图片、查看应用版本与完整迭代日志（当前 v1.11.0）
-- **多端导航**：PC 固定侧边栏；手机端底部导航（家庭 / 计划 / 花园 / 设置）
+- **设置页 `/settings`**：切换身份、修改家长口令、扫描并清理云端闲置打卡照片、查看应用版本与完整迭代日志（当前 v1.12.0）
+- **多端导航**：PC 固定侧边栏；手机端悬浮毛玻璃胶囊底部导航（家庭 / 计划 / 花园 / 设置，选中实心图标、再点当前标签回顶部、切换标签保留各页位置与筛选）
 - **PWA**：可「添加到主屏幕」当 App 用（manifest + Service Worker 缓存静态资源；接口数据仍然实时请求、永不缓存）
 
 ## 🛠 技术栈
@@ -104,8 +103,8 @@ npm run db:migrate:remote
 
 ### 数据分层
 
-- **D1 云端（跨设备共享）**：`family_ledger`（积分流水，可选 `member` 列用于多孩子区分）、`weekly_plans`（每周学习计划）；图片存 R2
-- **localStorage 本地（各设备独立）**：当前身份角色、家长口令、家庭成员名单、阳光花园数据
+- **D1 云端（跨设备共享）**：`family_ledger`（积分流水）、`weekly_plans`（每周学习计划）；图片存 R2
+- **localStorage 本地（各设备独立）**：当前身份角色、家长口令、阳光花园数据
 
 ### 装到手机桌面（PWA）
 
@@ -125,7 +124,7 @@ functions/api/            # 后端接口（文件路径即 URL 路径）
 ├── plans/[id].ts         #   PATCH        /api/plans/:id
 ├── upload.ts             #   POST         /api/upload（图片入 R2，5MB 上限）
 ├── images/[[key]].ts     #   GET          /api/images/:key（[[key]] 匹配多段）
-└── maintenance/orphans.ts #  GET/POST     /api/maintenance/orphans（孤儿图片扫描 / 清理）
+└── maintenance/orphans.ts #  GET/POST     /api/maintenance/orphans（闲置照片扫描 / 清理）
 
 migrations/               # D1 建表 SQL（编号递增，必须幂等；0002 给流水加 member 列）
 public/_routes.json       # 声明 Functions 只接管 /api/*
@@ -163,7 +162,7 @@ src/
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/ledger` | 流水列表（倒序，支持 `?status=pending\|approved\|rejected`、`?member=<成员>`） |
+| GET | `/api/ledger` | 流水列表（倒序，支持 `?status=pending\|approved\|rejected`） |
 | POST | `/api/ledger` | 新增流水（小孩打卡传 `status=pending`，默认 `approved`） |
 | PATCH | `/api/ledger/:id` | 更新审批状态（审批通过 / 驳回 / 重新提交） |
 | DELETE | `/api/ledger/:id` | 删除流水，并清理关联的 R2 图片 |
@@ -172,8 +171,8 @@ src/
 | PATCH | `/api/plans/:id` | 更新单项进度 |
 | POST | `/api/upload` | 上传图片到 R2（jpeg/png/webp/gif，≤5MB） |
 | GET | `/api/images/:key` | 读取 R2 图片（匿名，供 `<img>` 直接用） |
-| GET | `/api/maintenance/orphans` | 扫描 R2 中未被流水引用的孤儿打卡图片（只读，返回 `{ total, referenced, orphans, keys }`） |
-| POST | `/api/maintenance/orphans` | 删除孤儿打卡图片，需请求体 `{"confirm":true}` |
+| GET | `/api/maintenance/orphans` | 扫描 R2 中未被流水引用的闲置打卡照片（只读，返回 `{ total, referenced, orphans, keys }`） |
+| POST | `/api/maintenance/orphans` | 删除闲置打卡照片，需请求体 `{"confirm":true}` |
 
 接口**刻意不加鉴权**：本项目是家庭内部工具，权限靠前端身份与家长口令约束（见下方开发规则）。
 

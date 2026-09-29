@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Modal, Image, message, Badge, Popconfirm, Segmented } from 'antd';
 import {
   PlusOutlined,
@@ -19,12 +19,12 @@ import {
   DeleteOutlined,
   RollbackOutlined,
   DownloadOutlined,
-  TeamOutlined,
 } from '@ant-design/icons';
-import { addLedgerRecord, calcApprovedBalance, resubmitRequest } from '../../api/familyLedger';
+import { addLedgerRecord, resubmitRequest } from '../../api/familyLedger';
 import { uploadImage } from '../../api/upload';
 import { compressImage } from '../../utils/image';
 import { useBackButton } from '../../utils/useBackButton';
+import { useViewState } from '../../utils/useViewState';
 import { getTasksByType } from '../../config/familyRules';
 import { useFamilyStore } from '../../store/useFamilyStore';
 import { PageLoading, EmptyState, ErrorState } from '../../components/StateViews';
@@ -55,18 +55,16 @@ export default function FamilyDashboard() {
     pendingCount,
     loading,
     role,
-    members,
-    activeMember,
     loadLedger,
     refreshPending,
     approve,
     reject,
     removeRecord,
-    setActiveMember,
   } = useFamilyStore();
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
-  const [activeTab, setActiveTab] = useState('tasks');
+  // 当前分页（任务区 / 待审批 / 历史记录）—— 切到别的页面再回来要还在原来那页
+  const [activeTab, setActiveTab] = useViewState('family.activeTab', 'tasks');
   const [form] = Form.useForm<CustomTaskForm>();
 
   const isParent = role === 'parent';
@@ -81,9 +79,11 @@ export default function FamilyDashboard() {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   /** 正在结算兑现（家长） */
   const [settling, setSettling] = useState(false);
-  /** 历史记录状态筛选 + 已渲染条数（分页） */
-  const [recordFilter, setRecordFilter] = useState<RecordFilter>('all');
-  const [visibleCount, setVisibleCount] = useState(RECORDS_PAGE_SIZE);
+  /** 历史记录状态筛选 + 已渲染条数（分页）—— 跨页面切换保留，切走再回来还是原样 */
+  const [recordFilter, setRecordFilter] = useViewState<RecordFilter>('family.recordFilter', 'all');
+  const [visibleCount, setVisibleCount] = useViewState<number>('family.visibleCount', RECORDS_PAGE_SIZE);
+  /** 首次挂载不算「切换筛选」，否则会把恢复出来的分页进度清零 */
+  const filterMountedRef = useRef(false);
 
   const earningTasks = getTasksByType('earning');
   const spendingTasks = getTasksByType('spending');
@@ -91,25 +91,10 @@ export default function FamilyDashboard() {
   const homeworkTask = earningTasks.find((t) => t.id === 'finish_homework');
   const sleepTask = earningTasks.find((t) => t.id === 'sleep_on_time');
 
-  /** 是否启用了多成员（家庭里只有一个孩子时整块 UI 都不出现） */
-  const hasMembers = members.length > 0;
-
-  /** 当前选中成员名下的流水（未选成员 = 全部） */
-  const memberRecords = useMemo(
-    () => (activeMember ? records.filter((r) => r.member === activeMember) : records),
-    [records, activeMember]
-  );
-
-  /** 余额：选中成员时按该成员单独算，否则用全量余额 */
-  const displayBalance = useMemo(
-    () => (activeMember ? calcApprovedBalance(memberRecords) : balance),
-    [activeMember, memberRecords, balance]
-  );
-
-  /** 历史记录：先按成员（memberRecords 已过滤）再按状态筛选 */
+  /** 历史记录：按状态筛选（all = 全部） */
   const filteredRecords = useMemo(
-    () => (recordFilter === 'all' ? memberRecords : memberRecords.filter((r) => (r.status ?? 'approved') === recordFilter)),
-    [memberRecords, recordFilter]
+    () => (recordFilter === 'all' ? records : records.filter((r) => (r.status ?? 'approved') === recordFilter)),
+    [records, recordFilter]
   );
 
   /** 当前已渲染的历史记录（加载更多分页） */
@@ -124,9 +109,14 @@ export default function FamilyDashboard() {
   }, [loadLedger]);
 
   // 切换筛选条件后回到第一页，避免出现「筛完还剩 40 条已渲染」
+  // 首次挂载跳过：从别的页面切回来时要保住原来的分页进度
   useEffect(() => {
+    if (!filterMountedRef.current) {
+      filterMountedRef.current = true;
+      return;
+    }
     setVisibleCount(RECORDS_PAGE_SIZE);
-  }, [recordFilter, activeMember]);
+  }, [recordFilter, setVisibleCount]);
 
   // 每秒刷新当前时间（用于作息判断）
   useEffect(() => {
@@ -295,7 +285,7 @@ export default function FamilyDashboard() {
     try {
       const recordId = await addLedgerRecord(
         activeTask,
-        { note: note.trim() || undefined, imageUrl, member: activeMember },
+        { note: note.trim() || undefined, imageUrl },
         { status: isParent ? 'approved' : 'pending' }
       );
       await loadLedger();
@@ -323,7 +313,7 @@ export default function FamilyDashboard() {
     try {
       const recordId = await addLedgerRecord(
         task,
-        { member: activeMember },
+        undefined,
         { status: isParent ? 'approved' : 'pending' }
       );
       await loadLedger();
@@ -347,7 +337,7 @@ export default function FamilyDashboard() {
     try {
       const recordId = await addLedgerRecord(
         task,
-        { member: activeMember },
+        undefined,
         { status: isParent ? 'approved' : 'pending' }
       );
       await loadLedger();
@@ -366,7 +356,7 @@ export default function FamilyDashboard() {
     return <PageLoading />;
   }
 
-  const isPositive = displayBalance >= 0;
+  const isPositive = balance >= 0;
   const balanceColor = isPositive ? designTokens.colors.success : designTokens.colors.danger;
 
   /** 格式化流水时间 */
@@ -434,9 +424,9 @@ export default function FamilyDashboard() {
    * 这样积分→钱的闭环留在同一本流水里，家长和孩子都能看到兑现记录。
    */
   const handleSettle = async () => {
-    if (displayBalance <= 0) return;
+    if (balance <= 0) return;
     setSettling(true);
-    const amount = displayBalance;
+    const amount = balance;
     try {
       const task: TaskConfig = {
         id: 'payout',
@@ -447,10 +437,7 @@ export default function FamilyDashboard() {
       };
       await addLedgerRecord(
         task,
-        {
-          note: activeMember ? `结算给${activeMember}，余额清零` : '结算兑现，余额清零',
-          member: activeMember,
-        },
+        { note: '结算兑现，余额清零' },
         { status: 'approved' }
       );
       await loadLedger();
@@ -465,14 +452,13 @@ export default function FamilyDashboard() {
   /** 导出 CSV（仅家长）：按当前筛选导出全部记录，带 BOM 方便 Excel 直接打开中文 */
   const handleExportCsv = () => {
     const escapeCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
-    const header = ['时间', '任务', '类型', '积分', '状态', '成员', '备注', '图片'];
+    const header = ['时间', '任务', '类型', '积分', '状态', '备注', '图片'];
     const rows = filteredRecords.map((r) => [
       new Date(r.created_at).toLocaleString('zh-CN'),
       r.task_name,
       r.type === 'earning' ? '赚钱' : '消费/罚款',
       String(r.amount),
       r.status === 'pending' ? '待审批' : r.status === 'rejected' ? '已驳回' : '已入账',
-      r.member ?? '',
       (r.note ?? '').replace(/[\r\n]+/g, ' '),
       r.image_url ?? '',
     ]);
@@ -632,12 +618,7 @@ export default function FamilyDashboard() {
                       {record.amount >= 0 ? <RiseOutlined /> : <FallOutlined />}
                     </div>
                   }
-                  title={
-                    <span>
-                      {record.task_name}
-                      {record.member && <Tag className={styles.recordMember}>{record.member}</Tag>}
-                    </span>
-                  }
+                  title={record.task_name}
                   description={formatTime(record.created_at)}
                 />
                 <div className={styles.recordRight}>
@@ -742,12 +723,7 @@ export default function FamilyDashboard() {
                     <AuditOutlined />
                   </div>
                 }
-                title={
-                  <span>
-                    {record.task_name}
-                    {record.member && <Tag className={styles.recordMember}>{record.member}</Tag>}
-                  </span>
-                }
+                title={record.task_name}
                 description={formatTime(record.created_at)}
               />
               <div className={styles.recordRight}>
@@ -805,7 +781,7 @@ export default function FamilyDashboard() {
         <Card className={styles.balanceCard} variant="borderless">
           <div className={styles.balanceHeader}>
             <span className={styles.balanceLabel}>
-              <WalletOutlined /> {activeMember ? `${activeMember}的总积分` : '当前总积分'}
+              <WalletOutlined /> 当前总积分
             </span>
             <Tag
               color={isPositive ? 'success' : 'error'}
@@ -816,7 +792,7 @@ export default function FamilyDashboard() {
             </Tag>
           </div>
           <div className={`num ${styles.balanceValue}`} style={{ color: balanceColor }}>
-            {displayBalance}
+            {balance}
           </div>
           <div className={styles.balanceSub}>可用余额</div>
           {isParent && pendingCount > 0 && (
@@ -824,28 +800,10 @@ export default function FamilyDashboard() {
               <AuditOutlined /> 待审批 {pendingCount} 项
             </div>
           )}
-          {/* 多孩子家庭：切换看谁的余额（没添加成员时整行不出现） */}
-          {hasMembers && (
-            <div className={styles.memberRow}>
-              <span className={styles.memberLabel}>
-                <TeamOutlined /> 成员
-              </span>
-              <Select
-                size="small"
-                className={styles.memberSelect}
-                value={activeMember ?? ''}
-                onChange={(value) => setActiveMember(value ? String(value) : null)}
-                options={[
-                  { value: '', label: '全部' },
-                  ...members.map((name) => ({ value: name, label: name })),
-                ]}
-              />
-            </div>
-          )}
           {/* 结算兑现：把余额换成现金，余额清零（仅家长、余额为正时） */}
-          {isParent && displayBalance > 0 && (
+          {isParent && balance > 0 && (
             <Popconfirm
-              title={`兑现 ${displayBalance} 积分？`}
+              title={`兑现 ${balance} 积分？`}
               description="会记一条「现金兑现」支出，余额清零；如需回退请删除该记录"
               okText="确认兑现"
               cancelText="取消"
@@ -962,7 +920,7 @@ export default function FamilyDashboard() {
 
         {/* 近 14 天积分趋势（echarts 按需引入，见 components/BalanceTrend.tsx） */}
         <div className={styles.trendWrap}>
-          <BalanceTrend records={memberRecords} />
+          <BalanceTrend records={records} />
         </div>
       </div>
 
@@ -1026,9 +984,6 @@ export default function FamilyDashboard() {
                   <span>从相册选</span>
                 </label>
               </div>
-            )}
-            {hasMembers && (
-              <div className={styles.uploadHint}>记给：{activeMember ?? '未指定成员'}</div>
             )}
           </div>
         </div>

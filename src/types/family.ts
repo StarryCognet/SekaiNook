@@ -39,9 +39,8 @@ export interface LedgerRecord {
   /** 审批状态（缺省视为已入账，兼容存量数据） */
   status?: LedgerStatus;
   /**
-   * 家庭成员（可选，多孩子场景）。
-   * 空值表示未指定成员 —— 单孩子家庭不配置成员，界面上不会出现这个概念。
-   * 该字段依赖 migrations/0002_ledger_member.sql，未迁移的库读不到（值为 undefined）。
+   * 历史遗留字段：曾经用于多孩子家庭按成员分开记账，多成员功能已下线（界面上不再出现）。
+   * D1 的 member 列仍在（老数据不回改），新写入的记录该字段为空。
    */
   member?: string | null;
 }

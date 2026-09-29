@@ -1,9 +1,10 @@
 /**
- * 孤儿图片维护接口。
+ * 闲置照片维护接口（界面上叫「闲置照片」，代码里沿用 orphan = 未被引用）。
  * 路由：GET /api/maintenance/orphans（只扫描不删除，dry run）
- *       POST /api/maintenance/orphans（真正删除孤儿对象，需 confirm: true）
+ *       POST /api/maintenance/orphans（真正删除无人引用的对象，需 confirm: true）
  *
- * 「孤儿图片」= R2 中 tasks/ 前缀下存在、但没有任何 family_ledger.image_url 引用它的对象。
+ * 「闲置照片」= R2 中 tasks/ 前缀下存在、但没有任何 family_ledger.image_url 引用它的对象
+ * （打卡记录被删除后，照片仍留在云端的那种）。
  * 上传接口（functions/api/upload.ts）把图片写入 tasks/ 前缀，故扫描只针对该前缀，其他前缀一律不碰。
  */
 
@@ -67,14 +68,14 @@ async function collectReferencedKeys(db: D1Database): Promise<Set<string>> {
   return referenced;
 }
 
-/** 计算 tasks/ 前缀下的孤儿 key（存在对象、无任何引用） */
+/** 计算 tasks/ 前缀下的闲置 key（存在对象、无任何引用） */
 async function findOrphanKeys(env: Env): Promise<string[]> {
   const objectKeys = await listImageKeys(env.STARRYMIKU_BUCKET);
   const referenced = await collectReferencedKeys(env.DB);
   return objectKeys.filter((key) => !referenced.has(key));
 }
 
-/** 扫描孤儿图片（只读，绝不删除） */
+/** 扫描闲置照片（只读，绝不删除） */
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   let objectKeys: string[];
   let referenced: Set<string>;
@@ -82,7 +83,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
     objectKeys = await listImageKeys(env.STARRYMIKU_BUCKET);
     referenced = await collectReferencedKeys(env.DB);
   } catch {
-    return Response.json({ error: '扫描孤儿图片失败（R2 列举或 D1 查询异常）' }, { status: 500 });
+    return Response.json({ error: '扫描闲置照片失败（存储列举或数据库查询异常）' }, { status: 500 });
   }
 
   const orphanKeys = objectKeys.filter((key) => !referenced.has(key));
@@ -94,7 +95,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   });
 };
 
-/** 删除孤儿图片（危险操作，需请求体 { confirm: true }） */
+/** 删除闲置照片（危险操作，需请求体 { confirm: true }） */
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   let body: Record<string, unknown>;
   try {
@@ -105,7 +106,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   if (body.confirm !== true) {
     return Response.json(
-      { error: '危险操作：请在请求体中传入 {"confirm": true} 以确认删除孤儿图片' },
+      { error: '危险操作：请在请求体中传入 {"confirm": true} 以确认清理闲置照片' },
       { status: 400 }
     );
   }
@@ -114,7 +115,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     orphanKeys = await findOrphanKeys(env);
   } catch {
-    return Response.json({ error: '扫描孤儿图片失败（R2 列举或 D1 查询异常）' }, { status: 500 });
+    return Response.json({ error: '扫描闲置照片失败（存储列举或数据库查询异常）' }, { status: 500 });
   }
 
   const deletedKeys: string[] = [];
