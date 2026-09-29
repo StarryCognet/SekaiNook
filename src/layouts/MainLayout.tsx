@@ -109,6 +109,8 @@ export default function MainLayout() {
   const themeDark = useThemePreset().dark;
   const [mobile, setMobile] = useState(isMobile());
   const [collapsed, setCollapsed] = useState(false);
+  /** 往下滑看内容时把顶栏与底部 Tab 栏收起来，往上滑再放出来 */
+  const [chromeHidden, setChromeHidden] = useState(false);
   const contentRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -172,6 +174,58 @@ export default function MainLayout() {
       raf = requestAnimationFrame(() => {
         raf = 0;
         rememberScroll(location.pathname, el.scrollTop);
+      });
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [location.pathname, mobile]);
+
+  /**
+   * 下滑收栏 / 上滑放栏。
+   * - 只在手机上做：电脑端顶栏是流内的一条，滑走会在顶上留一块空白。
+   * - 顶部 HIDE_AFTER 之内永远不收：刚进页面还在看开头时，顶上那两条就是导航。
+   * - 位移要累计超过 STEP 才认方向：手指微抖、滚到头的橡皮筋回弹都不会让栏子忽隐忽现。
+   * - 切路由后 SUPPRESS 毫秒内不认：切换时会把内容滚回上次的位置，
+   *   那一下位移不是用户滑的，别因此把栏子收走。
+   */
+  useEffect(() => {
+    if (!mobile) {
+      setChromeHidden(false);
+      return;
+    }
+    const el = contentRef.current;
+    if (!el) return;
+    const HIDE_AFTER = 72;
+    const STEP = 6;
+    const SUPPRESS = 500;
+    let raf = 0;
+    let last = el.scrollTop;
+    const until = performance.now() + SUPPRESS;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const top = el.scrollTop;
+        if (performance.now() < until) {
+          last = top;
+          return;
+        }
+        if (top <= HIDE_AFTER) {
+          last = top;
+          setChromeHidden(false);
+          return;
+        }
+        const delta = top - last;
+        if (delta > STEP) {
+          last = top;
+          setChromeHidden(true);
+        } else if (delta < -STEP) {
+          last = top;
+          setChromeHidden(false);
+        }
       });
     };
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -294,7 +348,7 @@ export default function MainLayout() {
         </Sider>
       )}
       <Layout className={styles.mainLayout}>
-        <Header className={styles.header}>
+        <Header className={`${styles.header} ${chromeHidden ? styles.headerHidden : ""}`}>
           {mobile ? (
             /* 移动端顶栏左侧：小图标块 + 当前页名（面包屑在手机上太啰嗦） */
             <span className={styles.pageChip}>
@@ -377,7 +431,10 @@ export default function MainLayout() {
         </Content>
       </Layout>
       {mobile && (
-        <nav className={styles.bottomNav} aria-label="主导航">
+        <nav
+          className={`${styles.bottomNav} ${chromeHidden ? styles.bottomNavHidden : ""}`}
+          aria-label="主导航"
+        >
           {NAV_ITEMS.map((item) => {
             const active = item.key === activeTab;
             return (

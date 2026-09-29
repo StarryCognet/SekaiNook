@@ -232,6 +232,10 @@
     box-shadow:
       var(--glass-shadow),
       inset 0 0 0 0.5px var(--glass-ring);
+    /* 收起 / 放出：与底部 Tab 栏同一条曲线与时长 */
+    transition:
+      transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1),
+      opacity 0.24s ease;
   }
 
   .content {
@@ -249,6 +253,21 @@
   /* 手机顶栏更紧凑：动作区里三个小件挨紧一点，左边的页面名才留得住 */
   .headerActions {
     gap: 2px;
+  }
+
+  /* ===== 下滑收栏：顶栏往上滑走、底部 Tab 栏往下滑走，上滑原路回来 =====
+     两块共用同一条缓动曲线与时长，来回是一套动作；
+     藏起来时把点击一起收掉 —— 手指盲点不该还能点到已经飞出去的按钮。 */
+  .headerHidden {
+    transform: translateY(calc(-100% - 20px - env(safe-area-inset-top)));
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .bottomNavHidden {
+    transform: translateY(calc(100% + 24px + env(safe-area-inset-bottom)));
+    opacity: 0;
+    pointer-events: none;
   }
 }
 
@@ -305,6 +324,10 @@
   box-shadow:
     var(--glass-shadow),
     inset 0 0 0 0.5px var(--glass-ring);
+  /* 收起 / 放出：与顶栏同一条曲线与时长，两块来回看起来是一套动作 */
+  transition:
+    transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 0.24s ease;
 }
 
 .bottomNavItem {
@@ -378,5 +401,13 @@
   .bottomNav,
   .mainLayout .header {
     background: var(--color-surface);
+  }
+}
+
+/* 系统开了「减少动态效果」：把收放动画关掉（瞬间收起 / 放出，不做位移滑动） */
+@media (prefers-reduced-motion: reduce) {
+  .bottomNav,
+  .mainLayout .header {
+    transition: none;
   }
 }
