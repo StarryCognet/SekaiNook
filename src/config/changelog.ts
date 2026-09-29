@@ -11,10 +11,20 @@ export interface ChangelogEntry {
 }
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '1.20.0';
+export const APP_VERSION = '1.20.1';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.20.1',
+    date: '2026-09-29 21:40:00',
+    title: '底栏放大留白 + 顶栏改成悬浮玻璃胶囊',
+    changes: [
+      '底部导航整体放大一档：条高 59 → 68px、图标 24 → 26px、文字 10 → 11px，离屏幕底边与左右两侧的留白也都更宽',
+      '手机顶栏从「一条白条 + 面包屑」换成悬浮玻璃胶囊，跟底部导航同一种语言：左边是「当前页小图标块 + 页面名」，右边还是那颗太阳 / 月亮按钮；内容会从胶囊下面滑过去，不再被一条实心横条压住',
+      '面包屑只在电脑端保留 —— 手机上有了图标 + 页面名，那行「SekaiNook / 首页」本来就是重复信息',
+    ],
+  },
   {
     version: '1.20.0',
     date: '2026-09-29 21:05:00',

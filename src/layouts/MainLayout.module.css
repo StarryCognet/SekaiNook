@@ -6,8 +6,9 @@
   height: 100dvh;
   overflow: hidden;
   /* 底部导航占位高度（移动端 .content 用它给自己垫底）；
-     悬浮玻璃条是浮起来的，比贴底条更厚，所以让得更多一点 */
-  --bottom-nav-space: 92px;
+     悬浮玻璃条是浮起来的，比贴底条更厚，所以让得更多一点：
+     68（项 54 + 上下各 7）+ 离底 16 + 一段余量 */
+  --bottom-nav-space: 108px;
 }
 
 /* ===== PC 侧边栏：固定，不随内容滚动 ===== */
@@ -106,21 +107,82 @@
 
 /* ===== 移动端优化 ===== */
 @media (max-width: 768px) {
-  .header {
-    padding: 0 12px;
+  /* 移动端顶栏也做成「悬浮玻璃胶囊」，与底部 Tab 栏同一套语言：
+     整条浮在内容之上，内容从它下面滑过去（.content 用 padding-top 让位）。
+     这里用 .mainLayout .header 两级选择器，是为了压过 antd Header 自带的
+     height / padding / background（同权重、运行时注入，单类选择器压不住）。 */
+  .mainLayout .header {
+    position: fixed;
+    top: calc(8px + env(safe-area-inset-top));
+    left: 16px;
+    right: 16px;
+    z-index: 15;
+    height: 52px;
+    padding: 0 8px 0 14px;
     gap: 8px;
+    border-bottom: none;
+    border-radius: 100px;
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    box-shadow:
+      var(--glass-shadow),
+      inset 0 0 0 0.5px var(--glass-ring);
   }
 
   .content {
     padding: 12px;
-    /* 让出底部 Tab 栏高度（iOS 悬浮玻璃条更高）+ 安全区 */
+    /* 顶部让出悬浮胶囊顶栏（52 + 上下各 8 + 余量），底部让出 Tab 栏 + 安全区 */
+    padding-top: calc(52px + 28px + env(safe-area-inset-top));
     padding-bottom: calc(var(--bottom-nav-space) + env(safe-area-inset-bottom));
   }
 
-  /* 移动端隐藏面包屑中的 "SekaiNook" 前缀，只保留当前页名 */
-  .header :global(.ant-breadcrumb li:first-child) {
+  /* 移动端不用面包屑（左侧改成「图标块 + 当前页名」的胶囊标签） */
+  .header :global(.ant-breadcrumb) {
     display: none;
   }
+
+  /* 玻璃胶囊里那颗按钮也垫一层淡胶囊底（跟导航选中态同一个变量） */
+  .mainLayout .header .themeToggle {
+    background: var(--nav-active-bg);
+    border-color: transparent;
+  }
+
+  .mainLayout .header .themeToggle:hover {
+    background: var(--nav-active-bg) !important;
+    border-color: transparent;
+  }
+}
+
+/* ===== 移动端顶栏左侧：小图标块 + 当前页名 ===== */
+.pageChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--color-text);
+}
+
+.pageChipIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--nav-active-bg);
+  color: var(--color-primary);
+  font-size: 16px;
+}
+
+.pageChipLabel {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* ===== 移动端底部 Tab 栏：悬浮玻璃胶囊 =====
@@ -129,15 +191,15 @@
    七套主题共用同一套结构，颜色全走变量。 */
 .bottomNav {
   position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: calc(8px + env(safe-area-inset-bottom));
+  left: 16px;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 20;
   display: flex;
   align-items: stretch;
   gap: 2px;
-  padding: 6px;
-  /* 附件实测条高 59 = 项 47 + 上下各 6 */
+  padding: 7px;
+  /* 附件实测条高 59 = 项 47 + 上下各 6；按手感放大一档：68 = 项 54 + 上下各 7 */
   border-radius: 100px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -150,8 +212,8 @@
 .bottomNavItem {
   flex: 1;
   min-width: 0;
-  /* 附件实测：项 47 高、图标 24、标签 10px 满行高 */
-  height: 47px;
+  /* 附件实测：项 47 高、图标 24、标签 10px 满行高；按手感放大到 54 / 26 / 11 */
+  height: 54px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -163,7 +225,7 @@
   background: transparent;
   color: var(--color-text-secondary);
   font-family: inherit;
-  font-size: 10px;
+  font-size: 11px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: background 0.16s ease;
@@ -179,8 +241,8 @@
 .bottomNavIcon {
   display: flex;
   align-items: center;
-  /* 附件实测图标 24px：比文字大得多，靠它撑住整条栏的识别度 */
-  font-size: 24px;
+  /* 附件实测图标 24px：比文字大得多，靠它撑住整条栏的识别度（跟着栏高提到 26） */
+  font-size: 26px;
   line-height: 1;
   transition: transform 0.16s ease;
 }
@@ -197,7 +259,8 @@
 /* 无障碍降级：开了「降低透明度」「增强对比度」，或浏览器压根不支持毛玻璃时，
    退回不透明底色 —— 半透明层上放文字，对比度不够就是不合格的界面。 */
 @media (prefers-reduced-transparency: reduce) {
-  .bottomNav {
+  .bottomNav,
+  .mainLayout .header {
     background: var(--color-surface);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -205,7 +268,8 @@
 }
 
 @media (prefers-contrast: more) {
-  .bottomNav {
+  .bottomNav,
+  .mainLayout .header {
     background: var(--color-surface);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -213,7 +277,8 @@
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .bottomNav {
+  .bottomNav,
+  .mainLayout .header {
     background: var(--color-surface);
   }
 }

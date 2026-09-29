@@ -152,6 +152,8 @@ export default function MainLayout() {
   const currentLabel = BREADCRUMB_MAP[currentKey] ?? "家庭工作台";
   /** 当前路径归属哪个 Tab（/garden 下的子页面也算在「花园」名下） */
   const activeTab = resolveTabRoot(currentKey);
+  /** 当前 Tab 对应的导航项：移动端顶栏左侧借它的图标做「页面名胶囊」 */
+  const activeNavItem = NAV_ITEMS.find((item) => item.key === activeTab) ?? NAV_ITEMS[0];
 
   // 记住每个 Tab 最后停留的路径：切走再切回来能直接回到原处
   useEffect(() => {
@@ -291,7 +293,15 @@ export default function MainLayout() {
       )}
       <Layout className={styles.mainLayout}>
         <Header className={styles.header}>
-          <Breadcrumb items={[{ title: "SekaiNook" }, { title: currentLabel }]} />
+          {mobile ? (
+            /* 移动端顶栏左侧：小图标块 + 当前页名（面包屑在手机上太啰嗦） */
+            <span className={styles.pageChip}>
+              <span className={styles.pageChipIcon}>{renderIcon(activeNavItem, true)}</span>
+              <span className={styles.pageChipLabel}>{currentLabel}</span>
+            </span>
+          ) : (
+            <Breadcrumb items={[{ title: "SekaiNook" }, { title: currentLabel }]} />
+          )}
           {/* 深浅一键切换：点在「上次用的浅色」与「上次用的深色」之间来回，
               图标显示的是「点下去会变成什么」：深色时给太阳，浅色时给月亮 */}
           <Tooltip title={themeDark ? "切到浅色" : "切到深色"} placement="bottomRight">
