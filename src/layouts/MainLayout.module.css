@@ -41,23 +41,127 @@
   z-index: 10;
 }
 
-/* ===== 顶栏右上角：深浅主题一键切换 =====
-   形态与底部导航同一套（附件里的「动作胶囊」）：圆形 + 发丝描边，不抢内容 */
-.themeToggle {
+/* ===== 顶栏右侧动作区 =====
+   玻璃胶囊里一排小件：余额胶囊（仅电脑端）+ 通知铃铛 + 深浅开关。
+   手机端顶栏只有 52px 高，所以每件都不超过 32px。 */
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  font-size: 18px;
-  color: var(--color-text-secondary);
-  background: var(--color-surface-soft);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
 }
 
-.themeToggle:hover {
-  color: var(--color-primary) !important;
-  background: var(--color-surface-soft) !important;
-  border-color: var(--color-primary);
+/* 余额小胶囊：点一下去家庭账本（数字交给 .num 用等宽字，位数变化时不跳） */
+.balanceChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--nav-active-bg);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.balanceChip:hover {
+  background: var(--color-surface-soft);
+}
+
+.balanceChipNum {
+  letter-spacing: 0.3px;
+}
+
+/* 通知铃铛：未读挂角标，任何页面一键直达通知页 */
+.iconChip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 17px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.iconChip:hover {
+  background: var(--nav-active-bg);
+  color: var(--color-text);
+}
+
+/* ===== 深浅主题开关：日 / 月两段式，滑块托着当前这一档 =====
+   比原来那颗「点一下翻面」的圆按钮更高级的地方：两个状态都摆在明面上，
+   当前那个被滑块托着 —— 不用去猜图标指的是「现在」还是「接下来」。 */
+.brightnessSwitch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--nav-active-bg);
+  box-shadow: inset 0 0 0 0.5px var(--glass-ring);
+}
+
+.brightnessKnob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--color-surface);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.22),
+    0 3px 8px rgba(0, 0, 0, 0.12);
+  /* 带一点回弹，滑过去时有「咬合」的手感 */
+  transition: transform 0.26s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+
+.brightnessSwitch[data-dark="true"] .brightnessKnob {
+  transform: translateX(26px);
+}
+
+.brightnessOption {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-size: 15px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s ease;
+}
+
+.brightnessOption:hover {
+  color: var(--color-text-secondary);
+}
+
+/* 当前这一档的图标提到正文色，另一档留在 tertiary（安静） */
+.brightnessSwitch[data-dark="false"] .brightnessOption:first-of-type,
+.brightnessSwitch[data-dark="true"] .brightnessOption:last-of-type {
+  color: var(--color-text);
 }
 
 .content {
@@ -142,15 +246,9 @@
     display: none;
   }
 
-  /* 玻璃胶囊里那颗按钮也垫一层淡胶囊底（跟导航选中态同一个变量） */
-  .mainLayout .header .themeToggle {
-    background: var(--nav-active-bg);
-    border-color: transparent;
-  }
-
-  .mainLayout .header .themeToggle:hover {
-    background: var(--nav-active-bg) !important;
-    border-color: transparent;
+  /* 手机顶栏更紧凑：动作区里三个小件挨紧一点，左边的页面名才留得住 */
+  .headerActions {
+    gap: 2px;
   }
 }
 

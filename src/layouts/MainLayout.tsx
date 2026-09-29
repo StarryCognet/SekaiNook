@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Badge, Breadcrumb, Button, Layout, Menu, Tooltip } from "antd";
+import { Badge, Breadcrumb, Layout, Menu } from "antd";
 import {
   AccountBookFilled,
   AccountBookOutlined,
+  BellOutlined,
   BookOutlined,
   CalendarFilled,
   CalendarOutlined,
@@ -14,6 +15,7 @@ import {
   SettingOutlined,
   SunFilled,
   SunOutlined,
+  WalletOutlined,
 } from "@ant-design/icons";
 import { isMobile } from "../utils/device";
 import {
@@ -99,7 +101,7 @@ const NAV_ITEMS: NavItem[] = [
 export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role, pendingCount } = useFamilyStore();
+  const { role, pendingCount, balance } = useFamilyStore();
   const { audience, unreadCount, load: loadNotifications, refresh: refreshNotifications } =
     useNotificationStore();
   const loadNames = useSettingsStore((s) => s.load);
@@ -302,18 +304,71 @@ export default function MainLayout() {
           ) : (
             <Breadcrumb items={[{ title: "SekaiNook" }, { title: currentLabel }]} />
           )}
-          {/* 深浅一键切换：点在「上次用的浅色」与「上次用的深色」之间来回，
-              图标显示的是「点下去会变成什么」：深色时给太阳，浅色时给月亮 */}
-          <Tooltip title={themeDark ? "切到浅色" : "切到深色"} placement="bottomRight">
-            <Button
-              type="text"
-              shape="circle"
-              className={styles.themeToggle}
-              icon={themeDark ? <SunOutlined /> : <MoonOutlined />}
-              onClick={toggleBrightness}
-              aria-label={themeDark ? "切到浅色主题" : "切到深色主题"}
-            />
-          </Tooltip>
+          <div className={styles.headerActions}>
+            {/* 余额小胶囊：只在电脑端 —— 手机上首页与账本都有更大的余额卡，
+                顶栏再塞一个会把左边的页面名挤没 */}
+            {!mobile && (
+              <button
+                type="button"
+                className={styles.balanceChip}
+                onClick={() => navigate("/family")}
+                title="去家庭账本"
+              >
+                <WalletOutlined />
+                <span className={`num ${styles.balanceChipNum}`}>{balance}</span>
+              </button>
+            )}
+            {/* 通知铃铛：未读挂角标，停在任何一页都能一键到通知页 */}
+            <button
+              type="button"
+              className={styles.iconChip}
+              onClick={() => navigate("/home/notifications")}
+              title="通知"
+              aria-label={unreadCount > 0 ? `通知，${unreadCount} 条未读` : "通知"}
+            >
+              {unreadCount > 0 ? (
+                <Badge count={unreadCount} size="small" offset={[2, -2]}>
+                  <BellOutlined />
+                </Badge>
+              ) : (
+                <BellOutlined />
+              )}
+            </button>
+            {/* 深浅开关：太阳与月亮都摆在明面上，滑块托着当前这一档；
+                点另一档 = 切到「上次用的」那种深浅（与原来那颗圆按钮同一份记忆） */}
+            <div
+              className={styles.brightnessSwitch}
+              data-dark={themeDark ? "true" : "false"}
+              role="group"
+              aria-label="深浅主题"
+            >
+              <span className={styles.brightnessKnob} aria-hidden="true" />
+              <button
+                type="button"
+                className={styles.brightnessOption}
+                aria-pressed={!themeDark}
+                aria-label="切到浅色主题"
+                title="浅色"
+                onClick={() => {
+                  if (themeDark) toggleBrightness();
+                }}
+              >
+                <SunOutlined />
+              </button>
+              <button
+                type="button"
+                className={styles.brightnessOption}
+                aria-pressed={themeDark}
+                aria-label="切到深色主题"
+                title="深色"
+                onClick={() => {
+                  if (!themeDark) toggleBrightness();
+                }}
+              >
+                <MoonOutlined />
+              </button>
+            </div>
+          </div>
         </Header>
         <Content className={styles.content} ref={contentRef}>
           <div className="page-transition">
