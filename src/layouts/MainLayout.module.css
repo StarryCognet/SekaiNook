@@ -324,29 +324,76 @@
   box-shadow:
     var(--glass-shadow),
     inset 0 0 0 0.5px var(--glass-ring);
+  /* 长按拖动玻璃高光：这段手势别被浏览器当成「选中文字 / 长按菜单 / 滚页面」 */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
   /* 收起 / 放出：与顶栏同一条曲线与时长，两块来回看起来是一套动作 */
   transition:
     transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1),
     opacity 0.24s ease;
 }
 
-/* 选中高光：一条会「滑过去」的胶囊。
+/* 选中高光：一条会「滑过去」的胶囊（几何层）。
    位置与宽度由 JS 量出当前项后写进 transform / width，而不是挂在选中项自己身上 ——
    这样换 Tab 时它是「滑过去」，不是「在新位置凭空出现」。
-   曲线带过冲（1.56），滑到位时轻轻弹一下，接近实物的手感。 */
+   长按拖动时这一层的过渡由 JS 临时关掉（1:1 跟手），松手再打开，
+   于是它会从手指松开的位置弹到目标格。曲线带过冲（1.56），滑到位时轻轻弹一下。 */
 .navPill {
   position: absolute;
   top: 7px;
   left: 0;
   height: 54px;
   border-radius: 100px;
-  background: var(--nav-active-bg);
   pointer-events: none;
   z-index: 0;
   will-change: transform, width;
   transition:
     transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
     width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 玻璃质感（视觉层）：底色还是主题的 --nav-active-bg，上面压一层「顶亮底暗」的高光，
+   再来一道 0.5px 发丝圈、一条顶边亮线，外加内外两层落影 —— 看着像一块压在后面的
+   毛玻璃片。backdrop-filter 在这里几乎看不出效果（父级 .bottomNav 本身就是毛玻璃，
+   会形成新的背景根），真正让它「像玻璃」的是上面这几层光与影。 */
+.navPillGlass {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background-color: var(--nav-active-bg);
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0.14) 42%,
+    rgba(255, 255, 255, 0.04) 62%,
+    rgba(255, 255, 255, 0.16) 100%
+  );
+  -webkit-backdrop-filter: blur(8px) saturate(180%);
+  backdrop-filter: blur(8px) saturate(180%);
+  box-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18),
+    0 2px 6px rgba(0, 0, 0, 0.16),
+    0 8px 20px rgba(0, 0, 0, 0.1);
+  transform: scale(1);
+  transition:
+    transform 0.42s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.2s ease;
+}
+
+/* 「拿起来了」：玻璃片鼓一点、影子实一点（缩放放在内层，位移期间它还是 1:1 跟手） */
+.navPillDragging .navPillGlass {
+  transform: scale(1.06);
+  box-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.22),
+    0 6px 14px rgba(0, 0, 0, 0.22),
+    0 14px 30px rgba(0, 0, 0, 0.16);
 }
 
 .bottomNavItem {
@@ -370,7 +417,19 @@
   font-size: 11px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color 0.16s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  transition:
+    color 0.16s ease,
+    transform 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 长按「拿起来」的那一项：放大一档、文字提到正文色；松手沿同一条弹簧曲线弹回原大 */
+.bottomNavItemLifted {
+  transform: scale(1.16);
+  color: var(--color-text);
 }
 
 /* 选中态 = 文字提亮加粗；那层淡胶囊底交给 .navPill（它得滑过去） */
@@ -393,18 +452,31 @@
   transform: scale(0.9);
 }
 
+/* 但「拿起来了」就不再回缩 —— 抬起来的是整项，图标要跟着一起放大 */
+.bottomNavItem.bottomNavItemLifted .bottomNavIcon {
+  transform: none;
+}
+
 .bottomNavLabel {
   white-space: nowrap;
 }
 
 /* 无障碍降级：开了「降低透明度」「增强对比度」，或浏览器压根不支持毛玻璃时，
-   退回不透明底色 —— 半透明层上放文字，对比度不够就是不合格的界面。 */
+   退回不透明底色 —— 半透明层上放文字，对比度不够就是不合格的界面。
+   这种底上白色玻璃片会「看不见」，所以高光也跟着退回一层可见的描边。 */
 @media (prefers-reduced-transparency: reduce) {
   .bottomNav,
   .mainLayout .header {
     background: var(--color-surface);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+  }
+
+  .navPillGlass {
+    background-image: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: inset 0 0 0 1px var(--color-border);
   }
 }
 
@@ -415,6 +487,13 @@
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
+
+  .navPillGlass {
+    background-image: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: inset 0 0 0 1px var(--color-border);
+  }
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -422,13 +501,21 @@
   .mainLayout .header {
     background: var(--color-surface);
   }
+
+  .navPillGlass {
+    background-image: none;
+    box-shadow: inset 0 0 0 1px var(--color-border);
+  }
 }
 
-/* 系统开了「减少动态效果」：把收放动画与高光滑动都关掉（瞬间收起 / 立刻到位） */
+/* 系统开了「减少动态效果」：收放、高光滑动、长按抬起全部瞬间到位。
+   长按拖动本身不受影响（那是 1:1 跟手，不是动画） */
 @media (prefers-reduced-motion: reduce) {
   .bottomNav,
   .mainLayout .header,
-  .navPill {
+  .navPill,
+  .navPillGlass,
+  .bottomNavItem {
     transition: none;
   }
 }

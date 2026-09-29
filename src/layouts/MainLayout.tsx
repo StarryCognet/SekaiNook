@@ -187,6 +187,134 @@ export default function MainLayout() {
     };
   }, [activeTab, mobile]);
 
+  /**
+   * 长按「拿起来」换 Tab（手机上）：
+   * - 短按：照旧直接切（走按钮的 onClick）。
+   * - 长按：被按住的那一项放大，玻璃高光跟着手指走，松手落到哪一项就切到哪一项。
+   * 拖动期间高光不吃 CSS 过渡（1:1 跟手），松手时才把过渡打开 ——
+   * 于是它从手指松开的地方「弹」到目标格，而不是先归位再跳一次。
+   */
+  /** 按住多久算「拿起来」；这之前手指挪过 DRAG_CANCEL_PX 就当是在滑页面，取消长按 */
+  const LONG_PRESS_MS = 260;
+  const DRAG_CANCEL_PX = 8;
+  const pressTimerRef = useRef<number | null>(null);
+  const pressStartRef = useRef<{ key: string; pointerId: number; x: number } | null>(null);
+  const draggingRef = useRef(false);
+  const navBoxRef = useRef<{ left: number; width: number } | null>(null);
+  const slotRef = useRef<{ key: string; x: number; w: number }[]>([]);
+  const suppressClickRef = useRef(false);
+  const [dragging, setDragging] = useState(false);
+  const [dragX, setDragX] = useState<number | null>(null);
+  const [liftedKey, setLiftedKey] = useState<string | null>(null);
+
+  /** 量一次「栏」和「每一项」的位置：拖动期间它们不会变，量一次就够 */
+  const measureSlots = () => {
+    const nav = bottomNavRef.current;
+    if (!nav) return false;
+    const navBox = nav.getBoundingClientRect();
+    navBoxRef.current = { left: navBox.left, width: navBox.width };
+    slotRef.current = NAV_ITEMS.map((item) => {
+      const box = navItemRefs.current[item.key]?.getBoundingClientRect();
+      return { key: item.key, x: (box?.left ?? navBox.left) - navBox.left, w: box?.width ?? 0 };
+    });
+    return true;
+  };
+
+  const clearPressTimer = () => {
+    if (pressTimerRef.current !== null) {
+      window.clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
+  };
+
+  /** 手指落在哪一项上（贴到栏外时按栏边算，边上那项照样选得到） */
+  const slotAt = (clientX: number) => {
+    const navBox = navBoxRef.current;
+    if (!navBox) return null;
+    const x = Math.max(navBox.left, Math.min(navBox.left + navBox.width, clientX)) - navBox.left;
+    return slotRef.current.find((slot) => x >= slot.x && x < slot.x + slot.w) ?? null;
+  };
+
+  const handleNavPointerDown =
+    (key: string) => (ev: React.PointerEvent<HTMLButtonElement>) => {
+      if (!mobile || ev.button !== 0) return;
+      suppressClickRef.current = false;
+      pressStartRef.current = { key, pointerId: ev.pointerId, x: ev.clientX };
+      clearPressTimer();
+      pressTimerRef.current = window.setTimeout(() => {
+        pressTimerRef.current = null;
+        const start = pressStartRef.current;
+        const nav = bottomNavRef.current;
+        if (!start || !nav || !measureSlots()) return;
+        const slot = slotRef.current.find((s) => s.key === activeTab);
+        draggingRef.current = true;
+        setDragging(true);
+        setDragX(navPill?.x ?? slot?.x ?? 0);
+        setLiftedKey(start.key);
+        try {
+          nav.setPointerCapture(start.pointerId);
+        } catch {
+          /* 指针已经不在活动状态，忽略 */
+        }
+        try {
+          if ("vibrate" in navigator) navigator.vibrate(10);
+        } catch {
+          /* 有的浏览器不给震动，静默跳过 */
+        }
+      }, LONG_PRESS_MS);
+    };
+
+  const handleNavPointerMove = (ev: React.PointerEvent<HTMLElement>) => {
+    const start = pressStartRef.current;
+    if (!start) return;
+    if (!draggingRef.current) {
+      if (Math.abs(ev.clientX - start.x) > DRAG_CANCEL_PX) {
+        clearPressTimer();
+        pressStartRef.current = null;
+      }
+      return;
+    }
+    const navBox = navBoxRef.current;
+    const slot = slotRef.current.find((s) => s.key === activeTab);
+    if (!navBox || !slot) return;
+    // 胶囊中心跟着手指，但不许滑出栏外
+    const x = Math.max(0, Math.min(navBox.width - slot.w, ev.clientX - navBox.left - slot.w / 2));
+    setDragX((prev) => (prev !== null && Math.abs(prev - x) < 1 ? prev : x));
+    setLiftedKey(slotAt(ev.clientX)?.key ?? start.key);
+  };
+
+  const handleNavPointerUp = (ev: React.PointerEvent<HTMLElement>) => {
+    clearPressTimer();
+    const start = pressStartRef.current;
+    pressStartRef.current = null;
+    if (!draggingRef.current) return; // 普通短按：交给 onClick
+    const target = slotAt(ev.clientX)?.key ?? start?.key ?? activeTab;
+    draggingRef.current = false;
+    try {
+      bottomNavRef.current?.releasePointerCapture(ev.pointerId);
+    } catch {
+      /* 没捕获成功过，忽略 */
+    }
+    // 先把高光挪到目标格的坐标，再打开过渡 —— 它就从手指松开的地方弹过去
+    const slot = slotRef.current.find((s) => s.key === target);
+    if (slot) setNavPill({ x: slot.x, w: slot.w });
+    setDragging(false);
+    setDragX(null);
+    setLiftedKey(null);
+    suppressClickRef.current = true; // 拖完可能还会补一个 click，别让它再切一次
+    if (target !== activeTab) handleNavClick(target);
+  };
+
+  const handleNavPointerCancel = () => {
+    clearPressTimer();
+    pressStartRef.current = null;
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    setDragging(false);
+    setDragX(null);
+    setLiftedKey(null);
+  };
+
   // 记住每个 Tab 最后停留的路径：切走再切回来能直接回到原处
   useEffect(() => {
     rememberTabPath(currentKey);
@@ -463,18 +591,31 @@ export default function MainLayout() {
           ref={bottomNavRef}
           className={`${styles.bottomNav} ${chromeHidden ? styles.bottomNavHidden : ""}`}
           aria-label="主导航"
+          onPointerMove={handleNavPointerMove}
+          onPointerUp={handleNavPointerUp}
+          onPointerCancel={handleNavPointerCancel}
+          onContextMenu={(ev) => ev.preventDefault()}
         >
           {/* 选中高光：单独一条滑块，位置由上面的 useLayoutEffect 量出来，
-              换 Tab 时它会从旧位置滑到新位置（带弹簧），而不是瞬间跳过去 */}
+              换 Tab 时它会从旧位置滑到新位置（带弹簧），而不是瞬间跳过去。
+              长按拖动时它 1:1 跟手（inline transition:none），松手再交给 CSS 弹到目标格；
+              玻璃的质感在内层 .navPillGlass 上，两层各管一个 transform、互不干扰 */}
           {navPill && (
             <span
-              className={styles.navPill}
+              className={`${styles.navPill} ${dragging ? styles.navPillDragging : ""}`}
               aria-hidden="true"
-              style={{ transform: `translateX(${navPill.x}px)`, width: navPill.w }}
-            />
+              style={{
+                transform: `translateX(${(dragging && dragX !== null ? dragX : navPill.x).toFixed(1)}px)`,
+                width: navPill.w,
+                transition: dragging ? "none" : undefined,
+              }}
+            >
+              <span className={styles.navPillGlass} />
+            </span>
           )}
           {NAV_ITEMS.map((item) => {
             const active = item.key === activeTab;
+            const lifted = liftedKey === item.key;
             return (
               <button
                 key={item.key}
@@ -482,8 +623,18 @@ export default function MainLayout() {
                   navItemRefs.current[item.key] = el;
                 }}
                 type="button"
-                className={`${styles.bottomNavItem} ${active ? styles.bottomNavItemActive : ""}`}
-                onClick={() => handleNavClick(item.key)}
+                className={`${styles.bottomNavItem} ${active ? styles.bottomNavItemActive : ""} ${
+                  lifted ? styles.bottomNavItemLifted : ""
+                }`}
+                onPointerDown={handleNavPointerDown(item.key)}
+                onClick={() => {
+                  // 长按拖动收尾时浏览器可能补一个 click，吃掉它，别切两次
+                  if (suppressClickRef.current) {
+                    suppressClickRef.current = false;
+                    return;
+                  }
+                  handleNavClick(item.key);
+                }}
                 aria-label={item.label}
                 aria-current={active ? "page" : undefined}
               >
