@@ -330,7 +330,28 @@
     opacity 0.24s ease;
 }
 
+/* 选中高光：一条会「滑过去」的胶囊。
+   位置与宽度由 JS 量出当前项后写进 transform / width，而不是挂在选中项自己身上 ——
+   这样换 Tab 时它是「滑过去」，不是「在新位置凭空出现」。
+   曲线带过冲（1.56），滑到位时轻轻弹一下，接近实物的手感。 */
+.navPill {
+  position: absolute;
+  top: 7px;
+  left: 0;
+  height: 54px;
+  border-radius: 100px;
+  background: var(--nav-active-bg);
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform, width;
+  transition:
+    transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 .bottomNavItem {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 0;
   /* 附件实测：项 47 高、图标 24、标签 10px 满行高；按手感放大到 54 / 26 / 11 */
@@ -349,12 +370,11 @@
   font-size: 11px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.16s ease;
+  transition: color 0.16s ease;
 }
 
-/* 选中态 = 淡胶囊底 + 单色文字（不用主色文字，这是附件规范的写法） */
+/* 选中态 = 文字提亮加粗；那层淡胶囊底交给 .navPill（它得滑过去） */
 .bottomNavItemActive {
-  background: var(--nav-active-bg);
   color: var(--color-text);
   font-weight: 600;
 }
@@ -404,10 +424,11 @@
   }
 }
 
-/* 系统开了「减少动态效果」：把收放动画关掉（瞬间收起 / 放出，不做位移滑动） */
+/* 系统开了「减少动态效果」：把收放动画与高光滑动都关掉（瞬间收起 / 立刻到位） */
 @media (prefers-reduced-motion: reduce) {
   .bottomNav,
-  .mainLayout .header {
+  .mainLayout .header,
+  .navPill {
     transition: none;
   }
 }

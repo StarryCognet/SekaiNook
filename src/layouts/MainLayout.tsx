@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Badge, Breadcrumb, Layout, Menu } from "antd";
 import {
@@ -158,6 +158,34 @@ export default function MainLayout() {
   const activeTab = resolveTabRoot(currentKey);
   /** 当前 Tab 对应的导航项：移动端顶栏左侧借它的图标做「页面名胶囊」 */
   const activeNavItem = NAV_ITEMS.find((item) => item.key === activeTab) ?? NAV_ITEMS[0];
+
+  /**
+   * 底部 Tab 的选中高光是一条会「滑过去」的胶囊：
+   * 量出当前项在栏里的 left / width，交给 CSS 用带过冲的弹簧曲线做位移。
+   * 量出来而不是按「1/5 宽度」算，是为了以后改边距、加第 6 个 Tab 也不会错位。
+   */
+  const bottomNavRef = useRef<HTMLElement | null>(null);
+  const navItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [navPill, setNavPill] = useState<{ x: number; w: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!mobile) return;
+    const measure = () => {
+      const nav = bottomNavRef.current;
+      const active = navItemRefs.current[activeTab];
+      if (!nav || !active) return;
+      const navBox = nav.getBoundingClientRect();
+      const box = active.getBoundingClientRect();
+      setNavPill({ x: box.left - navBox.left, w: box.width });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+    };
+  }, [activeTab, mobile]);
 
   // 记住每个 Tab 最后停留的路径：切走再切回来能直接回到原处
   useEffect(() => {
@@ -432,14 +460,27 @@ export default function MainLayout() {
       </Layout>
       {mobile && (
         <nav
+          ref={bottomNavRef}
           className={`${styles.bottomNav} ${chromeHidden ? styles.bottomNavHidden : ""}`}
           aria-label="主导航"
         >
+          {/* 选中高光：单独一条滑块，位置由上面的 useLayoutEffect 量出来，
+              换 Tab 时它会从旧位置滑到新位置（带弹簧），而不是瞬间跳过去 */}
+          {navPill && (
+            <span
+              className={styles.navPill}
+              aria-hidden="true"
+              style={{ transform: `translateX(${navPill.x}px)`, width: navPill.w }}
+            />
+          )}
           {NAV_ITEMS.map((item) => {
             const active = item.key === activeTab;
             return (
               <button
                 key={item.key}
+                ref={(el) => {
+                  navItemRefs.current[item.key] = el;
+                }}
                 type="button"
                 className={`${styles.bottomNavItem} ${active ? styles.bottomNavItemActive : ""}`}
                 onClick={() => handleNavClick(item.key)}

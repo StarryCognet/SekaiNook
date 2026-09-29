@@ -640,7 +640,8 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {/* ================= 第一层：关于（不参与第二层，位置与内容不变） ================= */}
+      {/* ================= 第一层：关于（只在入口列表这一层显示） ================= */}
+      {section === null && (
       <section className={styles.group}>
         <h2 className={styles.groupTitle}>关于</h2>
         <p className={styles.groupDesc}>这是什么版本、改过什么</p>
@@ -735,6 +736,7 @@ export default function SettingsPage() {
           </div>
         </Card>
       </section>
+      )}
 
       {/* 切换为家长：口令验证弹窗 */}
       <Modal
