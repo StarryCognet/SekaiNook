@@ -149,6 +149,38 @@
   margin-bottom: 2px;
 }
 
+/* ===== 家庭称呼（跨设备同步） ===== */
+.nameFields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nameField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nameLabel {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.namePreview {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f9fafb;
+  font-size: 13px;
+  color: #1a1a2e;
+}
+
+.nameSaveBtn {
+  margin-top: 12px;
+  border-radius: 10px;
+}
+
 /* ===== 打卡图片清理（仅家长可见） ===== */
 .scanResult {
   font-size: 13px;

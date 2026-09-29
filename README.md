@@ -44,7 +44,8 @@
 - **双角色**：家长（可审批、可增删记录）/ 小孩（打卡后需家长审批）
 - **身份选择门**：新设备首次打开先选身份，不默认进家长模式（避免小孩自审自批）
 - **家长口令**：切换为家长需口令，出厂 `1234`，可在设置页改为 4-8 位
-- **设置页 `/settings`**：切换身份、修改家长口令、扫描并清理云端闲置打卡照片、查看应用版本与完整迭代日志（当前 v1.13.0）
+- **称呼可改、跨设备同步**：视角以自己的角度出发 —— 妈妈的手机上看到的是「女儿」，妹妹的手机上看到的是「妈妈」。设置页「称呼设置」里，女儿改妈妈那半（称呼 + 昵称），妈妈改女儿那半；昵称优先，没填昵称才用称呼；存在云端 `settings` 表，换设备打开是同一套名字（站内通知文案也跟着改口）
+- **设置页 `/settings`**：切换身份、修改家长口令、设置对方称呼、扫描并清理云端闲置打卡照片、查看应用版本与完整迭代日志（当前 v1.14.0）
 - **多端导航**：PC 固定侧边栏；手机端悬浮毛玻璃胶囊底部导航（首页 / 家庭 / 计划 / 花园 / 设置，选中实心图标、再点当前标签回顶部、切换标签保留各页位置与筛选）
 - **PWA**：可「添加到主屏幕」当 App 用（manifest + Service Worker 缓存静态资源；接口数据仍然实时请求、永不缓存）
 
@@ -114,7 +115,7 @@ npm run db:migrate:remote
 
 ### 数据分层
 
-- **D1 云端（跨设备共享）**：`family_ledger`（积分流水）、`weekly_plans`（每周学习计划）、`notifications`（站内通知收件箱）；图片存 R2
+- **D1 云端（跨设备共享）**：`family_ledger`（积分流水）、`weekly_plans`（每周学习计划）、`notifications`（站内通知收件箱）、`settings`（家庭称呼等跨设备设置）；图片存 R2
 - **localStorage 本地（各设备独立）**：当前身份角色、家长口令、阳光花园数据、导航与筛选等界面状态（`sessionStorage`）
 
 ### 装到手机桌面（PWA）
@@ -138,9 +139,10 @@ functions/api/            # 后端接口（文件路径即 URL 路径）
 ├── notifications/index.ts    # GET   /api/notifications（按 audience 取信箱 + 未读数）
 ├── notifications/[id].ts     # PATCH /api/notifications/:id（标记已读 / 未读）
 ├── notifications/read-all.ts # POST  /api/notifications/read-all（整格信箱一键已读）
+├── settings/index.ts     #   GET/PATCH    /api/settings（家庭称呼，跨设备同步）
 └── maintenance/orphans.ts #  GET/POST     /api/maintenance/orphans（闲置照片扫描 / 清理）
 functions/_lib/           # 后端共用模块（不下划线开头会被当成路由，所以放 _lib）
-migrations/               # D1 建表 SQL（编号递增，必须幂等；0002 给流水加 member 列，0003 建通知表）
+migrations/               # D1 建表 SQL（编号递增，必须幂等；0002 给流水加 member 列，0003 建通知表，0004 建 settings 键值表）
 public/_routes.json       # 声明 Functions 只接管 /api/*
 public/_redirects         # SPA 路由回退 /* → /index.html 200
 wrangler.jsonc            # D1 / R2 绑定与 Pages 构建配置
@@ -193,6 +195,8 @@ src/
 | GET | `/api/notifications?audience=parent\|child` | 取某格信箱的通知（倒序，`limit` 缺省 50 / 上限 200），返回 `{ items, unreadCount, ready }`（`ready=false` = 通知表还没迁移） |
 | PATCH | `/api/notifications/:id` | 标记单条已读 / 未读（请求体 `{"status":"read"\|"unread"}`） |
 | POST | `/api/notifications/read-all` | 整格信箱一键已读（请求体 `{"audience":"parent"\|"child"}`） |
+| GET | `/api/settings` | 读取家庭称呼（`{ names: { momCall, momNickname, kidCall, kidNickname }, ready }`，`ready=false` = settings 表还没迁移） |
+| PATCH | `/api/settings` | 部分更新称呼（只传要改的字段，最多 12 字，称呼留空回默认「妈妈 / 女儿」） |
 
 接口**刻意不加鉴权**：本项目是家庭内部工具，权限靠前端身份与家长口令约束（见下方开发规则）。
 

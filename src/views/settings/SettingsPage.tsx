@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Card,
   Tag,
@@ -18,18 +18,27 @@ import {
   LockOutlined,
   DeleteOutlined,
   PictureOutlined,
+  SmileOutlined,
 } from "@ant-design/icons";
 import { APP_VERSION, CHANGELOG } from "../../config/changelog";
 import { useFamilyStore } from "../../store/useFamilyStore";
 import type { FamilyRole } from "../../store/useFamilyStore";
+import { useSettingsStore } from "../../store/useSettingsStore";
+import {
+  DEFAULT_FAMILY_NAMES,
+  MAX_NAME_LENGTH,
+  displayName,
+  validateName,
+} from "../../types/settings";
 import { scanOrphanImages, deleteOrphanImages } from "../../api/maintenance";
 import { useBackButton } from "../../utils/useBackButton";
 import { designTokens } from "../../theme/tokens";
 import styles from "./SettingsPage.module.css";
 
-/** 设置页：身份切换（切家长需口令）+ 家长口令管理 + 打卡图片清理 + 应用信息与版本日志 */
+/** 设置页：身份切换（切家长需口令）+ 家长口令管理 + 家庭称呼 + 打卡图片清理 + 应用信息与版本日志 */
 export default function SettingsPage() {
   const { role, setRole, getParentPin, setParentPin } = useFamilyStore();
+  const { names, ready: namesReady, save: saveNames } = useSettingsStore();
 
   // 切家长口令验证弹窗
   const [pinModalOpen, setPinModalOpen] = useState(false);
@@ -47,7 +56,26 @@ export default function SettingsPage() {
   const [scanSummary, setScanSummary] = useState<string | null>(null);
   const [unusedCount, setUnusedCount] = useState(0);
 
+  // 家庭称呼：各人只管对方那一半 —— 女儿改妈妈的称呼，妈妈改女儿的称呼
+  const [callInput, setCallInput] = useState("");
+  const [nicknameInput, setNicknameInput] = useState("");
+  const [savingNames, setSavingNames] = useState(false);
+
   const isParent = role === "parent";
+  /** 这次编辑的是对方的哪一套称呼（家长→女儿，小孩→妈妈） */
+  const nameTarget: "mom" | "kid" = isParent ? "kid" : "mom";
+
+  // 服务端称呼到位（或身份切换）后同步进输入框
+  useEffect(() => {
+    setCallInput(nameTarget === "kid" ? names.kidCall : names.momCall);
+    setNicknameInput(nameTarget === "kid" ? names.kidNickname : names.momNickname);
+  }, [
+    nameTarget,
+    names.kidCall,
+    names.kidNickname,
+    names.momCall,
+    names.momNickname,
+  ]);
   // 弹窗打开时接管安卓返回键：返回键先关弹窗，而不是退出设置页
   useBackButton(pinModalOpen, () => setPinModalOpen(false));
   useBackButton(changePinOpen, () => setChangePinOpen(false));
@@ -94,6 +122,42 @@ export default function SettingsPage() {
     setNewPin("");
     setConfirmPin("");
     message.success("家长口令已更新");
+  };
+
+  /** 保存对方那一半称呼（存服务端，另一台手机刷新就能看到） */
+  const handleSaveNames = async () => {
+    const callValue = callInput.trim();
+    const nicknameValue = nicknameInput.trim();
+
+    const tooLong = validateName(callValue) ?? validateName(nicknameValue);
+    if (tooLong) {
+      message.error(`称呼${tooLong}`);
+      return;
+    }
+    if (!callValue && !nicknameValue) {
+      message.error("称呼和昵称至少要填一个");
+      return;
+    }
+
+    setSavingNames(true);
+    try {
+      const patch =
+        nameTarget === "kid"
+          ? {
+              kidCall: callValue || DEFAULT_FAMILY_NAMES.kidCall,
+              kidNickname: nicknameValue,
+            }
+          : {
+              momCall: callValue || DEFAULT_FAMILY_NAMES.momCall,
+              momNickname: nicknameValue,
+            };
+      const saved = await saveNames(patch);
+      message.success(`已保存，界面上会显示「${displayName(saved, nameTarget)}」`);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "保存失败，请重试");
+    } finally {
+      setSavingNames(false);
+    }
   };
 
   /** 扫描闲置照片（只读，不删除） */
@@ -177,6 +241,77 @@ export default function SettingsPage() {
           >
             修改家长口令
           </Button>
+        )}
+      </Card>
+
+      {/* 家庭称呼（跨设备同步）：女儿改妈妈那半，妈妈改女儿那半 */}
+      <Card className={styles.infoCard} variant="borderless">
+        <div className={styles.infoHeader}>
+          <div className={styles.infoIcon}>
+            <SmileOutlined />
+          </div>
+          <div className={styles.infoText}>
+            <div className={styles.appName}>称呼设置</div>
+            <div className={styles.appDesc}>
+              {isParent
+                ? "你的界面里，女儿叫什么（昵称优先，留空就显示称呼）"
+                : "你的界面里，妈妈叫什么（昵称优先，留空就显示称呼）"}
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.nameFields}>
+          <label className={styles.nameField}>
+            <span className={styles.nameLabel}>
+              {isParent ? "女儿的称呼" : "妈妈的称呼"}
+            </span>
+            <Input
+              value={callInput}
+              maxLength={MAX_NAME_LENGTH}
+              placeholder={isParent ? "例如：女儿" : "例如：妈妈"}
+              onChange={(e) => setCallInput(e.target.value)}
+            />
+          </label>
+          <label className={styles.nameField}>
+            <span className={styles.nameLabel}>
+              {isParent ? "女儿的昵称" : "妈妈的昵称"}
+            </span>
+            <Input
+              value={nicknameInput}
+              maxLength={MAX_NAME_LENGTH}
+              placeholder={isParent ? "例如：妹妹" : "例如：老妈"}
+              onChange={(e) => setNicknameInput(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <div className={styles.namePreview}>
+          现在会显示「
+          {displayName(
+            {
+              ...names,
+              ...(nameTarget === "kid"
+                ? { kidCall: callInput || DEFAULT_FAMILY_NAMES.kidCall, kidNickname: nicknameInput }
+                : { momCall: callInput || DEFAULT_FAMILY_NAMES.momCall, momNickname: nicknameInput }),
+            },
+            nameTarget
+          )}
+          」（{isParent ? "女儿" : "妈妈"}自己的手机上打开也是这个名字）
+        </div>
+
+        <Button
+          block
+          type="primary"
+          loading={savingNames}
+          onClick={handleSaveNames}
+          className={styles.nameSaveBtn}
+        >
+          保存称呼
+        </Button>
+        {!namesReady && (
+          <div className={styles.roleHint}>
+            还没连上云端称呼表（本地库需要执行 0004 迁移），当前显示的是本机缓存
+          </div>
         )}
       </Card>
 

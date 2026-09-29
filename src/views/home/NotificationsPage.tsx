@@ -15,6 +15,7 @@ import type { ReactNode } from 'react';
 import { EmptyState, PageLoading } from '../../components/StateViews';
 import { useFamilyStore } from '../../store/useFamilyStore';
 import { useNotificationStore } from '../../store/useNotificationStore';
+import { useKidName, useMomName } from '../../store/useSettingsStore';
 import { useViewState } from '../../utils/useViewState';
 import type { NotifyType } from '../../types/notification';
 import { relativeTime, useNow } from './homeUtils';
@@ -44,6 +45,9 @@ export default function NotificationsPage() {
   const role = useFamilyStore((s) => s.role);
   const { audience, items, unreadCount, loading, ready, load, markRead, markAllRead } =
     useNotificationStore();
+  // 收件箱标题也按视角走：妈妈看的是女儿的动态，女儿看的是妈妈说的话
+  const momName = useMomName();
+  const kidName = useKidName();
 
   const [filter, setFilter] = useViewState<NoticeFilter>('home.noticeFilter', 'all');
   const [markingAll, setMarkingAll] = useState(false);
@@ -82,7 +86,7 @@ export default function NotificationsPage() {
         <div className={styles.headText}>
           <div className={styles.title}>通知</div>
           <div className={styles.subtitle}>
-            {audience === 'parent' ? '妹妹的打卡动态' : '妈妈说的话'}
+            {audience === 'parent' ? `${kidName}的打卡动态` : `${momName}说的话`}
             {unreadCount > 0 ? ` · ${unreadCount} 条未读` : ' · 都看过了'}
           </div>
         </div>

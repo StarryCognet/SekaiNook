@@ -19,6 +19,7 @@ import { getTasksByType } from '../../config/familyRules';
 import { useFamilyStore } from '../../store/useFamilyStore';
 import { useGardenStore } from '../../store/useGardenStore';
 import { useNotificationStore } from '../../store/useNotificationStore';
+import { useKidName, useMomName } from '../../store/useSettingsStore';
 import { setViewState } from '../../utils/useViewState';
 import { checkTask, isTaskDone } from '../../utils/taskRules';
 import type { TaskConfig } from '../../types/family';
@@ -61,6 +62,9 @@ export default function KidHome() {
   } = useGardenStore();
   const { balance, records, loadLedger } = useFamilyStore();
   const { items: notifications, unreadCount } = useNotificationStore();
+  // 妹妹的视角：她自己一律是「我」，另一个人是妈妈（妈妈怎么被称呼由她在设置里定）
+  const kidName = useKidName();
+  const momName = useMomName();
 
   const [activeTask, setActiveTask] = useState<TaskConfig | null>(null);
 
@@ -110,7 +114,7 @@ export default function KidHome() {
     { key: 'garden', label: '我的花园', icon: <SunOutlined />, onClick: () => goGarden('garden') },
     {
       key: 'notice',
-      label: '妈妈的话',
+      label: `${momName}的话`,
       icon: <NotificationOutlined />,
       badge: unreadCount,
       onClick: () => navigate('/home/notifications'),
@@ -127,7 +131,7 @@ export default function KidHome() {
       <section className={styles.hero}>
         <div className={styles.heroTop}>
           <div>
-            <div className={styles.heroGreeting}>{greetingText(now)}，妹妹</div>
+            <div className={styles.heroGreeting}>{greetingText(now)}，{kidName}</div>
             <div className={styles.heroDate}>{dateText(now)}</div>
           </div>
           <button className={styles.heroAvatar} onClick={() => goGarden('rewards')} aria-label="我的勋章">
@@ -252,7 +256,7 @@ export default function KidHome() {
       {latestNotice && (
         <button className={styles.noticeCard} onClick={() => navigate('/home/notifications')}>
           <div className={styles.noticeHead}>
-            <NotificationOutlined /> 妈妈说的话
+            <NotificationOutlined /> {momName}说的话
             <span className={styles.noticeTime}>{relativeTime(latestNotice.created_at, now)}</span>
           </div>
           <div className={styles.noticeTitle}>{latestNotice.title}</div>
@@ -280,7 +284,7 @@ export default function KidHome() {
         onClose={() => setActiveTask(null)}
         onSuccess={async () => {
           await loadLedger();
-          message.success('已提交，等妈妈审批');
+          message.success(`已提交，等${momName}审批`);
         }}
       />
     </div>

@@ -17,6 +17,7 @@ import { fetchWeeklyPlans } from '../../api/familyTasks';
 import BalanceTrend from '../../components/BalanceTrend';
 import { useFamilyStore } from '../../store/useFamilyStore';
 import { useNotificationStore } from '../../store/useNotificationStore';
+import { useKidName, useMomName } from '../../store/useSettingsStore';
 import { exportLedgerCsv } from '../../utils/exportLedger';
 import { setViewState } from '../../utils/useViewState';
 import { getCurrentWeekLabel } from '../../utils/week';
@@ -43,7 +44,7 @@ interface TodoItem {
 
 /**
  * 妈妈版首页：第一屏就是「有什么要我做」——
- * 待审批、可兑现、计划落后，点一下就能处理；下面是本周账目与妹妹今天的流水。
+ * 待审批、可兑现、计划落后，点一下就能处理；下面是本周账目与女儿今天的流水。
  */
 export default function ParentHome() {
   const navigate = useNavigate();
@@ -51,6 +52,9 @@ export default function ParentHome() {
 
   const { balance, records, pendingCount, pendingRecords, loadLedger } = useFamilyStore();
   const { unreadCount } = useNotificationStore();
+  // 妈妈的视角：她自己一律是「我」，另一个人是女儿（怎么称呼由妈妈在设置里定）
+  const momName = useMomName();
+  const kidName = useKidName();
 
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [settling, setSettling] = useState(false);
@@ -134,7 +138,7 @@ export default function ParentHome() {
   if (balance > 0) {
     todos.push({
       key: 'settle',
-      text: `妹妹攒了 ${balance} 积分，可以兑现了`,
+      text: `${kidName}攒了 ${balance} 积分，可以兑现了`,
       hint: `兑现 ${balance} 元，余额清零`,
       kind: 'settle',
     });
@@ -192,7 +196,7 @@ export default function ParentHome() {
       <section className={styles.hero}>
         <div className={styles.heroTop}>
           <div>
-            <div className={styles.heroGreeting}>{greetingText(now)}，妈妈</div>
+            <div className={styles.heroGreeting}>{greetingText(now)}，{momName}</div>
             <div className={styles.heroDate}>{dateText(now)}</div>
           </div>
           <div className={`num ${styles.heroClock}`}>{clockText(now)}</div>
@@ -287,10 +291,10 @@ export default function ParentHome() {
         <BalanceTrend records={records} />
       </section>
 
-      {/* 妹妹今天：有新申请就在这儿能看见，点进去审批 */}
+      {/* 女儿今天：有新申请就在这儿能看见，点进去审批 */}
       <section className={styles.card}>
         <div className={styles.cardHead}>
-          <span className={styles.cardTitle}>妹妹今天</span>
+          <span className={styles.cardTitle}>{kidName}今天</span>
           <span className={styles.cardExtra}>{today.length} 条</span>
         </div>
 

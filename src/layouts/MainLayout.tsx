@@ -24,6 +24,7 @@ import {
 } from "../utils/tabMemory";
 import { useFamilyStore } from "../store/useFamilyStore";
 import { useNotificationStore } from "../store/useNotificationStore";
+import { useSettingsStore } from "../store/useSettingsStore";
 import styles from "./MainLayout.module.css";
 
 const { Sider, Header, Content } = Layout;
@@ -99,6 +100,7 @@ export default function MainLayout() {
   const { role, pendingCount } = useFamilyStore();
   const { audience, unreadCount, load: loadNotifications, refresh: refreshNotifications } =
     useNotificationStore();
+  const loadNames = useSettingsStore((s) => s.load);
   const [mobile, setMobile] = useState(isMobile());
   const [collapsed, setCollapsed] = useState(false);
   const contentRef = useRef<HTMLElement | null>(null);
@@ -114,6 +116,12 @@ export default function MainLayout() {
     if (!role) return;
     loadNotifications(role === 'parent' ? 'parent' : 'child').catch(() => undefined);
   }, [role, loadNotifications]);
+
+  // 家庭称呼（妈妈怎么叫女儿、女儿怎么叫妈妈）存在服务端，进 App 对一次，
+  // 这样另一台手机改了称呼，这边刷新就能看到
+  useEffect(() => {
+    loadNames().catch(() => undefined);
+  }, [loadNames]);
 
   // 未读通知轮询：放在主布局里而不是各页面 —— 不管停在哪一页，底部 Tab 的角标都要准。
   // 页面在后台（息屏 / 切走）时暂停，回到前台立刻补一次（省电，安卓上尤其重要）

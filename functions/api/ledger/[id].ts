@@ -4,6 +4,7 @@
  */
 
 import { amountText, pushNotifications } from '../../_lib/notifications';
+import { displayName, readFamilyNames } from '../../_lib/settings';
 
 interface Env {
   DB: D1Database;
@@ -57,12 +58,16 @@ export const onRequestPatch: PagesFunction<Env> = async ({ params, request, env 
   // 状态没变就不重复通知（家长连点两下、网络重试都会走到这里）
   if (record.status !== status) {
     const amountLabel = amountText(record.type, record.amount);
+    // 文案里的称呼按设置表走：孩子看的是「妈妈通过了…」，家长看的是「女儿提交了…」
+    const names = await readFamilyNames(env.DB);
+    const mom = displayName(names, 'mom');
+    const kid = displayName(names, 'kid');
     if (status === 'approved') {
       await pushNotifications(env.DB, [
         {
           audience: 'child',
           type: 'approved',
-          title: `「${record.task_name}」已通过`,
+          title: `${mom}通过了「${record.task_name}」`,
           body: `${amountLabel} 积分已入账`,
           link: '/family',
           dedupeKey: `ledger:${id}:approved:${record.status}`,
@@ -73,7 +78,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ params, request, env 
         {
           audience: 'child',
           type: 'rejected',
-          title: `「${record.task_name}」被驳回了`,
+          title: `${mom}驳回了「${record.task_name}」`,
           body: '看看哪里不对，改好可以再提交一次',
           link: '/family',
           dedupeKey: `ledger:${id}:rejected:${record.status}`,
@@ -84,7 +89,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ params, request, env 
         {
           audience: 'parent',
           type: 'resubmitted',
-          title: '妹妹重新提交了打卡',
+          title: `${kid}重新提交了打卡`,
           body: `${record.task_name} ${amountLabel}`,
           link: '/family',
           dedupeKey: `ledger:${id}:resubmit:${record.status}`,

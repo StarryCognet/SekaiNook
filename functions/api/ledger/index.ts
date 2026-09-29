@@ -8,6 +8,7 @@
  */
 
 import { amountText, pushNotifications } from '../../_lib/notifications';
+import { displayName, readFamilyNames } from '../../_lib/settings';
 
 interface Env {
   DB: D1Database;
@@ -117,35 +118,39 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   // 记完账再写通知（写通知失败不影响记账）：
   //   孩子提交打卡 → 告诉家长；家长直接记账 / 结算兑现 → 告诉孩子
+  // 文案里的称呼按设置表走（女儿怎么叫妈妈、妈妈怎么叫女儿），读不到就用默认值
   const amountLabel = amountText(type, amount);
   if (finalStatus === 'pending') {
+    const names = await readFamilyNames(env.DB);
     await pushNotifications(env.DB, [
       {
         audience: 'parent',
         type: 'checkin_pending',
-        title: '妹妹提交了打卡',
+        title: `${displayName(names, 'kid')}提交了打卡`,
         body: `${task_name} ${amountLabel}`,
         link: '/family',
         dedupeKey: `ledger:${id}:pending`,
       },
     ]);
   } else if (finalStatus === 'approved' && task_id === 'payout') {
+    const names = await readFamilyNames(env.DB);
     await pushNotifications(env.DB, [
       {
         audience: 'child',
         type: 'payout',
-        title: `妈妈兑现了 ${Math.abs(amount)} 积分`,
+        title: `${displayName(names, 'mom')}兑现了 ${Math.abs(amount)} 积分`,
         body: '余额已清零，明天继续加油',
         link: '/family',
         dedupeKey: `ledger:${id}:payout`,
       },
     ]);
   } else if (finalStatus === 'approved') {
+    const names = await readFamilyNames(env.DB);
     await pushNotifications(env.DB, [
       {
         audience: 'child',
         type: 'recorded',
-        title: '妈妈记了一笔',
+        title: `${displayName(names, 'mom')}记了一笔`,
         body: `${task_name} ${amountLabel}`,
         link: '/family',
         dedupeKey: `ledger:${id}:recorded`,
