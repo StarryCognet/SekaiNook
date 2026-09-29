@@ -102,7 +102,7 @@ const NAV_ITEMS: NavItem[] = [
 export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role, pendingCount, balance } = useFamilyStore();
+  const { role, pendingCount, balance, refreshPending } = useFamilyStore();
   const { audience, unreadCount, load: loadNotifications, refresh: refreshNotifications } =
     useNotificationStore();
   const loadNames = useSettingsStore((s) => s.load);
@@ -132,14 +132,17 @@ export default function MainLayout() {
     loadNames().catch(() => undefined);
   }, [loadNames]);
 
-  // 未读通知轮询：放在主布局里而不是各页面 —— 不管停在哪一页，底部 Tab 的角标都要准。
+  // 未读通知 + 待审批数轮询：放在主布局里而不是各页面 —— 不管停在哪一页，底部 Tab 的角标都要准。
+  // 待审批只有家长那一端要盯：孩子刚交上来的申请，妈妈在花园页也该看见红点。
   // 页面在后台（息屏 / 切走）时暂停，回到前台立刻补一次（省电，安卓上尤其重要）
   useEffect(() => {
     if (!audience) return;
     const refresh = () => {
       if (document.hidden) return;
       refreshNotifications().catch(() => undefined);
+      if (role === 'parent') refreshPending().catch(() => undefined);
     };
+    refresh();
     const timer = setInterval(refresh, 15000);
     const onVisible = () => {
       if (!document.hidden) refresh();
@@ -151,7 +154,7 @@ export default function MainLayout() {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
     };
-  }, [audience, refreshNotifications]);
+  }, [audience, refreshNotifications, role, refreshPending]);
 
   const currentKey = location.pathname;
   const currentLabel = BREADCRUMB_MAP[currentKey] ?? "家庭工作台";

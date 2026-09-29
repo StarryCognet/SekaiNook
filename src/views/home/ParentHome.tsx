@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Popconfirm, message } from 'antd';
 import {
@@ -15,6 +15,7 @@ import {
 import { addLedgerRecord } from '../../api/familyLedger';
 import { fetchWeeklyPlans } from '../../api/familyTasks';
 import BalanceTrend from '../../components/BalanceTrend';
+import RefreshFailedBar from '../../components/RefreshFailedBar';
 import { useFamilyStore } from '../../store/useFamilyStore';
 import { useNotificationStore } from '../../store/useNotificationStore';
 import { useKidName, useMomName } from '../../store/useSettingsStore';
@@ -58,23 +59,56 @@ export default function ParentHome() {
 
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [settling, setSettling] = useState(false);
+  /** 拉取失败时页面要说话：不能让孩子赚到的分「显示成 0」 */
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  useEffect(() => {
-    loadLedger().catch(() => undefined);
+  const refresh = useCallback(async () => {
+    try {
+      await loadLedger();
+      setLoadFailed(false);
+    } catch {
+      setLoadFailed(true);
+    }
   }, [loadLedger]);
 
-  // 本周计划进度（只读：没有计划就当作不落后，不去创建）
   useEffect(() => {
-    let alive = true;
-    fetchWeeklyPlans(getCurrentWeekLabel())
-      .then((list) => {
-        if (alive) setPlans(list);
-      })
-      .catch(() => undefined);
-    return () => {
-      alive = false;
+    void refresh();
+  }, [refresh]);
+
+  // 妈妈版首页要「一直在看」：孩子随时可能交上来一条新的申请。
+  // 20 秒轮一次；页面在后台（息屏 / 切走）跳过，回到前台立刻补一次
+  useEffect(() => {
+    const tick = () => {
+      if (document.hidden) return;
+      void refresh();
     };
+    const timer = setInterval(tick, 20000);
+    document.addEventListener('visibilitychange', tick);
+    window.addEventListener('focus', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+      window.removeEventListener('focus', tick);
+    };
+  }, [refresh]);
+
+  // 本周计划进度（只读：没有计划就当作不落后，不去创建）；一分钟刷一次就够
+  const loadPlans = useCallback(async () => {
+    try {
+      const list = await fetchWeeklyPlans(getCurrentWeekLabel());
+      setPlans(list);
+    } catch {
+      // 计划拉不到就不显示「落后」，不因此挡住整页
+    }
   }, []);
+
+  useEffect(() => {
+    void loadPlans();
+    const timer = setInterval(() => {
+      if (!document.hidden) void loadPlans();
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [loadPlans]);
 
   const week = recentSummary(records, 7, now);
   const today = todayRecords(records, now);
@@ -195,6 +229,9 @@ export default function ParentHome() {
 
   return (
     <div className={styles.page}>
+      {/* 没拉到最新数据就要说出来，并给一个就地重试的入口 */}
+      {loadFailed && <RefreshFailedBar onRetry={refresh} />}
+
       {/* 顶部：问候 + 实时时钟 + 两个最该看的数字 */}
       <section className={styles.hero}>
         <div className={styles.heroTop}>

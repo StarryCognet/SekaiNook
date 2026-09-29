@@ -1,0 +1,41 @@
+/* 「没拉到最新数据」的提示条：看得见、点一下就地重试 */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 12px;
+  background: var(--tint-warning-bg);
+  color: var(--tint-warning-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bar:active {
+  transform: scale(0.99);
+}
+
+.bar:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.icon {
+  color: inherit;
+  font-size: 15px;
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+}
+
+.action {
+  flex-shrink: 0;
+  color: inherit;
+  text-decoration: underline;
+}

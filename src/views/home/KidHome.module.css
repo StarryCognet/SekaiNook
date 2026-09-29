@@ -421,6 +421,114 @@
   color: var(--color-text-secondary);
 }
 
+/* 等妈妈看：一条条列出来，孩子知道自己交了什么 */
+.pendingList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pendingItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+
+.pendingItem:last-child {
+  border-bottom: none;
+}
+
+.pendingName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pendingAmount {
+  color: var(--color-primary);
+  font-size: 14px;
+}
+
+.pendingTime {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+
+.pendingHint {
+  margin-top: 8px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+/* 被退回的那条：用警示色，但不用大红大紫吓孩子 */
+.rejectCard {
+  border: 1px solid var(--color-warning);
+  background: var(--color-surface);
+}
+
+.rejectSeen {
+  padding: 2px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.rejectTask {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.rejectAmount {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.rejectReason {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--color-surface-soft);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.rejectRetry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 0;
+  border: none;
+  border-radius: 12px;
+  background: var(--gradient-hero, var(--color-primary));
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rejectRetry:active {
+  transform: scale(0.98);
+}
+
 @media (min-width: 768px) {
   .checkinGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));

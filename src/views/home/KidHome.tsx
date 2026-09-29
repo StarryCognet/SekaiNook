@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Progress, message } from 'antd';
 import {
@@ -14,6 +14,7 @@ import {
   TrophyOutlined,
 } from '@ant-design/icons';
 import CheckInModal from '../../components/CheckInModal';
+import RefreshFailedBar from '../../components/RefreshFailedBar';
 import { getGardenIcon } from '../../components/garden/GardenIcon';
 import { getTasksByType } from '../../config/familyRules';
 import { useFamilyStore } from '../../store/useFamilyStore';
@@ -44,6 +45,10 @@ const QUICK_TASK_IDS = [
   'wash_dishes',
 ];
 
+/** 被妈妈退回的申请看过就记在本机，最多留这么多条 */
+const SEEN_REJECTS_KEY = 'sekainook_kid_seen_rejects';
+const SEEN_REJECTS_MAX = 50;
+
 /**
  * 妹妹版首页：一眼看到「今天要做什么、我赚了多少、妈妈说了什么」。
  * 大数字、大按钮，全部操作一次点击可达。
@@ -61,7 +66,7 @@ export default function KidHome() {
     init: initGarden,
     completeTask,
   } = useGardenStore();
-  const { balance, records, loadLedger } = useFamilyStore();
+  const { balance, records, pendingRecords, pendingCount, loadLedger } = useFamilyStore();
   const { items: notifications, unreadCount } = useNotificationStore();
   // 妹妹的视角：她自己一律是「我」，另一个人是妈妈（妈妈怎么被称呼由她在设置里定）
   const kidName = useKidName();
@@ -70,15 +75,52 @@ export default function KidHome() {
   const palette = useThemePalette();
 
   const [activeTask, setActiveTask] = useState<TaskConfig | null>(null);
+  /** 拉取失败时页面要说话：不能把「没拉到」显示成「这周一分没赚」 */
+  const [loadFailed, setLoadFailed] = useState(false);
+  // 被妈妈退回的申请，看过一次就别老在孩子眼前晃（记在本机，不影响妈妈那边）
+  const [seenRejects, setSeenRejects] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(SEEN_REJECTS_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
 
   // 花园存档放在 localStorage 里，原来只有花园页会 init —— 首页要用它，就得自己装一次
   useEffect(() => {
     initGarden();
   }, [initGarden]);
 
-  useEffect(() => {
-    loadLedger().catch(() => undefined);
+  const refresh = useCallback(async () => {
+    try {
+      await loadLedger();
+      setLoadFailed(false);
+    } catch {
+      setLoadFailed(true);
+    }
   }, [loadLedger]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  // 「我交的那条批了没有」是孩子最想知道的：20 秒问一次，页面在后台就跳过
+  useEffect(() => {
+    const tick = () => {
+      if (document.hidden) return;
+      void refresh();
+    };
+    const timer = setInterval(tick, 20000);
+    document.addEventListener('visibilitychange', tick);
+    window.addEventListener('focus', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+      window.removeEventListener('focus', tick);
+    };
+  }, [refresh]);
 
   const gardenTotal = gardenTasks.length;
   const gardenPercent = gardenTotal > 0 ? Math.round((gardenDone / gardenTotal) * 100) : 0;
@@ -98,6 +140,28 @@ export default function KidHome() {
   );
 
   const latestNotice = notifications[0];
+
+  // 最近一条「妈妈退回来了」：按时间倒序取第一条还没点过「知道了」的
+  const rejected = records
+    .filter((r) => r.status === 'rejected' && !seenRejects.includes(r.id))
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+  // 退回的那条还能不能重交：得还认得出是哪个任务
+  const rejectedTask = rejected
+    ? [...earningTasks, ...getTasksByType('spending')].find((t) => t.id === rejected.task_id)
+    : undefined;
+
+  /** 「知道了」：这条退回不再提醒（下次退回的是新的一条，照样会提醒） */
+  const dismissReject = (id: string) => {
+    setSeenRejects((prev) => {
+      const next = [...prev, id].slice(-SEEN_REJECTS_MAX);
+      try {
+        localStorage.setItem(SEEN_REJECTS_KEY, JSON.stringify(next));
+      } catch {
+        // 存不进去也不影响这一次
+      }
+      return next;
+    });
+  };
 
   /** 去花园的某个子页（顺手把菜单选好，落地就是那一页） */
   const goGarden = (menu: string) => {
@@ -159,6 +223,66 @@ export default function KidHome() {
           </span>
         </div>
       </section>
+
+      {/* 妈妈退回来的：把她的那句话摆在最上面，点一下就能重交 */}
+      {rejected && (
+        <section className={`${styles.card} ${styles.rejectCard}`}>
+          <div className={styles.cardHead}>
+            <span className={styles.cardTitle}>{momName}退回了一条</span>
+            <button className={styles.rejectSeen} onClick={() => dismissReject(rejected.id)}>
+              知道了
+            </button>
+          </div>
+          <div className={styles.rejectTask}>
+            <span>{rejected.task_name}</span>
+            <span className={`num ${styles.rejectAmount}`}>
+              {rejected.amount > 0 ? `+${rejected.amount}` : rejected.amount}
+            </span>
+          </div>
+          <div className={styles.rejectReason}>
+            {rejected.note || '看看哪里不对，改好可以再提交一次'}
+          </div>
+          {rejectedTask && (
+            <button
+              className={styles.rejectRetry}
+              onClick={() => {
+                dismissReject(rejected.id);
+                setActiveTask(rejectedTask);
+              }}
+            >
+              重新交一次 <RightOutlined />
+            </button>
+          )}
+        </section>
+      )}
+
+      {/* 等妈妈看：交上去的申请现在到哪一步了，孩子不用瞎猜 */}
+      {pendingCount > 0 && (
+        <section className={styles.card}>
+          <div className={styles.cardHead}>
+            <span className={styles.cardTitle}>等{momName}看</span>
+            <span className={styles.cardExtra}>还有 {pendingCount} 条没批</span>
+          </div>
+          <ul className={styles.pendingList}>
+            {pendingRecords.slice(0, 3).map((r) => (
+              <li key={r.id} className={styles.pendingItem}>
+                <span className={styles.pendingName}>{r.task_name}</span>
+                <span className={`num ${styles.pendingAmount}`}>
+                  {r.amount > 0 ? `+${r.amount}` : r.amount}
+                </span>
+                <span className={styles.pendingTime}>{relativeTime(r.created_at, now)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className={styles.pendingHint}>{momName}有空就会看，批了会自动加进我的积分</div>
+          <button className={styles.cardLink} onClick={() => goLedger('pending')}>
+            看看我交了什么 <RightOutlined />
+          </button>
+        </section>
+      )}
+
+      {/* 没拉到最新数据就说出来（不然「0 积分」会让孩子白难过一场） */}
+      {loadFailed && <RefreshFailedBar onRetry={refresh} />}
 
       {/* 21 点还没做完学习任务：给一条能直接点走的提醒 */}
       {showLateAlert && (
