@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Badge, Breadcrumb, Layout, Menu } from "antd";
 import {
@@ -29,6 +29,14 @@ import { useFamilyStore } from "../store/useFamilyStore";
 import { useNotificationStore } from "../store/useNotificationStore";
 import { useSettingsStore } from "../store/useSettingsStore";
 import { useThemePreset, useThemeStore } from "../store/useThemeStore";
+import {
+  SPRING_BOUNCY,
+  SPRING_BOUNCY_MS,
+  SPRING_CALM,
+  SPRING_CALM_MS,
+  SPRING_MID,
+  SPRING_MID_MS,
+} from "../theme/motion";
 import styles from "./MainLayout.module.css";
 
 const { Sider, Header, Content } = Layout;
@@ -194,8 +202,10 @@ export default function MainLayout() {
    * 拖动期间高光不吃 CSS 过渡（1:1 跟手），松手时才把过渡打开 ——
    * 于是它从手指松开的地方「弹」到目标格，而不是先归位再跳一次。
    */
-  /** 按住多久算「拿起来」；这之前手指挪过 DRAG_CANCEL_PX 就当是在滑页面，取消长按 */
-  const LONG_PRESS_MS = 260;
+  /** 按住多久算「拿起来」；这之前手指挪过 DRAG_CANCEL_PX 就当是在滑页面，取消长按。
+      170ms 比「有意的按压」还短一截，所以按住几乎马上就能拉；真正的短按（<170ms）
+      仍旧走 onClick，不会被吞掉。 */
+  const LONG_PRESS_MS = 170;
   const DRAG_CANCEL_PX = 8;
   const pressTimerRef = useRef<number | null>(null);
   const pressStartRef = useRef<{ key: string; pointerId: number; x: number } | null>(null);
@@ -206,6 +216,35 @@ export default function MainLayout() {
   const [dragging, setDragging] = useState(false);
   const [dragX, setDragX] = useState<number | null>(null);
   const [liftedKey, setLiftedKey] = useState<string | null>(null);
+  /** 拖动瞬时速度（px/ms，平滑过）：玻璃被「拉」多长、水痕多明显，全看它 */
+  const speedRef = useRef(0);
+  const lastMoveRef = useRef<{ x: number; t: number } | null>(null);
+  /** 水痕（拖尾）：自己一份 x，用指数追赶手指 —— 永远慢半拍，才像水 */
+  const [trailX, setTrailX] = useState<number | null>(null);
+  const [trailOn, setTrailOn] = useState(false);
+  const trailTimerRef = useRef<number | null>(null);
+  /** 松手/切 Tab 用哪条弹簧：按「跨了几格」挑，近处弹三次，跨得远就收敛 */
+  const [pillSpring, setPillSpring] = useState({ easing: SPRING_BOUNCY, ms: SPRING_BOUNCY_MS });
+  /** 系统开了「减少动态效果」：弹簧、水痕、拉伸全部不要 */
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (!query) return;
+    setReduceMotion(query.matches);
+    const onChange = () => setReduceMotion(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
+  /** 跨几格决定回弹力度：过冲是按比例的，跨得越远越得收着，不然高光会甩出栏外 */
+  const springBetween = (fromKey: string, toKey: string) => {
+    const slotIndexOf = (key: string) => NAV_ITEMS.findIndex((item) => item.key === key);
+    const distance = Math.abs(slotIndexOf(toKey) - slotIndexOf(fromKey));
+    if (distance <= 1) return { easing: SPRING_BOUNCY, ms: SPRING_BOUNCY_MS };
+    if (distance === 2) return { easing: SPRING_MID, ms: SPRING_MID_MS };
+    return { easing: SPRING_CALM, ms: SPRING_CALM_MS };
+  };
 
   /** 量一次「栏」和「每一项」的位置：拖动期间它们不会变，量一次就够 */
   const measureSlots = () => {
@@ -247,9 +286,19 @@ export default function MainLayout() {
         const nav = bottomNavRef.current;
         if (!start || !nav || !measureSlots()) return;
         const slot = slotRef.current.find((s) => s.key === activeTab);
+        const from = navPill?.x ?? slot?.x ?? 0;
         draggingRef.current = true;
+        speedRef.current = 0;
+        lastMoveRef.current = null;
+        if (trailTimerRef.current !== null) {
+          window.clearTimeout(trailTimerRef.current);
+          trailTimerRef.current = null;
+        }
         setDragging(true);
-        setDragX(navPill?.x ?? slot?.x ?? 0);
+        setDragX(from);
+        // 水痕先落在高光当前的位置，跟手之后再慢慢被「拉」出来
+        setTrailX(from);
+        setTrailOn(true);
         setLiftedKey(start.key);
         try {
           nav.setPointerCapture(start.pointerId);
@@ -279,7 +328,17 @@ export default function MainLayout() {
     if (!navBox || !slot) return;
     // 胶囊中心跟着手指，但不许滑出栏外
     const x = Math.max(0, Math.min(navBox.width - slot.w, ev.clientX - navBox.left - slot.w / 2));
+    // 瞬时速度（px/ms）：既决定玻璃被拉多长，也决定水痕多浓。平滑一下，别跟着手指抖
+    const now = performance.now();
+    const last = lastMoveRef.current;
+    if (last) {
+      const dt = Math.max(1, now - last.t);
+      speedRef.current = speedRef.current * 0.55 + ((x - last.x) / dt) * 0.45;
+    }
+    lastMoveRef.current = { x, t: now };
     setDragX((prev) => (prev !== null && Math.abs(prev - x) < 1 ? prev : x));
+    // 水痕用「指数追赶」而不是 1:1：跟着走但永远慢半拍，停下来它会自己贴上去
+    setTrailX((prev) => (prev === null ? x : prev + (x - prev) * 0.4));
     setLiftedKey(slotAt(ev.clientX)?.key ?? start.key);
   };
 
@@ -298,9 +357,17 @@ export default function MainLayout() {
     // 先把高光挪到目标格的坐标，再打开过渡 —— 它就从手指松开的地方弹过去
     const slot = slotRef.current.find((s) => s.key === target);
     if (slot) setNavPill({ x: slot.x, w: slot.w });
+    // 这一程按「跨了几格」挑弹簧：相邻一格弹足三次，跨得远就收敛
+    setPillSpring(springBetween(start?.key ?? activeTab, target));
     setDragging(false);
     setDragX(null);
     setLiftedKey(null);
+    speedRef.current = 0;
+    lastMoveRef.current = null;
+    // 水痕晚 0.07 秒起步、走同一条弹簧追上去，到位之后淡出
+    if (slot) setTrailX(slot.x);
+    if (trailTimerRef.current !== null) window.clearTimeout(trailTimerRef.current);
+    trailTimerRef.current = window.setTimeout(() => setTrailOn(false), 1100);
     suppressClickRef.current = true; // 拖完可能还会补一个 click，别让它再切一次
     if (target !== activeTab) handleNavClick(target);
   };
@@ -313,6 +380,9 @@ export default function MainLayout() {
     setDragging(false);
     setDragX(null);
     setLiftedKey(null);
+    speedRef.current = 0;
+    lastMoveRef.current = null;
+    setTrailOn(false);
   };
 
   // 记住每个 Tab 最后停留的路径：切走再切回来能直接回到原处
@@ -437,6 +507,8 @@ export default function MainLayout() {
       scrollToTop(key);
       return;
     }
+    // 短按切 Tab 也按「跨了几格」挑弹簧：相邻一格来回弹三次，跨得远就收敛一点
+    setPillSpring(springBetween(activeTab, key));
     navigate(getTabPath(key) ?? key);
   };
 
@@ -591,23 +663,58 @@ export default function MainLayout() {
           ref={bottomNavRef}
           className={`${styles.bottomNav} ${chromeHidden ? styles.bottomNavHidden : ""}`}
           aria-label="主导航"
+          /* 把「会弹三次」的弹簧曲线交给 CSS 变量，玻璃片、标签项的缩放也走同一条 */
+          style={
+            {
+              "--spring-bouncy": SPRING_BOUNCY,
+              "--spring-bouncy-ms": `${SPRING_BOUNCY_MS}ms`,
+            } as CSSProperties
+          }
           onPointerMove={handleNavPointerMove}
           onPointerUp={handleNavPointerUp}
           onPointerCancel={handleNavPointerCancel}
           onContextMenu={(ev) => ev.preventDefault()}
         >
           {/* 选中高光：单独一条滑块，位置由上面的 useLayoutEffect 量出来，
-              换 Tab 时它会从旧位置滑到新位置（带弹簧），而不是瞬间跳过去。
-              长按拖动时它 1:1 跟手（inline transition:none），松手再交给 CSS 弹到目标格；
-              玻璃的质感在内层 .navPillGlass 上，两层各管一个 transform、互不干扰 */}
+              换 Tab 时它会从旧位置滑到新位置（弹簧按「跨了几格」挑），而不是瞬间跳过去。
+              长按拖动时它 1:1 跟手（inline transition:none），并按手指速度被横向「拉」长 ——
+              像一块被拽着走的水；松手交给弹簧弹到目标格，来回弹两三次。
+              玻璃的质感在内层 .navPillGlass 上；拖尾 .navPillTrail 是它底下那层模糊影子，
+              永远慢半拍（指数追赶 + 松手后延迟 0.07 秒起步），看着就是一道水痕 */}
+          {trailOn && navPill && trailX !== null && (
+            <span
+              className={styles.navPillTrail}
+              aria-hidden="true"
+              style={{
+                transform: `translateX(${trailX.toFixed(1)}px)`,
+                width: navPill.w,
+                opacity: dragging ? Math.min(0.5, 0.12 + Math.abs(speedRef.current) * 0.22) : 0,
+                transition:
+                  dragging || reduceMotion
+                    ? "none"
+                    : `transform ${pillSpring.ms}ms ${pillSpring.easing} 70ms, width ${pillSpring.ms}ms ${pillSpring.easing} 70ms, opacity 0.5s ease 0.25s`,
+              }}
+            />
+          )}
           {navPill && (
             <span
               className={`${styles.navPill} ${dragging ? styles.navPillDragging : ""}`}
               aria-hidden="true"
               style={{
-                transform: `translateX(${(dragging && dragX !== null ? dragX : navPill.x).toFixed(1)}px)`,
+                transform: `translateX(${(dragging && dragX !== null ? dragX : navPill.x).toFixed(1)}px)${
+                  dragging && !reduceMotion && Math.abs(speedRef.current) > 0.05
+                    ? ` scale(${(1 + Math.min(0.22, Math.abs(speedRef.current) * 0.12)).toFixed(3)}, ${(
+                        1 -
+                        Math.min(0.22, Math.abs(speedRef.current) * 0.12) * 0.35
+                      ).toFixed(3)})`
+                    : ""
+                }`,
+                transformOrigin: speedRef.current >= 0 ? "0% 50%" : "100% 50%",
                 width: navPill.w,
-                transition: dragging ? "none" : undefined,
+                transition:
+                  dragging || reduceMotion
+                    ? "none"
+                    : `transform ${pillSpring.ms}ms ${pillSpring.easing}, width ${pillSpring.ms}ms ${pillSpring.easing}`,
               }}
             >
               <span className={styles.navPillGlass} />
@@ -616,6 +723,10 @@ export default function MainLayout() {
           {NAV_ITEMS.map((item) => {
             const active = item.key === activeTab;
             const lifted = liftedKey === item.key;
+            // 「拿起来」与松手弹回都走那条会弹三次的弹簧（跟高光同一条）
+            const itemTransition = reduceMotion
+              ? "none"
+              : `color 0.16s ease, transform ${SPRING_BOUNCY_MS}ms ${SPRING_BOUNCY}`;
             return (
               <button
                 key={item.key}
@@ -626,6 +737,7 @@ export default function MainLayout() {
                 className={`${styles.bottomNavItem} ${active ? styles.bottomNavItemActive : ""} ${
                   lifted ? styles.bottomNavItemLifted : ""
                 }`}
+                style={{ transition: itemTransition }}
                 onPointerDown={handleNavPointerDown(item.key)}
                 onClick={() => {
                   // 长按拖动收尾时浏览器可能补一个 click，吃掉它，别切两次
