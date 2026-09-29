@@ -1,10 +1,14 @@
 /* ============================================================
    全局样式 + 主题变量
    ------------------------------------------------------------
-   主题切换的机制：<html data-theme="original|midnight"> 上挂变量集，
+   主题切换的机制：<html data-theme="..."> 上挂变量集，
    所有组件只读变量（禁止硬编码 hex），换主题 = 换一组变量。
+   目前六套：original（原始）/ midnight（午夜蓝）/ sakura（樱花粉）
+            / forest（森林绿）/ sunset（暖阳橙）/ crimson（暗夜红）
+   加新主题：本文件加一段 :root[data-theme='新id']，
+            再到 theme/themes.ts 的 THEMES 加一条（两处字段要对齐）。
    自定义背景图：JS 设置 --app-bg-image 与 data-bg="on"，
-   底色与卡片自动变半透明，让照片透出来。
+   底色与卡片自动变半透明（走各主题的 --surface-glass），让照片透出来。
    ============================================================ */
 
 :root {
@@ -34,14 +38,17 @@
   --app-bg-image: none;
   /* 压在照片上的一层薄纱，保证文字够清楚 */
   --app-bg-veil: rgba(255, 255, 255, 0);
-  /* 提示色块：浅底深字（午夜蓝主题里换成深底亮字） */
+  /* 设了背景图时的半透明卡片底（各主题自己覆盖） */
+  --surface-glass: rgba(255, 255, 255, 0.82);
+  --surface-soft-glass: rgba(255, 255, 255, 0.7);
+  /* 提示色块：浅底深字（深色主题里换成深底亮字） */
   --tint-warning-bg: #fff3d6;
   --tint-warning-text: #8a5a00;
   --tint-brand-bg: #f3edff;
   --tint-brand-text: #8f6cf0;
 }
 
-/* ===== 午夜蓝主题 ===== */
+/* ===== 午夜蓝（深色）===== */
 :root[data-theme='midnight'] {
   --color-primary: #2b7fe0;
   --color-primary-soft: #1b4a8f;
@@ -61,22 +68,131 @@
   --glass-ring: rgba(120, 180, 255, 0.22);
   --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
   --app-bg-veil: rgba(6, 12, 28, 0.32);
+  --surface-glass: rgba(14, 26, 51, 0.82);
+  --surface-soft-glass: rgba(19, 34, 65, 0.7);
   --tint-warning-bg: rgba(247, 185, 85, 0.16);
   --tint-warning-text: #f7b955;
   --tint-brand-bg: rgba(43, 127, 224, 0.18);
   --tint-brand-text: #7fe8ff;
 }
 
+/* ===== 樱花粉（浅色）===== */
+:root[data-theme='sakura'] {
+  --color-primary: #e8628f;
+  --color-primary-soft: #f6a8c4;
+  --color-success: #2fae86;
+  --color-danger: #e8455f;
+  --color-warning: #e9a13a;
+  --color-bg: #fff5f8;
+  --app-bg-base: #fff5f8;
+  --color-surface: #ffffff;
+  --color-surface-soft: #fdf1f5;
+  --color-text: #3b2430;
+  --color-text-secondary: #8b6b78;
+  --color-text-tertiary: #b39aa4;
+  --color-border: #f6dbe5;
+  --shadow-card: 0 2px 12px rgba(232, 98, 143, 0.12);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-ring: rgba(255, 255, 255, 0.75);
+  --glass-shadow: 0 8px 28px rgba(232, 98, 143, 0.18);
+  --app-bg-veil: rgba(255, 245, 248, 0);
+  --surface-glass: rgba(255, 255, 255, 0.82);
+  --surface-soft-glass: rgba(255, 255, 255, 0.7);
+  --tint-warning-bg: #fff3d6;
+  --tint-warning-text: #8a5a00;
+  --tint-brand-bg: #ffe6ef;
+  --tint-brand-text: #d94a7c;
+}
+
+/* ===== 森林绿（浅色）===== */
+:root[data-theme='forest'] {
+  --color-primary: #2f9e6e;
+  --color-primary-soft: #8fd3b4;
+  --color-success: #2f9e6e;
+  --color-danger: #e0603f;
+  --color-warning: #dfa03a;
+  --color-bg: #f2f9f5;
+  --app-bg-base: #f2f9f5;
+  --color-surface: #ffffff;
+  --color-surface-soft: #eef7f1;
+  --color-text: #1e3b2f;
+  --color-text-secondary: #5f7d6f;
+  --color-text-tertiary: #93ab9f;
+  --color-border: #dcebe2;
+  --shadow-card: 0 2px 12px rgba(47, 158, 110, 0.12);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-ring: rgba(255, 255, 255, 0.75);
+  --glass-shadow: 0 8px 28px rgba(31, 111, 77, 0.18);
+  --app-bg-veil: rgba(242, 249, 245, 0);
+  --surface-glass: rgba(255, 255, 255, 0.82);
+  --surface-soft-glass: rgba(255, 255, 255, 0.7);
+  --tint-warning-bg: #fff4d9;
+  --tint-warning-text: #8a5a00;
+  --tint-brand-bg: #e3f4ec;
+  --tint-brand-text: #2f9e6e;
+}
+
+/* ===== 暖阳橙（浅色）===== */
+:root[data-theme='sunset'] {
+  --color-primary: #e07b39;
+  --color-primary-soft: #f5b183;
+  --color-success: #3d9e6d;
+  --color-danger: #d8452f;
+  --color-warning: #dd9a2a;
+  --color-bg: #fff8f1;
+  --app-bg-base: #fff8f1;
+  --color-surface: #ffffff;
+  --color-surface-soft: #fdf3e9;
+  --color-text: #3f2a1b;
+  --color-text-secondary: #8a6c55;
+  --color-text-tertiary: #b39b86;
+  --color-border: #f4e0cc;
+  --shadow-card: 0 2px 12px rgba(224, 123, 57, 0.12);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-ring: rgba(255, 255, 255, 0.75);
+  --glass-shadow: 0 8px 28px rgba(194, 95, 34, 0.18);
+  --app-bg-veil: rgba(255, 248, 241, 0);
+  --surface-glass: rgba(255, 255, 255, 0.82);
+  --surface-soft-glass: rgba(255, 255, 255, 0.7);
+  --tint-warning-bg: #fdeccd;
+  --tint-warning-text: #8a5a00;
+  --tint-brand-bg: #fdeadb;
+  --tint-brand-text: #c25f22;
+}
+
+/* ===== 暗夜红（深色）===== */
+:root[data-theme='crimson'] {
+  --color-primary: #f04a5a;
+  --color-primary-soft: #8c1f2d;
+  --color-success: #3ddc97;
+  --color-danger: #ff7b7b;
+  --color-warning: #f2b44c;
+  --color-bg: #140609;
+  --app-bg-base: #140609;
+  --color-surface: #1f0c11;
+  --color-surface-soft: #2a1218;
+  --color-text: #f8ecef;
+  --color-text-secondary: #c99aa5;
+  --color-text-tertiary: #9c7079;
+  --color-border: #3d2027;
+  --shadow-card: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --glass-bg: rgba(31, 12, 17, 0.68);
+  --glass-ring: rgba(255, 140, 150, 0.22);
+  --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --app-bg-veil: rgba(20, 6, 9, 0.32);
+  --surface-glass: rgba(31, 12, 17, 0.82);
+  --surface-soft-glass: rgba(42, 18, 24, 0.7);
+  --tint-warning-bg: rgba(242, 180, 76, 0.16);
+  --tint-warning-text: #f2b44c;
+  --tint-brand-bg: rgba(240, 74, 90, 0.18);
+  --tint-brand-text: #ff9aa4;
+}
+
 /* ===== 设了自定义背景图：底色透明 + 卡片半透明，照片透出来 ===== */
 :root[data-bg='on'] {
   --color-bg: transparent;
-  --color-surface: rgba(255, 255, 255, 0.82);
-  --color-surface-soft: rgba(255, 255, 255, 0.7);
-}
-
-:root[data-theme='midnight'][data-bg='on'] {
-  --color-surface: rgba(14, 26, 51, 0.82);
-  --color-surface-soft: rgba(19, 34, 65, 0.7);
+  --color-surface: var(--surface-glass);
+  --color-surface-soft: var(--surface-soft-glass);
 }
 
 * {

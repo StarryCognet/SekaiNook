@@ -118,9 +118,15 @@
 
 /* ===== 主题选择 ===== */
 .themeList {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+@media (max-width: 560px) {
+  .themeList {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .themeItem {

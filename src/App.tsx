@@ -7,7 +7,7 @@ import RoleGate from "./components/RoleGate";
 import { PageLoading } from "./components/StateViews";
 import { useFamilyStore } from "./store/useFamilyStore";
 import { useThemeStore } from "./store/useThemeStore";
-import { buildAntdTheme } from "./theme/themes";
+import { buildAntdTheme, themePreset } from "./theme/themes";
 
 /**
  * 路由级页面按需加载：首屏只保留应用壳（主题 + 路由 + 身份门 + 主布局）。
@@ -77,9 +77,9 @@ export default function App() {
     root.dataset.bg = hasBackground ? "on" : "off";
     root.style.setProperty("--app-bg-image", hasBackground ? `url("${background}")` : "none");
 
-    // 手机浏览器地址栏 / 状态栏跟着主题变色
+    // 手机浏览器地址栏 / 状态栏跟着主题变色（取该主题的页面底色）
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", themeId === "midnight" ? "#060c1c" : "#f5f6fa");
+    if (meta) meta.setAttribute("content", themePreset(themeId).palette.bg);
   }, [themeId, background, hasBackground]);
 
   const themeConfig = useMemo(() => buildAntdTheme(themeId, hasBackground), [themeId, hasBackground]);
