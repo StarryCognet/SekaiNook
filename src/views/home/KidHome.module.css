@@ -1,41 +1,27 @@
 /* ============================================================
-   女儿版首页 —— 原本的布局 + 午夜蓝配色
+   女儿版首页 —— 布局不变，配色全部跟随全局主题
    ------------------------------------------------------------
-   这一页的配色不走全局主题（m02035：女儿首页固定午夜蓝），
-   所以颜色收在 .page 上的一组局部变量里；取值与全局「午夜蓝」主题一致，
-   这样用户把全局主题也切到午夜蓝时，整页和外面是同一套颜色。
+   颜色只读 theme/global.css 的全局变量，页面不再自带局部配色：
+   换主题整页跟着变（浅色主题 = 浅色卡片 + 主色渐变头图）。
+   唯一例外：画在主色渐变上的白字/白图标（纯白或白色半透明）。
    ============================================================ */
 
 .page {
-  /* 午夜蓝一套（与 theme/global.css 的 [data-theme='midnight'] 对齐） */
-  --kid-surface: #0e1a33;
-  --kid-surface-soft: #132241;
-  --kid-border: #22355a;
-  --kid-text: #e8f1ff;
-  --kid-text-2: #92a8c9;
-  --kid-primary: #2b7fe0;
-  --kid-cyan: #7fe8ff;
-  --kid-success: #34d399;
-  --kid-danger: #ff6b81;
-  --kid-warning: #f7b955;
-
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding-bottom: 8px;
 }
 
-/* 顶部渐变头图（午夜蓝：深墨底 + 一点青蓝高光） */
+/* 顶部渐变头图（主色渐变，跟着主题的 --color-primary 走；上面的文字一律白色） */
 .hero {
   position: relative;
   overflow: hidden;
   padding: 18px 18px 16px;
   border-radius: 20px;
-  color: #eaf6ff;
-  background: linear-gradient(135deg, #22457f 0%, #142a52 55%, #0a1428 100%);
-  box-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.45),
-    inset 0 0 0 1px rgba(127, 232, 255, 0.14);
+  color: #ffffff;
+  background: var(--gradient-hero);
+  box-shadow: var(--shadow-card);
 }
 
 .hero::after {
@@ -46,7 +32,8 @@
   width: 180px;
   height: 180px;
   border-radius: 50%;
-  background: rgba(127, 232, 255, 0.12);
+  /* 白色微光：落在主色渐变上的装饰高光 */
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .heroTop {
@@ -71,7 +58,8 @@
   height: 44px;
   border: none;
   border-radius: 50%;
-  background: rgba(127, 232, 255, 0.16);
+  /* 白色半透明底：徽章按钮画在主色渐变上 */
+  background: rgba(255, 255, 255, 0.16);
   font-size: 22px;
   line-height: 1;
   cursor: pointer;
@@ -86,7 +74,7 @@
 
 .heroSunIcon {
   font-size: 22px;
-  color: var(--kid-cyan);
+  color: #ffffff;
 }
 
 .heroSunValue {
@@ -94,8 +82,8 @@
   font-weight: 700;
   line-height: 1;
   letter-spacing: -1px;
-  /* 大数字发一点青光，夜里看着像霓虹 */
-  text-shadow: 0 0 20px rgba(127, 232, 255, 0.5);
+  /* 大数字的白色微光：落在主色渐变上 */
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
 }
 
 .heroSunUnit {
@@ -116,11 +104,12 @@
   gap: 4px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(127, 232, 255, 0.14);
+  /* 白色半透明底：胶囊标签画在主色渐变上 */
+  background: rgba(255, 255, 255, 0.14);
   font-size: 12px;
 }
 
-/* 21 点提醒条（保留警示黄，深色底上用半透明琥珀） */
+/* 21 点提醒条（走警示色块：浅色主题浅底深字，深色主题深底亮字） */
 .alertBar {
   display: flex;
   align-items: center;
@@ -130,21 +119,21 @@
   padding: 12px 14px;
   border: none;
   border-radius: 14px;
-  background: rgba(247, 185, 85, 0.16);
-  color: var(--kid-warning);
+  background: var(--tint-warning-bg);
+  color: var(--tint-warning-text);
   font-size: 13px;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-card);
 }
 
 /* 通用卡片 */
 .card {
   padding: 14px;
   border-radius: 18px;
-  background: var(--kid-surface);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
 }
 
 .cardHead {
@@ -157,12 +146,12 @@
 .cardTitle {
   font-size: 15px;
   font-weight: 700;
-  color: var(--kid-text);
+  color: var(--color-text);
 }
 
 .cardExtra {
   font-size: 12px;
-  color: var(--kid-text-2);
+  color: var(--color-text-secondary);
 }
 
 .cardLink {
@@ -175,7 +164,7 @@
   padding: 6px 0;
   border: none;
   background: none;
-  color: var(--kid-cyan);
+  color: var(--color-primary);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -185,7 +174,7 @@
   padding: 14px 0 6px;
   text-align: center;
   font-size: 13px;
-  color: var(--kid-text-2);
+  color: var(--color-text-secondary);
 }
 
 /* 今日学习任务 */
@@ -201,9 +190,9 @@
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border: none;
+  border: 1px solid var(--color-border);
   border-radius: 14px;
-  background: var(--kid-surface-soft);
+  background: var(--color-surface-soft);
   text-align: left;
   cursor: pointer;
 }
@@ -216,8 +205,8 @@
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  background: rgba(127, 232, 255, 0.12);
-  color: var(--kid-cyan);
+  background: var(--tint-brand-bg);
+  color: var(--tint-brand-text);
   font-size: 16px;
 }
 
@@ -231,20 +220,20 @@
 .taskName {
   font-size: 14px;
   font-weight: 600;
-  color: var(--kid-text);
+  color: var(--color-text);
 }
 
 .taskMeta {
   font-size: 11px;
-  color: var(--kid-text-2);
+  color: var(--color-text-secondary);
 }
 
 .taskGo {
   flex-shrink: 0;
   padding: 5px 12px;
   border-radius: 999px;
-  background: var(--kid-primary);
-  color: #fff;
+  background: var(--color-primary);
+  color: #ffffff;
   font-size: 12px;
   font-weight: 700;
 }
@@ -267,27 +256,27 @@
   font-size: 32px;
   font-weight: 700;
   line-height: 1;
-  color: var(--kid-text);
+  color: var(--color-text);
 }
 
 .moneyUnit {
   font-size: 12px;
-  color: var(--kid-text-2);
+  color: var(--color-text-secondary);
 }
 
 .moneySide {
   font-size: 12px;
   line-height: 1.7;
-  color: var(--kid-text-2);
+  color: var(--color-text-secondary);
   text-align: right;
 }
 
 .income {
-  color: var(--kid-success);
+  color: var(--color-success);
 }
 
 .expense {
-  color: var(--kid-danger);
+  color: var(--color-danger);
 }
 
 .checkinGrid {
@@ -303,14 +292,14 @@
   justify-content: space-between;
   gap: 6px;
   padding: 12px;
-  border: 1px solid var(--kid-border);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
-  background: var(--kid-surface-soft);
+  background: var(--color-surface-soft);
   cursor: pointer;
 }
 
 .checkinBtn:disabled {
-  background: rgba(19, 34, 65, 0.5);
+  /* 底色沿用次级底，只靠透明度压暗（不再写死深色） */
   opacity: 0.5;
   cursor: default;
 }
@@ -318,7 +307,7 @@
 .checkinName {
   overflow: hidden;
   font-size: 13px;
-  color: var(--kid-text);
+  color: var(--color-text);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -327,18 +316,18 @@
   flex-shrink: 0;
   font-size: 13px;
   font-weight: 700;
-  color: var(--kid-success);
+  color: var(--color-success);
 }
 
-/* 妈妈说的话（保留暖金，代表妈妈的声音；深色底上压成琥珀） */
+/* 妈妈说的话（暖色提示块，跟着主题的警示色块走） */
 .noticeCard {
   display: block;
   width: 100%;
   padding: 14px;
   border: none;
   border-radius: 18px;
-  background: linear-gradient(135deg, rgba(247, 185, 85, 0.2), rgba(247, 185, 85, 0.06));
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  background: var(--tint-warning-bg);
+  box-shadow: var(--shadow-card);
   text-align: left;
   cursor: pointer;
 }
@@ -349,26 +338,27 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--kid-warning);
+  color: var(--tint-warning-text);
 }
 
 .noticeTime {
   margin-left: auto;
   font-weight: 400;
-  color: rgba(247, 185, 85, 0.7);
+  /* 比标题淡一档：只压透明度，颜色继承 .noticeHead */
+  opacity: 0.7;
 }
 
 .noticeTitle {
   margin-top: 6px;
   font-size: 14px;
   font-weight: 700;
-  color: #ffe3a8;
+  color: var(--tint-warning-text);
 }
 
 .noticeBody {
   margin-top: 2px;
   font-size: 12px;
-  color: rgba(255, 227, 168, 0.72);
+  color: var(--color-text-secondary);
 }
 
 /* 宫格入口 */
@@ -387,8 +377,8 @@
   padding: 12px 4px;
   border: none;
   border-radius: 16px;
-  background: var(--kid-surface);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
   cursor: pointer;
 }
 
@@ -401,7 +391,7 @@
   position: relative;
   font-size: 20px;
   line-height: 1;
-  color: var(--kid-cyan);
+  color: var(--color-primary);
 }
 
 .gridBadge {
@@ -412,8 +402,8 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--kid-danger);
-  color: #fff;
+  background: var(--color-danger);
+  color: #ffffff;
   font-size: 10px;
   line-height: 16px;
   text-align: center;
@@ -421,7 +411,7 @@
 
 .gridLabel {
   font-size: 11px;
-  color: var(--kid-text-2);
+  color: var(--color-text-secondary);
 }
 
 @media (min-width: 768px) {

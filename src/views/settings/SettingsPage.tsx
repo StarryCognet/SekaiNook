@@ -274,7 +274,7 @@ export default function SettingsPage() {
             <div className={styles.infoText}>
               <div className={styles.appName}>主题</div>
               <div className={styles.appDesc}>
-                全局生效；只改这台手机的显示，另一台手机自己选
+                全局生效；只改这台手机的显示，另一台手机自己选。顶栏右上角那颗太阳/月亮也能一键在深浅之间来回切
               </div>
             </div>
           </div>

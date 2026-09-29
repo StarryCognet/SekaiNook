@@ -22,7 +22,7 @@
 .balanceCard {
   text-align: center;
   padding: 8px 0;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-soft) 100%);
+  background: var(--gradient-hero);
   border-radius: 16px;
   overflow: hidden;
   position: relative;

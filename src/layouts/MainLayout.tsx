@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Badge, Breadcrumb, Layout, Menu } from "antd";
+import { Badge, Breadcrumb, Button, Layout, Menu, Tooltip } from "antd";
 import {
   AccountBookFilled,
   AccountBookOutlined,
@@ -9,6 +9,7 @@ import {
   CalendarOutlined,
   HomeFilled,
   HomeOutlined,
+  MoonOutlined,
   SettingFilled,
   SettingOutlined,
   SunFilled,
@@ -25,6 +26,7 @@ import {
 import { useFamilyStore } from "../store/useFamilyStore";
 import { useNotificationStore } from "../store/useNotificationStore";
 import { useSettingsStore } from "../store/useSettingsStore";
+import { useThemePreset, useThemeStore } from "../store/useThemeStore";
 import styles from "./MainLayout.module.css";
 
 const { Sider, Header, Content } = Layout;
@@ -101,6 +103,8 @@ export default function MainLayout() {
   const { audience, unreadCount, load: loadNotifications, refresh: refreshNotifications } =
     useNotificationStore();
   const loadNames = useSettingsStore((s) => s.load);
+  const toggleBrightness = useThemeStore((s) => s.toggleBrightness);
+  const themeDark = useThemePreset().dark;
   const [mobile, setMobile] = useState(isMobile());
   const [collapsed, setCollapsed] = useState(false);
   const contentRef = useRef<HTMLElement | null>(null);
@@ -288,6 +292,18 @@ export default function MainLayout() {
       <Layout className={styles.mainLayout}>
         <Header className={styles.header}>
           <Breadcrumb items={[{ title: "SekaiNook" }, { title: currentLabel }]} />
+          {/* 深浅一键切换：点在「上次用的浅色」与「上次用的深色」之间来回，
+              图标显示的是「点下去会变成什么」：深色时给太阳，浅色时给月亮 */}
+          <Tooltip title={themeDark ? "切到浅色" : "切到深色"} placement="bottomRight">
+            <Button
+              type="text"
+              shape="circle"
+              className={styles.themeToggle}
+              icon={themeDark ? <SunOutlined /> : <MoonOutlined />}
+              onClick={toggleBrightness}
+              aria-label={themeDark ? "切到浅色主题" : "切到深色主题"}
+            />
+          </Tooltip>
         </Header>
         <Content className={styles.content} ref={contentRef}>
           <div className="page-transition">

@@ -21,7 +21,7 @@
   width: 68px;
   height: 68px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-soft));
+  background: var(--gradient-hero);
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -145,7 +145,7 @@
 }
 
 .badgeEarned .badgeIcon {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-soft));
+  background: var(--gradient-hero);
   color: #ffffff;
 }
 

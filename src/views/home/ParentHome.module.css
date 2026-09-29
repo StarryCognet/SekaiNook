@@ -5,13 +5,13 @@
   padding-bottom: 8px;
 }
 
-/* 顶部深色卡：妈妈的界面走信息密度路线，不用花园那套糖果色 */
+/* 顶部主视觉卡：跟随主题的主色渐变（深色主题下自然仍是深色），文字保持白色 */
 .hero {
   padding: 18px;
   border-radius: 20px;
   color: #fff;
-  background: linear-gradient(135deg, #1a1a2e 0%, #2a2a4a 100%);
-  box-shadow: 0 8px 24px rgba(26, 26, 46, 0.28);
+  background: var(--gradient-hero);
+  box-shadow: var(--shadow-card);
 }
 
 .heroTop {
@@ -55,7 +55,9 @@
   padding: 8px 4px;
   border: none;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
+  /* 主色渐变之上的描边胶囊：底色走主题变量，白字仍然清楚 */
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--glass-ring);
   color: #fff;
   cursor: pointer;
 }
@@ -74,15 +76,16 @@
 .heroDivider {
   width: 1px;
   height: 34px;
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--glass-ring);
 }
 
 /* 通用卡片 */
 .card {
   padding: 14px;
+  border: 1px solid var(--color-border);
   border-radius: 18px;
   background: var(--color-surface);
-  box-shadow: 0 2px 12px rgba(26, 26, 46, 0.08);
+  box-shadow: var(--shadow-card);
 }
 
 .cardHead {
@@ -151,7 +154,7 @@
   padding: 12px;
   border: 1px solid var(--color-border);
   border-radius: 14px;
-  background: var(--color-bg);
+  background: var(--color-surface-soft);
   text-align: left;
   cursor: pointer;
 }
@@ -202,7 +205,7 @@
 .statCell {
   padding: 8px 4px;
   border-radius: 12px;
-  background: var(--color-bg);
+  background: var(--color-surface-soft);
   text-align: center;
 }
 
@@ -280,10 +283,10 @@
   align-items: center;
   gap: 6px;
   padding: 12px 4px;
-  border: none;
+  border: 1px solid var(--color-border);
   border-radius: 16px;
   background: var(--color-surface);
-  box-shadow: 0 2px 12px rgba(26, 26, 46, 0.08);
+  box-shadow: var(--shadow-card);
   cursor: pointer;
 }
 

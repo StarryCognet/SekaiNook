@@ -20,6 +20,7 @@ import { useFamilyStore } from '../../store/useFamilyStore';
 import { useGardenStore } from '../../store/useGardenStore';
 import { useNotificationStore } from '../../store/useNotificationStore';
 import { useKidName, useMomName } from '../../store/useSettingsStore';
+import { useThemePalette } from '../../store/useThemeStore';
 import { setViewState } from '../../utils/useViewState';
 import { checkTask, isTaskDone } from '../../utils/taskRules';
 import type { TaskConfig } from '../../types/family';
@@ -65,6 +66,8 @@ export default function KidHome() {
   // 妹妹的视角：她自己一律是「我」，另一个人是妈妈（妈妈怎么被称呼由她在设置里定）
   const kidName = useKidName();
   const momName = useMomName();
+  // 进度条这类 antd 组件吃不了 CSS 变量，颜色从当前主题的调色板里取
+  const palette = useThemePalette();
 
   const [activeTask, setActiveTask] = useState<TaskConfig | null>(null);
 
@@ -174,8 +177,8 @@ export default function KidHome() {
         <Progress
           percent={gardenPercent}
           showInfo={false}
-          strokeColor={{ '0%': '#7fe8ff', '100%': '#2b7fe0' }}
-          trailColor="rgba(255, 255, 255, 0.12)"
+          strokeColor={{ '0%': palette.primarySoft, '100%': palette.primary }}
+          trailColor="var(--color-border)"
           size="small"
         />
         {todoTasks.length === 0 ? (
