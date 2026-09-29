@@ -4,6 +4,17 @@
 
 ## ✨ 功能特性
 
+### 🏡 首页（第 1 个标签，按身份分成两套界面）
+打开 App 的第一屏，妹妹和妈妈看到的是完全不同的两套页面（同一台设备只有一个人在用）：
+- **妹妹版**：大数字阳光积分、连续天数与勋章进度、今日学习任务一键完成、21 点还没做完任务的提醒条、「我的积分」本周赚了多少花掉多少、妈妈说的最新一句话、8 个常用入口宫格（去打卡 / 背古诗 / 花园 / 妈妈的话 / 本周计划 / 我的账本 / 勋章 / 设置）
+- **妈妈版**：实时时钟、待审批数与当前余额两个大数字、「需要我处理」待办（待审批 / 可兑现 / 本周计划落后）点一下直达、本周收入支出净额与打卡次数 + 近 14 天趋势图、妹妹今天的流水（可在首页直接兑现清零）、入口宫格（去审批 / 账本 / 计划 / 花园 / 通知 / 导出流水 / 结算兑现 / 设置）
+- 「去审批」会直接把账本页切到待审批那一页
+
+### 🔔 通知收件箱
+- 妹妹提交打卡、妈妈直接记账、审批通过 / 驳回、重新提交、结算兑现，都会给对方留一条站内消息
+- 首页标签挂未读角标（家庭标签挂待审批数），点开 `/home/notifications` 看完整收件箱，支持一键全部已读、点条目跳到对应页面
+- 通知只由服务端在事件处写入（没有「创建通知」接口，客户端造不出假消息）；「今天任务没做完」「21 点了」这类待办提醒在首页即时计算，不进收件箱
+
 ### 🏠 家庭工作台（积分银行）
 - **积分余额**：大数字展示当前总积分（由已审批流水汇总），正数绿色、负数红色
 - **任务区**：一键打卡赚钱任务（整理房间、洗碗、按时完成作业、按时睡觉等）与消费/罚款任务（看 iPad、玩手机、视力下降等）
@@ -33,8 +44,8 @@
 - **双角色**：家长（可审批、可增删记录）/ 小孩（打卡后需家长审批）
 - **身份选择门**：新设备首次打开先选身份，不默认进家长模式（避免小孩自审自批）
 - **家长口令**：切换为家长需口令，出厂 `1234`，可在设置页改为 4-8 位
-- **设置页 `/settings`**：切换身份、修改家长口令、扫描并清理云端闲置打卡照片、查看应用版本与完整迭代日志（当前 v1.12.0）
-- **多端导航**：PC 固定侧边栏；手机端悬浮毛玻璃胶囊底部导航（家庭 / 计划 / 花园 / 设置，选中实心图标、再点当前标签回顶部、切换标签保留各页位置与筛选）
+- **设置页 `/settings`**：切换身份、修改家长口令、扫描并清理云端闲置打卡照片、查看应用版本与完整迭代日志（当前 v1.13.0）
+- **多端导航**：PC 固定侧边栏；手机端悬浮毛玻璃胶囊底部导航（首页 / 家庭 / 计划 / 花园 / 设置，选中实心图标、再点当前标签回顶部、切换标签保留各页位置与筛选）
 - **PWA**：可「添加到主屏幕」当 App 用（manifest + Service Worker 缓存静态资源；接口数据仍然实时请求、永不缓存）
 
 ## 🛠 技术栈
@@ -103,8 +114,8 @@ npm run db:migrate:remote
 
 ### 数据分层
 
-- **D1 云端（跨设备共享）**：`family_ledger`（积分流水）、`weekly_plans`（每周学习计划）；图片存 R2
-- **localStorage 本地（各设备独立）**：当前身份角色、家长口令、阳光花园数据
+- **D1 云端（跨设备共享）**：`family_ledger`（积分流水）、`weekly_plans`（每周学习计划）、`notifications`（站内通知收件箱）；图片存 R2
+- **localStorage 本地（各设备独立）**：当前身份角色、家长口令、阳光花园数据、导航与筛选等界面状态（`sessionStorage`）
 
 ### 装到手机桌面（PWA）
 
@@ -124,16 +135,19 @@ functions/api/            # 后端接口（文件路径即 URL 路径）
 ├── plans/[id].ts         #   PATCH        /api/plans/:id
 ├── upload.ts             #   POST         /api/upload（图片入 R2，5MB 上限）
 ├── images/[[key]].ts     #   GET          /api/images/:key（[[key]] 匹配多段）
+├── notifications/index.ts    # GET   /api/notifications（按 audience 取信箱 + 未读数）
+├── notifications/[id].ts     # PATCH /api/notifications/:id（标记已读 / 未读）
+├── notifications/read-all.ts # POST  /api/notifications/read-all（整格信箱一键已读）
 └── maintenance/orphans.ts #  GET/POST     /api/maintenance/orphans（闲置照片扫描 / 清理）
-
-migrations/               # D1 建表 SQL（编号递增，必须幂等；0002 给流水加 member 列）
+functions/_lib/           # 后端共用模块（不下划线开头会被当成路由，所以放 _lib）
+migrations/               # D1 建表 SQL（编号递增，必须幂等；0002 给流水加 member 列，0003 建通知表）
 public/_routes.json       # 声明 Functions 只接管 /api/*
 public/_redirects         # SPA 路由回退 /* → /index.html 200
 wrangler.jsonc            # D1 / R2 绑定与 Pages 构建配置
 
 src/
-├── api/            # 数据访问层（http.ts 统一 REST 客户端 + familyLedger/familyTasks/upload）
-├── components/     # 通用组件（加载/空/错误态、身份选择门、花园图标）
+├── api/            # 数据访问层（http.ts 统一 REST 客户端 + familyLedger/familyTasks/upload/notifications）
+├── components/     # 通用组件（加载/空/错误态、身份选择门、打卡弹窗、花园图标）
 ├── config/         # 业务规则唯一数据源（任务、学习计划、花园配置、版本日志）
 ├── layouts/        # 主布局（PC 侧边栏 + 移动端底部导航）、花园布局
 ├── store/          # zustand 全局状态（积分流水/审批/身份/口令、花园）
@@ -141,6 +155,7 @@ src/
 ├── types/          # TypeScript 类型定义
 ├── utils/          # 工具函数（设备判断、ISO 周计算、图片压缩）
 └── views/
+    ├── home/       # 首页（妹妹版 / 妈妈版）与通知收件箱
     ├── family/     # 家庭工作台、每周学习计划
     ├── garden/     # 阳光花园儿童工作台
     └── settings/   # 设置（身份/口令/版本日志）
@@ -150,13 +165,15 @@ src/
 
 | 路径 | 页面 |
 |------|------|
-| `/` | 自动跳转 `/family` |
-| `/family` | 家庭工作台（积分银行） |
+| `/` | 自动跳转 `/home` |
+| `/home` | 首页（按身份显示妹妹版 / 妈妈版） |
+| `/home/notifications` | 通知收件箱 |
+| `/family` | 家庭工作台（积分银行 / 账本） |
 | `/family/plan` | 每周学习计划 |
 | `/garden` | 阳光花园・学习乐园 |
 | `/settings` | 设置（身份切换、家长口令、版本日志） |
 
-未选择身份时会先显示身份选择门；未知路径回退到 `/family`。
+未选择身份时会先显示身份选择门；未知路径回退到 `/home`。
 
 ## 🔌 后端接口
 
@@ -173,6 +190,9 @@ src/
 | GET | `/api/images/:key` | 读取 R2 图片（匿名，供 `<img>` 直接用） |
 | GET | `/api/maintenance/orphans` | 扫描 R2 中未被流水引用的闲置打卡照片（只读，返回 `{ total, referenced, orphans, keys }`） |
 | POST | `/api/maintenance/orphans` | 删除闲置打卡照片，需请求体 `{"confirm":true}` |
+| GET | `/api/notifications?audience=parent\|child` | 取某格信箱的通知（倒序，`limit` 缺省 50 / 上限 200），返回 `{ items, unreadCount, ready }`（`ready=false` = 通知表还没迁移） |
+| PATCH | `/api/notifications/:id` | 标记单条已读 / 未读（请求体 `{"status":"read"\|"unread"}`） |
+| POST | `/api/notifications/read-all` | 整格信箱一键已读（请求体 `{"audience":"parent"\|"child"}`） |
 
 接口**刻意不加鉴权**：本项目是家庭内部工具，权限靠前端身份与家长口令约束（见下方开发规则）。
 

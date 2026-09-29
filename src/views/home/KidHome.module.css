@@ -1,0 +1,418 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+/* 顶部渐变头图（花园色系，跟妹妹那边同一套视觉） */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 18px 16px;
+  border-radius: 20px;
+  color: #fff;
+  background: linear-gradient(135deg, #b791fa 0%, #8f6cf0 55%, #7a5ae0 100%);
+  box-shadow: 0 8px 24px rgba(143, 108, 240, 0.28);
+}
+
+.hero::after {
+  content: '';
+  position: absolute;
+  top: -70px;
+  right: -50px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.heroTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.heroGreeting {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.heroDate {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.heroAvatar {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.heroSun {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.heroSunIcon {
+  font-size: 22px;
+}
+
+.heroSunValue {
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+.heroSunUnit {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.heroChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.heroChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+}
+
+/* 21 点提醒条 */
+.alertBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-radius: 14px;
+  background: #fff3d6;
+  color: #8a5a00;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(245, 166, 35, 0.22);
+}
+
+/* 通用卡片 */
+.card {
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: 0 4px 16px rgba(183, 145, 250, 0.14);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.cardTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #3a3a5c;
+}
+
+.cardExtra {
+  font-size: 12px;
+  color: #8a8aa8;
+}
+
+.cardLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  color: #8f6cf0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.allDone {
+  padding: 14px 0 6px;
+  text-align: center;
+  font-size: 13px;
+  color: #8a8aa8;
+}
+
+/* 今日学习任务 */
+.taskList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.taskItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 14px;
+  background: #f3edff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.taskIcon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #fff;
+  color: #8f6cf0;
+  font-size: 16px;
+}
+
+.taskBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.taskName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3a3a5c;
+}
+
+.taskMeta {
+  font-size: 11px;
+  color: #8a8aa8;
+}
+
+.taskGo {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #b791fa;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 我的积分 */
+.moneyRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.moneyValue {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.moneyNumber {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  color: #3a3a5c;
+}
+
+.moneyUnit {
+  font-size: 12px;
+  color: #8a8aa8;
+}
+
+.moneySide {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #8a8aa8;
+  text-align: right;
+}
+
+.income {
+  color: #52c41a;
+}
+
+.expense {
+  color: #e94560;
+}
+
+.checkinGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.checkinBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #ede7fb;
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.checkinBtn:disabled {
+  background: #f7f7fa;
+  opacity: 0.5;
+  cursor: default;
+}
+
+.checkinName {
+  overflow: hidden;
+  font-size: 13px;
+  color: #3a3a5c;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkinValue {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #52c41a;
+}
+
+/* 妈妈说的话 */
+.noticeCard {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #fff7e0, #fffdf6);
+  box-shadow: 0 4px 16px rgba(255, 197, 61, 0.18);
+  text-align: left;
+  cursor: pointer;
+}
+
+.noticeHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b58a2b;
+}
+
+.noticeTime {
+  margin-left: auto;
+  font-weight: 400;
+  color: #c0a468;
+}
+
+.noticeTitle {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #5a4a20;
+}
+
+.noticeBody {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #8a7a50;
+}
+
+/* 宫格入口 */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.gridItem {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 4px;
+  border: none;
+  border-radius: 16px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 10px rgba(183, 145, 250, 0.12);
+  cursor: pointer;
+}
+
+.gridItem:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.gridIcon {
+  position: relative;
+  font-size: 20px;
+  line-height: 1;
+  color: #8f6cf0;
+}
+
+.gridBadge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #e94560;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.gridLabel {
+  font-size: 11px;
+  color: #3a3a5c;
+}
+
+@media (min-width: 768px) {
+  .checkinGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+
+  .hero {
+    padding: 22px;
+  }
+
+  .heroSunValue {
+    font-size: 52px;
+  }
+}

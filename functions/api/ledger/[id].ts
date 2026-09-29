@@ -3,6 +3,8 @@
  * 路由：PATCH /api/ledger/:id（更新审批状态）、DELETE /api/ledger/:id（删除记录并清理关联图片）
  */
 
+import { amountText, pushNotifications } from '../../_lib/notifications';
+
 interface Env {
   DB: D1Database;
   STARRYMIKU_BUCKET: R2Bucket;
@@ -39,13 +41,58 @@ export const onRequestPatch: PagesFunction<Env> = async ({ params, request, env 
     return Response.json({ error: 'status 非法' }, { status: 400 });
   }
 
-  const result = await env.DB.prepare('UPDATE family_ledger SET status = ? WHERE id = ?')
-    .bind(status, id)
-    .run();
+  // 先读原记录：既用于 404 判定，也用于给通知拼文案、判断状态是否真的变了
+  const record = await env.DB.prepare(
+    'SELECT task_name, type, amount, status FROM family_ledger WHERE id = ?'
+  )
+    .bind(id)
+    .first<{ task_name: string; type: string; amount: number; status: string }>();
 
-  if (!result.meta.changes) {
+  if (!record) {
     return Response.json({ error: '记录不存在' }, { status: 404 });
   }
+
+  await env.DB.prepare('UPDATE family_ledger SET status = ? WHERE id = ?').bind(status, id).run();
+
+  // 状态没变就不重复通知（家长连点两下、网络重试都会走到这里）
+  if (record.status !== status) {
+    const amountLabel = amountText(record.type, record.amount);
+    if (status === 'approved') {
+      await pushNotifications(env.DB, [
+        {
+          audience: 'child',
+          type: 'approved',
+          title: `「${record.task_name}」已通过`,
+          body: `${amountLabel} 积分已入账`,
+          link: '/family',
+          dedupeKey: `ledger:${id}:approved:${record.status}`,
+        },
+      ]);
+    } else if (status === 'rejected') {
+      await pushNotifications(env.DB, [
+        {
+          audience: 'child',
+          type: 'rejected',
+          title: `「${record.task_name}」被驳回了`,
+          body: '看看哪里不对，改好可以再提交一次',
+          link: '/family',
+          dedupeKey: `ledger:${id}:rejected:${record.status}`,
+        },
+      ]);
+    } else if (status === 'pending') {
+      await pushNotifications(env.DB, [
+        {
+          audience: 'parent',
+          type: 'resubmitted',
+          title: '妹妹重新提交了打卡',
+          body: `${record.task_name} ${amountLabel}`,
+          link: '/family',
+          dedupeKey: `ledger:${id}:resubmit:${record.status}`,
+        },
+      ]);
+    }
+  }
+
   return Response.json({ ok: true });
 };
 

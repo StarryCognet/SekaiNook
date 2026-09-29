@@ -12,14 +12,16 @@ import { antdTheme } from "./theme/tokens";
  * 路由级页面按需加载：首屏只保留应用壳（主题 + 路由 + 身份门 + 主布局）。
  * 与静态 import 的组件、默认导出、path 完全一致，只改变加载时机。
  */
+const HomePage = lazy(() => import("./views/home/HomePage"));
+const NotificationsPage = lazy(() => import("./views/home/NotificationsPage"));
 const FamilyDashboard = lazy(() => import("./views/family/FamilyDashboard"));
 const WeeklyPlan = lazy(() => import("./views/family/WeeklyPlan"));
 const GardenLayout = lazy(() => import("./layouts/GardenLayout"));
 const SettingsPage = lazy(() => import("./views/settings/SettingsPage"));
 
-/** 根路由：跳转 /family（PC 显示仪表盘，移动端显示移动工作台） */
+/** 根路由：跳首页（首页内部再按身份分成妹妹版 / 妈妈版） */
 function HomeRedirect() {
-  return <Navigate to="/family" replace />;
+  return <Navigate to="/home" replace />;
 }
 
 /**
@@ -35,12 +37,14 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<HomeRedirect />} />
         <Route element={<MainLayout />}>
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/home/notifications" element={<NotificationsPage />} />
           <Route path="/family" element={<FamilyDashboard />} />
           <Route path="/family/plan" element={<WeeklyPlan />} />
           <Route path="/garden" element={<GardenLayout />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
-        <Route path="*" element={<Navigate to="/family" replace />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </Suspense>
   );

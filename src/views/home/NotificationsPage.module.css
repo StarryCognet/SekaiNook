@@ -1,0 +1,145 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.back {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 15px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(26, 26, 46, 0.08);
+}
+
+.headText {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.notReady {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fff3d6;
+  color: #8a5a00;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 16px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 12px rgba(26, 26, 46, 0.06);
+  text-align: left;
+  cursor: pointer;
+}
+
+.unread {
+  background: #f3edff;
+}
+
+.icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 16px;
+  color: var(--color-text-secondary);
+}
+
+/* 按类型上色：待审批=橙、通过=绿、驳回=红、兑现=金 */
+.checkin_pending,
+.resubmitted {
+  color: #f5a623;
+}
+
+.approved {
+  color: var(--color-success);
+}
+
+.rejected {
+  color: var(--color-danger);
+}
+
+.recorded {
+  color: #8f6cf0;
+}
+
+.payout {
+  color: #d4a017;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.itemTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.itemBody {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.time {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--color-danger);
+}

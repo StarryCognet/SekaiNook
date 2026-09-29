@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Modal, Image, message, Badge, Popconfirm, Segmented } from 'antd';
+import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Image, message, Badge, Popconfirm, Segmented } from 'antd';
 import {
   PlusOutlined,
   MinusOutlined,
@@ -11,8 +11,6 @@ import {
   FallOutlined,
   HistoryOutlined,
   AppstoreOutlined,
-  CameraOutlined,
-  PictureOutlined,
   EyeOutlined,
   AuditOutlined,
   CloseCircleOutlined,
@@ -21,14 +19,14 @@ import {
   DownloadOutlined,
 } from '@ant-design/icons';
 import { addLedgerRecord, resubmitRequest } from '../../api/familyLedger';
-import { uploadImage } from '../../api/upload';
-import { compressImage } from '../../utils/image';
-import { useBackButton } from '../../utils/useBackButton';
 import { useViewState } from '../../utils/useViewState';
+import { exportLedgerCsv } from '../../utils/exportLedger';
+import { checkTask, isTaskDone } from '../../utils/taskRules';
 import { getTasksByType } from '../../config/familyRules';
 import { useFamilyStore } from '../../store/useFamilyStore';
 import { PageLoading, EmptyState, ErrorState } from '../../components/StateViews';
 import BalanceTrend from '../../components/BalanceTrend';
+import CheckInModal from '../../components/CheckInModal';
 import { designTokens } from '../../theme/tokens';
 import type { LedgerRecord, LedgerStatus, TaskConfig, TaskType } from '../../types/family';
 import styles from './FamilyDashboard.module.css';
@@ -69,12 +67,8 @@ export default function FamilyDashboard() {
 
   const isParent = role === 'parent';
 
-  // 任务打卡弹窗状态
+  // 任务打卡弹窗状态（照片与备注草稿由 CheckInModal 自己管）
   const [activeTask, setActiveTask] = useState<TaskConfig | null>(null);
-  const [note, setNote] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   /** 正在提交的任务 id（防止手机连点重复入账） */
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   /** 正在结算兑现（家长） */
@@ -166,57 +160,9 @@ export default function FamilyDashboard() {
   const hour = now.getHours();
   const isLate = hour >= 21;
 
-  /** 打开任务打卡弹窗 */
-  const openTaskModal = (task: TaskConfig) => {
-    setActiveTask(task);
-    setNote('');
-    setImageFile(null);
-    setImagePreview(null);
-  };
-
-  /** 关闭任务打卡弹窗 */
-  const closeTaskModal = () => {
-    setActiveTask(null);
-    setNote('');
-    setImageFile(null);
-    setImagePreview(null);
-  };
-
-  // 安卓硬件返回键：打卡弹窗打开时，返回键先关弹窗，而不是直接退出应用
-  useBackButton(!!activeTask, closeTaskModal);
-
-  /** 当天该任务已提交次数（含待审批，不含被驳回） */
-  const countTodaySubmissions = (taskId: string): number => {
-    const today = new Date().toDateString();
-    return records.filter(
-      (r) =>
-        r.task_id === taskId &&
-        r.status !== 'rejected' &&
-        new Date(r.created_at).toDateString() === today
-    ).length;
-  };
-
-  /** 任务能否打卡；不能时返回给用户看的提示文案 */
-  const checkTask = (task: TaskConfig): string | null => {
-    if (task.window) {
-      const [startH, startM] = task.window.start.split(':').map(Number);
-      const [endH, endM] = task.window.end.split(':').map(Number);
-      const minutes = now.getHours() * 60 + now.getMinutes();
-      if (minutes < startH * 60 + startM || minutes > endH * 60 + endM) {
-        return `「${task.name}」只能在 ${task.window.start}-${task.window.end} 之间打卡`;
-      }
-    }
-    if (task.dailyLimit !== undefined && countTodaySubmissions(task.id) >= task.dailyLimit) {
-      return task.dailyLimit === 1
-        ? `「${task.name}」今天已经打过卡啦`
-        : `「${task.name}」每天最多 ${task.dailyLimit} 次，今天用完啦`;
-    }
-    return null;
-  };
-
-  /** 是否已达今日上限（按钮置灰，避免重复打卡） */
-  const isTaskDone = (task: TaskConfig): boolean =>
-    task.dailyLimit !== undefined && countTodaySubmissions(task.id) >= task.dailyLimit;
+  /** 打卡规则的判断在 utils/taskRules 里 —— 首页（妹妹版）用的是同一套规则 */
+  const guardTask = (task: TaskConfig) => checkTask(task, records, now);
+  const isDone = (task: TaskConfig) => isTaskDone(task, records, now);
 
   /** 撤销刚才的打卡 */
   const handleUndo = async (recordId: string) => {
@@ -248,62 +194,9 @@ export default function FamilyDashboard() {
     });
   };
 
-  /** 选择图片（拍照或相册） */
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-    e.target.value = '';
-  };
-
-  /** 提交任务打卡：压缩图片 → 上传（如有）→ 写入流水 */
-  const handleTaskSubmit = async () => {
-    if (!activeTask) return;
-    const blocked = checkTask(activeTask);
-    if (blocked) {
-      message.warning(blocked);
-      return;
-    }
-
-    setUploading(true);
-    let imageUrl: string | undefined;
-    let uploadError: string | null = null;
-
-    // 上传图片（失败不阻断打卡，但必须把原因说清楚）
-    if (imageFile) {
-      try {
-        // 手机原图常 3-15MB，先压到长边 1600 并转 JPEG，绕开后端 5MB 上限与 HEIF 格式问题
-        const compressed = await compressImage(imageFile);
-        const result = await uploadImage(compressed);
-        imageUrl = result.url;
-      } catch (e) {
-        uploadError = e instanceof Error ? e.message : '图片上传失败';
-      }
-    }
-
-    try {
-      const recordId = await addLedgerRecord(
-        activeTask,
-        { note: note.trim() || undefined, imageUrl },
-        { status: isParent ? 'approved' : 'pending' }
-      );
-      await loadLedger();
-      closeTaskModal();
-      notifySuccess(activeTask, recordId);
-      if (uploadError) {
-        message.warning({ content: `照片没传上去：${uploadError}（打卡本身已成功）`, duration: 6 });
-      }
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : '操作失败，请重试');
-    } finally {
-      setUploading(false);
-    }
-  };
-
   /** 打卡：写入流水（小孩端为待审批申请）并刷新余额 */
   const handleTask = async (task: TaskConfig) => {
-    const blocked = checkTask(task);
+    const blocked = guardTask(task);
     if (blocked) {
       message.warning(blocked);
       return;
@@ -449,30 +342,9 @@ export default function FamilyDashboard() {
     }
   };
 
-  /** 导出 CSV（仅家长）：按当前筛选导出全部记录，带 BOM 方便 Excel 直接打开中文 */
+  /** 导出 CSV（仅家长）：按当前筛选导出全部记录（导出实现在 utils/exportLedger，首页也用同一份） */
   const handleExportCsv = () => {
-    const escapeCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
-    const header = ['时间', '任务', '类型', '积分', '状态', '备注', '图片'];
-    const rows = filteredRecords.map((r) => [
-      new Date(r.created_at).toLocaleString('zh-CN'),
-      r.task_name,
-      r.type === 'earning' ? '赚钱' : '消费/罚款',
-      String(r.amount),
-      r.status === 'pending' ? '待审批' : r.status === 'rejected' ? '已驳回' : '已入账',
-      (r.note ?? '').replace(/[\r\n]+/g, ' '),
-      r.image_url ?? '',
-    ]);
-    const csv = [header, ...rows].map((cells) => cells.map(escapeCell).join(',')).join('\r\n');
-    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `sekainook-流水-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    message.success(`已导出 ${rows.length} 条记录`);
+    message.success(`已导出 ${exportLedgerCsv(filteredRecords)} 条记录`);
   };
 
   /** 流水状态标签 */
@@ -509,8 +381,8 @@ export default function FamilyDashboard() {
                   borderColor: designTokens.colors.success,
                 }}
                 icon={<PlusOutlined />}
-                disabled={isTaskDone(task)}
-                onClick={() => openTaskModal(task)}
+                disabled={isDone(task)}
+                onClick={() => setActiveTask(task)}
               >
                 <span className={styles.actionBtnText}>{task.name}</span>
                 <span className={`num ${styles.actionBtnValue}`}>+{task.value}</span>
@@ -528,8 +400,8 @@ export default function FamilyDashboard() {
                 danger
                 className={`${styles.actionBtn} btn-press`}
                 icon={<MinusOutlined />}
-                disabled={isTaskDone(task)}
-                onClick={() => openTaskModal(task)}
+                disabled={isDone(task)}
+                onClick={() => setActiveTask(task)}
               >
                 <span className={styles.actionBtnText}>{task.name}</span>
                 <span className={`num ${styles.actionBtnValue}`}>{task.value}</span>
@@ -895,7 +767,7 @@ export default function FamilyDashboard() {
                 borderColor: designTokens.colors.success,
               }}
               icon={<CheckCircleOutlined />}
-              disabled={!homeworkTask || isTaskDone(homeworkTask)}
+              disabled={!homeworkTask || isDone(homeworkTask)}
               loading={submittingId === homeworkTask?.id}
               onClick={() => homeworkTask && handleTask(homeworkTask)}
             >
@@ -909,7 +781,7 @@ export default function FamilyDashboard() {
                 borderColor: designTokens.colors.primary,
               }}
               icon={<MoonOutlined />}
-              disabled={!sleepTask || isTaskDone(sleepTask)}
+              disabled={!sleepTask || isDone(sleepTask)}
               loading={submittingId === sleepTask?.id}
               onClick={() => sleepTask && handleTask(sleepTask)}
             >
@@ -924,85 +796,17 @@ export default function FamilyDashboard() {
         </div>
       </div>
 
-      {/* ===== 任务打卡弹窗 ===== */}
-      <Modal
-        open={!!activeTask}
-        title={activeTask ? `${isParent ? '打卡' : '申请打卡'}：${activeTask.name}` : ''}
-        onCancel={closeTaskModal}
-        onOk={handleTaskSubmit}
-        okText={isParent ? '确认打卡' : '提交申请'}
-        cancelText="取消"
-        confirmLoading={uploading}
-        // 手机端键盘弹出时不要把弹窗顶出屏幕：贴顶 + 内容区自己滚动
-        style={{ top: 24 }}
-        styles={{ body: { maxHeight: '60vh', overflowY: 'auto' } }}
-        destroyOnHidden
-      >
-        {/* 上方：拍照 / 相册 双入口 */}
-        <div className={styles.modalSection}>
-          <div className={styles.modalLabel}>
-            <CameraOutlined /> 上传照片
-          </div>
-          <div className={styles.uploadArea}>
-            {imagePreview ? (
-              <div className={styles.imagePreviewWrap}>
-                <img src={imagePreview} alt="任务照片" className={styles.imagePreview} />
-                <Button
-                  size="small"
-                  className={styles.imageRemove}
-                  onClick={() => {
-                    setImageFile(null);
-                    setImagePreview(null);
-                  }}
-                >
-                  移除
-                </Button>
-              </div>
-            ) : (
-              <div className={styles.uploadChoices}>
-                {/* 拍照：capture 直接调起系统相机 */}
-                <label className={styles.uploadBtn}>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleImageChange}
-                    style={{ display: 'none' }}
-                  />
-                  <CameraOutlined />
-                  <span>拍照</span>
-                </label>
-                {/* 相册：不带 capture，让系统弹「相机 / 相册 / 文件」选择 */}
-                <label className={styles.uploadBtn}>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    style={{ display: 'none' }}
-                  />
-                  <PictureOutlined />
-                  <span>从相册选</span>
-                </label>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 下方：备注 */}
-        <div className={styles.modalSection}>
-          <div className={styles.modalLabel}>
-            <PictureOutlined /> 备注
-          </div>
-          <Input.TextArea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="填写任务备注（可选）"
-            rows={3}
-            maxLength={200}
-            showCount
-          />
-        </div>
-      </Modal>
+      {/* ===== 任务打卡弹窗（照片与备注草稿由组件内部管理） ===== */}
+      <CheckInModal
+        task={activeTask}
+        isParent={isParent}
+        guard={guardTask}
+        onClose={() => setActiveTask(null)}
+        onSuccess={async (task, recordId) => {
+          await loadLedger();
+          notifySuccess(task, recordId);
+        }}
+      />
     </div>
   );
 }

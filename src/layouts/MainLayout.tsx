@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Badge, Breadcrumb, Layout, Menu } from "antd";
 import {
+  AccountBookFilled,
+  AccountBookOutlined,
   BookOutlined,
   CalendarFilled,
   CalendarOutlined,
@@ -21,13 +23,16 @@ import {
   resolveTabRoot,
 } from "../utils/tabMemory";
 import { useFamilyStore } from "../store/useFamilyStore";
+import { useNotificationStore } from "../store/useNotificationStore";
 import styles from "./MainLayout.module.css";
 
 const { Sider, Header, Content } = Layout;
 
 /** 面包屑尾项：按路径取名 */
 const BREADCRUMB_MAP: Record<string, string> = {
-  "/family": "家庭工作台",
+  "/home": "首页",
+  "/home/notifications": "通知",
+  "/family": "家庭账本",
   "/family/plan": "学习计划",
   "/garden": "阳光花园・学习乐园",
   "/settings": "设置",
@@ -44,17 +49,26 @@ interface NavItem {
   iconActive: ReactNode;
   label: string;
   shortLabel: string;
-  withBadge?: boolean;
+  /** 角标挂哪种计数：待审批（仅家长可见）或未读通知 */
+  badge?: "pending" | "unread";
 }
 
 const NAV_ITEMS: NavItem[] = [
   {
-    key: "/family",
+    key: "/home",
     icon: <HomeOutlined />,
     iconActive: <HomeFilled />,
-    label: "家庭工作台",
-    shortLabel: "家庭",
-    withBadge: true,
+    label: "首页",
+    shortLabel: "首页",
+    badge: "unread",
+  },
+  {
+    key: "/family",
+    icon: <AccountBookOutlined />,
+    iconActive: <AccountBookFilled />,
+    label: "家庭账本",
+    shortLabel: "账本",
+    badge: "pending",
   },
   {
     key: "/family/plan",
@@ -83,6 +97,8 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { role, pendingCount } = useFamilyStore();
+  const { audience, unreadCount, load: loadNotifications, refresh: refreshNotifications } =
+    useNotificationStore();
   const [mobile, setMobile] = useState(isMobile());
   const [collapsed, setCollapsed] = useState(false);
   const contentRef = useRef<HTMLElement | null>(null);
@@ -92,6 +108,33 @@ export default function MainLayout() {
     window.addEventListener("resize", handle);
     return () => window.removeEventListener("resize", handle);
   }, []);
+
+  // 身份决定看哪一格信箱：家长看家长那格，小孩看小孩那格
+  useEffect(() => {
+    if (!role) return;
+    loadNotifications(role === 'parent' ? 'parent' : 'child').catch(() => undefined);
+  }, [role, loadNotifications]);
+
+  // 未读通知轮询：放在主布局里而不是各页面 —— 不管停在哪一页，底部 Tab 的角标都要准。
+  // 页面在后台（息屏 / 切走）时暂停，回到前台立刻补一次（省电，安卓上尤其重要）
+  useEffect(() => {
+    if (!audience) return;
+    const refresh = () => {
+      if (document.hidden) return;
+      refreshNotifications().catch(() => undefined);
+    };
+    const timer = setInterval(refresh, 15000);
+    const onVisible = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [audience, refreshNotifications]);
 
   const currentKey = location.pathname;
   const currentLabel = BREADCRUMB_MAP[currentKey] ?? "家庭工作台";
@@ -171,14 +214,21 @@ export default function MainLayout() {
     navigate(getTabPath(key) ?? key);
   };
 
-  /** 家长的待审批角标：角标要挂在图标上（挂文字上语义不对，也容易错位） */
-  const showPendingBadge = (item: NavItem) =>
-    Boolean(item.withBadge) && role === "parent" && pendingCount > 0;
+  /**
+   * Tab 角标：角标要挂在图标上（挂文字上语义不对，也容易错位）。
+   * 家庭 Tab = 待审批数（只有家长需要处理），首页 Tab = 未读通知数。
+   */
+  const badgeCount = (item: NavItem): number => {
+    if (item.badge === "pending") return role === "parent" ? pendingCount : 0;
+    if (item.badge === "unread") return unreadCount;
+    return 0;
+  };
 
   const renderIcon = (item: NavItem, active: boolean) => {
     const node = active ? item.iconActive : item.icon;
-    return showPendingBadge(item) ? (
-      <Badge count={pendingCount} size="small" offset={[6, -2]}>
+    const count = badgeCount(item);
+    return count > 0 ? (
+      <Badge count={count} size="small" offset={[6, -2]}>
         {node}
       </Badge>
     ) : (

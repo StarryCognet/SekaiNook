@@ -1,0 +1,75 @@
+/* 任务打卡弹窗（账本页与首页共用） */
+
+.modalSection {
+  margin-bottom: 16px;
+}
+
+.modalLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text, #1a1a2e);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.uploadArea {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.uploadChoices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+.uploadBtn {
+  width: 100%;
+  height: 120px;
+  border: 2px dashed var(--color-border, #d1d5db);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #fafafa;
+}
+
+.uploadBtn:hover {
+  border-color: var(--color-text, #1a1a2e);
+  color: var(--color-text, #1a1a2e);
+  background: #f5f5f5;
+}
+
+/* 图标放大：.anticon 是 antd 的全局类名，CSS Module 里必须显式 :global 才命中 */
+.uploadBtn :global(.anticon) {
+  font-size: 32px;
+}
+
+.imagePreviewWrap {
+  position: relative;
+  width: 100%;
+}
+
+.imagePreview {
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.imageRemove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}

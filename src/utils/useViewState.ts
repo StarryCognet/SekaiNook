@@ -59,3 +59,12 @@ export function useViewState<T>(
 
   return [value, set];
 }
+
+/**
+ * 直接写某个界面状态（不经过组件）。
+ * 用于「跳过去并顺手切到某个 Tab」这类跨页动作，例如首页的「去审批」按钮：
+ * 先把 family.activeTab 写成 pending，再跳到 /family，账本页挂载时就落在待审批页。
+ */
+export function setViewState<T>(key: string, value: T): void {
+  write(key, value);
+}

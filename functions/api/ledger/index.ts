@@ -7,6 +7,8 @@
  * POST 仅在请求真的带了 member 时才写这一列。
  */
 
+import { amountText, pushNotifications } from '../../_lib/notifications';
+
 interface Env {
   DB: D1Database;
 }
@@ -73,6 +75,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
+  const finalStatus = typeof status === 'string' ? status : 'approved';
 
   if (member) {
     await env.DB.prepare(
@@ -87,7 +90,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         amount,
         typeof note === 'string' ? note : null,
         typeof image_url === 'string' ? image_url : null,
-        typeof status === 'string' ? status : 'approved',
+        finalStatus,
         createdAt,
         member
       )
@@ -106,10 +109,48 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         amount,
         typeof note === 'string' ? note : null,
         typeof image_url === 'string' ? image_url : null,
-        typeof status === 'string' ? status : 'approved',
+        finalStatus,
         createdAt
       )
       .run();
+  }
+
+  // 记完账再写通知（写通知失败不影响记账）：
+  //   孩子提交打卡 → 告诉家长；家长直接记账 / 结算兑现 → 告诉孩子
+  const amountLabel = amountText(type, amount);
+  if (finalStatus === 'pending') {
+    await pushNotifications(env.DB, [
+      {
+        audience: 'parent',
+        type: 'checkin_pending',
+        title: '妹妹提交了打卡',
+        body: `${task_name} ${amountLabel}`,
+        link: '/family',
+        dedupeKey: `ledger:${id}:pending`,
+      },
+    ]);
+  } else if (finalStatus === 'approved' && task_id === 'payout') {
+    await pushNotifications(env.DB, [
+      {
+        audience: 'child',
+        type: 'payout',
+        title: `妈妈兑现了 ${Math.abs(amount)} 积分`,
+        body: '余额已清零，明天继续加油',
+        link: '/family',
+        dedupeKey: `ledger:${id}:payout`,
+      },
+    ]);
+  } else if (finalStatus === 'approved') {
+    await pushNotifications(env.DB, [
+      {
+        audience: 'child',
+        type: 'recorded',
+        title: '妈妈记了一笔',
+        body: `${task_name} ${amountLabel}`,
+        link: '/family',
+        dedupeKey: `ledger:${id}:recorded`,
+      },
+    ]);
   }
 
   return Response.json({ id }, { status: 201 });

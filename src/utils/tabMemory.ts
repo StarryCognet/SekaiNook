@@ -14,8 +14,11 @@
  * 存一份能顺带把位置也恢复回来。
  */
 
-/** 四个 Tab 的根路径；按最长前缀匹配，所以 /family/plan 会命中「学习计划」而不是「家庭工作台」 */
-const TAB_ROOTS = ['/family/plan', '/family', '/garden', '/settings'];
+/**
+ * Tab 根路径；按最长前缀匹配，所以 /family/plan 命中「学习计划」而不是「家庭账本」，
+ * /home/notifications 归「首页」。
+ */
+const TAB_ROOTS = ['/home', '/family/plan', '/family', '/garden', '/settings'];
 
 const TAB_PATH_KEY = 'sekainook_tab_paths_v1';
 const SCROLL_KEY = 'sekainook_scroll_v1';
@@ -41,14 +44,14 @@ function writeMap(key: string, value: Record<string, string | number>): void {
   }
 }
 
-/** 路径属于哪个 Tab（找不到兜底回「家庭工作台」） */
+/** 路径属于哪个 Tab（找不到兜底回「首页」） */
 export function resolveTabRoot(pathname: string): string {
   let matched = '';
   for (const root of TAB_ROOTS) {
     const hit = pathname === root || pathname.startsWith(`${root}/`);
     if (hit && root.length > matched.length) matched = root;
   }
-  return matched || '/family';
+  return matched || '/home';
 }
 
 /** 记住某个 Tab 最后停留的路径 */
