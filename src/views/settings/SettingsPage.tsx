@@ -22,6 +22,10 @@ import {
   BgColorsOutlined,
   CheckOutlined,
   UploadOutlined,
+  ArrowLeftOutlined,
+  RightOutlined,
+  DownOutlined,
+  UpOutlined,
 } from "@ant-design/icons";
 import { APP_VERSION, CHANGELOG } from "../../config/changelog";
 import { useFamilyStore } from "../../store/useFamilyStore";
@@ -41,9 +45,17 @@ import { compressImage } from "../../utils/image";
 import { useBackButton } from "../../utils/useBackButton";
 import styles from "./SettingsPage.module.css";
 
+/** 设置页第二层的大类 */
+type SectionId = "appearance" | "family" | "admin";
+
+/** 版本日志收起时展示几个版本（都是最新在前） */
+const RECENT_LOG_COUNT = 3;
+
 /**
- * 设置页：按用途分成四组 ——
- *   外观（主题 / 全局背景图）、家庭（身份 / 称呼）、家长管理（口令 / 照片清理）、关于（应用信息 / 版本日志）。
+ * 设置页：两层结构 ——
+ *   第一层只列大类入口（外观 / 家庭 / 家长管理）与「关于」（应用信息 + 版本日志）；
+ *   点一个入口进第二层再改具体项，第二层顶部有返回。关于与版本日志留在第一层不动。
+ *   版本日志默认收起（只看最新 3 个），展开后顶部与底部各有收起按钮。
  */
 export default function SettingsPage() {
   const { role, setRole, getParentPin, setParentPin } = useFamilyStore();
@@ -51,6 +63,13 @@ export default function SettingsPage() {
   // 主题（本机）与背景图（跨设备同步）
   const { themeId, setThemeId, background, saveBackground } = useThemeStore();
   const palette = useThemePalette();
+
+  // 当前在第二层的哪个大类；null = 停在外层入口列表
+  const [section, setSection] = useState<SectionId | null>(null);
+  const settingsRef = useRef<HTMLDivElement | null>(null);
+
+  // 版本日志折叠：默认收起
+  const [logExpanded, setLogExpanded] = useState(false);
 
   // 切家长口令验证弹窗
   const [pinModalOpen, setPinModalOpen] = useState(false);
@@ -81,6 +100,50 @@ export default function SettingsPage() {
   const isParent = role === "parent";
   /** 这次编辑的是对方的哪一套称呼（家长→女儿，小孩→妈妈） */
   const nameTarget: "mom" | "kid" = isParent ? "kid" : "mom";
+  const currentThemeName =
+    THEMES.find((item) => item.id === themeId)?.name ?? themeId;
+
+  // 外层入口：一句话告诉你这组里有什么、现在是什么状态
+  const sections: { id: SectionId; title: string; desc: string; icon: React.ReactNode }[] = [
+    {
+      id: "appearance",
+      title: "外观",
+      desc: `主题与背景图 · 现在是「${currentThemeName}」主题${
+        background ? " · 已设背景图" : ""
+      }`,
+      icon: <BgColorsOutlined />,
+    },
+    {
+      id: "family",
+      title: "家庭",
+      desc: `身份与称呼 · 现在用的是${isParent ? "家长" : "小孩"}身份`,
+      icon: <UserSwitchOutlined />,
+    },
+    ...(isParent
+      ? [
+          {
+            id: "admin" as SectionId,
+            title: "家长管理",
+            desc: "家长口令、打卡照片清理",
+            icon: <LockOutlined />,
+          },
+        ]
+      : []),
+  ];
+
+  const visibleLog = logExpanded
+    ? CHANGELOG
+    : CHANGELOG.slice(0, RECENT_LOG_COUNT);
+  const hiddenLogCount = Math.max(0, CHANGELOG.length - RECENT_LOG_COUNT);
+
+  /** 进第二层：顺手把滚动拉回顶部，否则会落在上一层停留的位置 */
+  const openSection = (id: SectionId) => {
+    setSection(id);
+    requestAnimationFrame(() =>
+      settingsRef.current?.scrollIntoView({ block: "start" })
+    );
+  };
+  const closeSection = () => setSection(null);
 
   // 服务端称呼到位（或身份切换）后同步进输入框
   useEffect(() => {
@@ -93,7 +156,8 @@ export default function SettingsPage() {
     names.momCall,
     names.momNickname,
   ]);
-  // 弹窗打开时接管安卓返回键：返回键先关弹窗，而不是退出设置页
+  // 弹窗 / 第二层打开时接管安卓返回键：返回键先退一层，而不是退出设置页
+  useBackButton(section !== null, closeSection);
   useBackButton(pinModalOpen, () => setPinModalOpen(false));
   useBackButton(changePinOpen, () => setChangePinOpen(false));
 
@@ -258,218 +322,255 @@ export default function SettingsPage() {
     }
   };
 
+  /** 第二层顶部的返回条，每个大类页都带一条 */
+  const renderBackBar = () => (
+    <button type="button" className={styles.backBtn} onClick={closeSection}>
+      <ArrowLeftOutlined /> 设置
+    </button>
+  );
+
   return (
-    <div className={styles.settings}>
-      {/* ================= 外观 ================= */}
-      <section className={styles.group}>
-        <h2 className={styles.groupTitle}>外观</h2>
-        <p className={styles.groupDesc}>主题和背景图，改完这台手机立刻变</p>
-
-        {/* 主题切换 */}
-        <Card className={styles.infoCard} variant="borderless">
-          <div className={styles.infoHeader}>
-            <div className={styles.infoIcon}>
-              <BgColorsOutlined />
-            </div>
-            <div className={styles.infoText}>
-              <div className={styles.appName}>主题</div>
-              <div className={styles.appDesc}>
-                全局生效；只改这台手机的显示，另一台手机自己选。顶栏右上角那颗太阳/月亮也能一键在深浅之间来回切
-              </div>
-            </div>
-          </div>
-          <div className={styles.themeList}>
-            {THEMES.map((preset) => {
-              const active = preset.id === themeId;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  className={`${styles.themeItem} ${active ? styles.themeItemActive : ""}`}
-                  onClick={() => handleThemeChange(preset.id)}
-                >
-                  <span className={styles.themeSwatch}>
-                    {preset.swatch.map((color) => (
-                      <i key={color} style={{ background: color }} />
-                    ))}
-                  </span>
-                  <span className={styles.themeBody}>
-                    <span className={styles.themeName}>{preset.name}</span>
-                    <span className={styles.themeDesc}>{preset.description}</span>
-                  </span>
-                  {active && <CheckOutlined className={styles.themeCheck} />}
-                </button>
-              );
-            })}
-          </div>
-        </Card>
-
-        {/* 全局背景图 */}
-        <Card className={styles.infoCard} variant="borderless">
-          <div className={styles.infoHeader}>
-            <div className={styles.infoIcon}>
-              <PictureOutlined />
-            </div>
-            <div className={styles.infoText}>
-              <div className={styles.appName}>全局背景图</div>
-              <div className={styles.appDesc}>
-                换一张全家福当底色，两台手机会同步
-              </div>
-            </div>
-          </div>
-
-          {background ? (
-            <div className={styles.bgPreview}>
-              <img className={styles.bgPreviewImg} src={background} alt="当前背景图" />
-              <span className={styles.bgPreviewNote}>现在用的就是这张</span>
-            </div>
-          ) : (
-            <div className={styles.bgEmpty}>还没设置背景图，现在用主题自带的纯色底</div>
-          )}
-
-          <div className={styles.bgActions}>
-            <Button
-              icon={<UploadOutlined />}
-              loading={uploadingBg}
-              onClick={() => bgInputRef.current?.click()}
-            >
-              {background ? "换一张照片" : "上传照片当背景"}
-            </Button>
-            {background && (
-              <Popconfirm
-                title="移除背景图？"
-                description="移除后恢复主题自带的纯色底，照片会在下次清理闲置照片时从云端删掉"
-                okText="移除"
-                cancelText="取消"
-                onConfirm={handleRemoveBackground}
-              >
-                <Button danger icon={<DeleteOutlined />} loading={removingBg}>
-                  移除背景图
-                </Button>
-              </Popconfirm>
-            )}
-          </div>
-          <input
-            ref={bgInputRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={handleBgPicked}
-          />
-          <div className={styles.roleHint}>建议用横图；上传前会自动压到长边 1600px</div>
-        </Card>
-      </section>
-
-      {/* ================= 家庭 ================= */}
-      <section className={styles.group}>
-        <h2 className={styles.groupTitle}>家庭</h2>
-        <p className={styles.groupDesc}>身份和称呼，两个人在各自手机上各管一半</p>
-
-        {/* 当前身份 */}
-        <Card className={styles.infoCard} variant="borderless">
-          <div className={styles.infoHeader}>
-            <div className={styles.infoIcon}>
-              <UserSwitchOutlined />
-            </div>
-            <div className={styles.infoText}>
-              <div className={styles.appName}>当前身份</div>
-              <div className={styles.appDesc}>
-                {role === "parent" ? "家长：可审批小孩的打卡申请" : "小孩：打卡后需家长审批"}
-              </div>
-            </div>
-          </div>
-          <Segmented
-            block
-            value={role ?? undefined}
-            onChange={handleRoleChange}
-            options={[
-              { label: "家长", value: "parent" },
-              { label: "小孩", value: "child" },
-            ]}
-            className={styles.roleSwitch}
-          />
-          <div className={styles.roleHint}>
-            {role === "parent"
-              ? "切回小孩无需口令，随时可切"
-              : "切换为家长需输入家长口令"}
-          </div>
-        </Card>
-
-        {/* 家庭称呼（跨设备同步）：女儿改妈妈那半，妈妈改女儿那半 */}
-        <Card className={styles.infoCard} variant="borderless">
-          <div className={styles.infoHeader}>
-            <div className={styles.infoIcon}>
-              <SmileOutlined />
-            </div>
-            <div className={styles.infoText}>
-              <div className={styles.appName}>称呼设置</div>
-              <div className={styles.appDesc}>
-                {isParent
-                  ? "你的界面里，女儿叫什么（昵称优先，留空就显示称呼）"
-                  : "你的界面里，妈妈叫什么（昵称优先，留空就显示称呼）"}
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.nameFields}>
-            <label className={styles.nameField}>
-              <span className={styles.nameLabel}>
-                {isParent ? "女儿的称呼" : "妈妈的称呼"}
-              </span>
-              <Input
-                value={callInput}
-                maxLength={MAX_NAME_LENGTH}
-                placeholder={isParent ? "例如：女儿" : "例如：妈妈"}
-                onChange={(e) => setCallInput(e.target.value)}
-              />
-            </label>
-            <label className={styles.nameField}>
-              <span className={styles.nameLabel}>
-                {isParent ? "女儿的昵称" : "妈妈的昵称"}
-              </span>
-              <Input
-                value={nicknameInput}
-                maxLength={MAX_NAME_LENGTH}
-                placeholder={isParent ? "例如：宝贝" : "例如：老妈"}
-                onChange={(e) => setNicknameInput(e.target.value)}
-              />
-            </label>
-          </div>
-
-          <div className={styles.namePreview}>
-            现在会显示「
-            {displayName(
-              {
-                ...names,
-                ...(nameTarget === "kid"
-                  ? { kidCall: callInput || DEFAULT_FAMILY_NAMES.kidCall, kidNickname: nicknameInput }
-                  : { momCall: callInput || DEFAULT_FAMILY_NAMES.momCall, momNickname: nicknameInput }),
-              },
-              nameTarget
-            )}
-            」（{isParent ? "女儿" : "妈妈"}自己的手机上打开也是这个名字）
-          </div>
-
-          <Button
-            block
-            type="primary"
-            loading={savingNames}
-            onClick={handleSaveNames}
-            className={styles.nameSaveBtn}
-          >
-            保存称呼
-          </Button>
-          {!namesReady && (
-            <div className={styles.roleHint}>
-              还没连上云端称呼表（本地库需要执行 0004 迁移），当前显示的是本机缓存
-            </div>
-          )}
-        </Card>
-      </section>
-
-      {/* ================= 家长管理（仅家长可见） ================= */}
-      {isParent && (
+    <div className={styles.settings} ref={settingsRef}>
+      {/* ================= 第一层：大类入口 ================= */}
+      {section === null && (
         <section className={styles.group}>
+          <div className={styles.entryList}>
+            {sections.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                className={styles.entry}
+                onClick={() => openSection(entry.id)}
+              >
+                <span className={styles.entryIcon}>{entry.icon}</span>
+                <span className={styles.entryBody}>
+                  <span className={styles.entryName}>{entry.title}</span>
+                  <span className={styles.entryDesc}>{entry.desc}</span>
+                </span>
+                <RightOutlined className={styles.entryArrow} />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ================= 第二层：外观 ================= */}
+      {section === "appearance" && (
+        <section className={styles.group}>
+          {renderBackBar()}
+          <h2 className={styles.groupTitle}>外观</h2>
+          <p className={styles.groupDesc}>主题和背景图，改完这台手机立刻变</p>
+
+          {/* 主题切换 */}
+          <Card className={styles.infoCard} variant="borderless">
+            <div className={styles.infoHeader}>
+              <div className={styles.infoIcon}>
+                <BgColorsOutlined />
+              </div>
+              <div className={styles.infoText}>
+                <div className={styles.appName}>主题</div>
+                <div className={styles.appDesc}>
+                  全局生效；只改这台手机的显示，另一台手机自己选。顶栏右上角那颗太阳/月亮也能一键在深浅之间来回切
+                </div>
+              </div>
+            </div>
+            <div className={styles.themeList}>
+              {THEMES.map((preset) => {
+                const active = preset.id === themeId;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={`${styles.themeItem} ${active ? styles.themeItemActive : ""}`}
+                    onClick={() => handleThemeChange(preset.id)}
+                  >
+                    <span className={styles.themeSwatch}>
+                      {preset.swatch.map((color) => (
+                        <i key={color} style={{ background: color }} />
+                      ))}
+                    </span>
+                    <span className={styles.themeBody}>
+                      <span className={styles.themeName}>{preset.name}</span>
+                      <span className={styles.themeDesc}>{preset.description}</span>
+                    </span>
+                    {active && <CheckOutlined className={styles.themeCheck} />}
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* 全局背景图 */}
+          <Card className={styles.infoCard} variant="borderless">
+            <div className={styles.infoHeader}>
+              <div className={styles.infoIcon}>
+                <PictureOutlined />
+              </div>
+              <div className={styles.infoText}>
+                <div className={styles.appName}>全局背景图</div>
+                <div className={styles.appDesc}>
+                  换一张全家福当底色，两台手机会同步
+                </div>
+              </div>
+            </div>
+
+            {background ? (
+              <div className={styles.bgPreview}>
+                <img className={styles.bgPreviewImg} src={background} alt="当前背景图" />
+                <span className={styles.bgPreviewNote}>现在用的就是这张</span>
+              </div>
+            ) : (
+              <div className={styles.bgEmpty}>还没设置背景图，现在用主题自带的纯色底</div>
+            )}
+
+            <div className={styles.bgActions}>
+              <Button
+                icon={<UploadOutlined />}
+                loading={uploadingBg}
+                onClick={() => bgInputRef.current?.click()}
+              >
+                {background ? "换一张照片" : "上传照片当背景"}
+              </Button>
+              {background && (
+                <Popconfirm
+                  title="移除背景图？"
+                  description="移除后恢复主题自带的纯色底，照片会在下次清理闲置照片时从云端删掉"
+                  okText="移除"
+                  cancelText="取消"
+                  onConfirm={handleRemoveBackground}
+                >
+                  <Button danger icon={<DeleteOutlined />} loading={removingBg}>
+                    移除背景图
+                  </Button>
+                </Popconfirm>
+              )}
+            </div>
+            <input
+              ref={bgInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={handleBgPicked}
+            />
+            <div className={styles.roleHint}>建议用横图；上传前会自动压到长边 1600px</div>
+          </Card>
+        </section>
+      )}
+
+      {/* ================= 第二层：家庭 ================= */}
+      {section === "family" && (
+        <section className={styles.group}>
+          {renderBackBar()}
+          <h2 className={styles.groupTitle}>家庭</h2>
+          <p className={styles.groupDesc}>身份和称呼，两个人在各自手机上各管一半</p>
+
+          {/* 当前身份 */}
+          <Card className={styles.infoCard} variant="borderless">
+            <div className={styles.infoHeader}>
+              <div className={styles.infoIcon}>
+                <UserSwitchOutlined />
+              </div>
+              <div className={styles.infoText}>
+                <div className={styles.appName}>当前身份</div>
+                <div className={styles.appDesc}>
+                  {role === "parent" ? "家长：可审批小孩的打卡申请" : "小孩：打卡后需家长审批"}
+                </div>
+              </div>
+            </div>
+            <Segmented
+              block
+              value={role ?? undefined}
+              onChange={handleRoleChange}
+              options={[
+                { label: "家长", value: "parent" },
+                { label: "小孩", value: "child" },
+              ]}
+              className={styles.roleSwitch}
+            />
+            <div className={styles.roleHint}>
+              {role === "parent"
+                ? "切回小孩无需口令，随时可切"
+                : "切换为家长需输入家长口令"}
+            </div>
+          </Card>
+
+          {/* 家庭称呼（跨设备同步）：女儿改妈妈那半，妈妈改女儿那半 */}
+          <Card className={styles.infoCard} variant="borderless">
+            <div className={styles.infoHeader}>
+              <div className={styles.infoIcon}>
+                <SmileOutlined />
+              </div>
+              <div className={styles.infoText}>
+                <div className={styles.appName}>称呼设置</div>
+                <div className={styles.appDesc}>
+                  {isParent
+                    ? "你的界面里，女儿叫什么（昵称优先，留空就显示称呼）"
+                    : "你的界面里，妈妈叫什么（昵称优先，留空就显示称呼）"}
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.nameFields}>
+              <label className={styles.nameField}>
+                <span className={styles.nameLabel}>
+                  {isParent ? "女儿的称呼" : "妈妈的称呼"}
+                </span>
+                <Input
+                  value={callInput}
+                  maxLength={MAX_NAME_LENGTH}
+                  placeholder={isParent ? "例如：女儿" : "例如：妈妈"}
+                  onChange={(e) => setCallInput(e.target.value)}
+                />
+              </label>
+              <label className={styles.nameField}>
+                <span className={styles.nameLabel}>
+                  {isParent ? "女儿的昵称" : "妈妈的昵称"}
+                </span>
+                <Input
+                  value={nicknameInput}
+                  maxLength={MAX_NAME_LENGTH}
+                  placeholder={isParent ? "例如：宝贝" : "例如：老妈"}
+                  onChange={(e) => setNicknameInput(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <div className={styles.namePreview}>
+              现在会显示「
+              {displayName(
+                {
+                  ...names,
+                  ...(nameTarget === "kid"
+                    ? { kidCall: callInput || DEFAULT_FAMILY_NAMES.kidCall, kidNickname: nicknameInput }
+                    : { momCall: callInput || DEFAULT_FAMILY_NAMES.momCall, momNickname: nicknameInput }),
+                },
+                nameTarget
+              )}
+              」（{isParent ? "女儿" : "妈妈"}自己的手机上打开也是这个名字）
+            </div>
+
+            <Button
+              block
+              type="primary"
+              loading={savingNames}
+              onClick={handleSaveNames}
+              className={styles.nameSaveBtn}
+            >
+              保存称呼
+            </Button>
+            {!namesReady && (
+              <div className={styles.roleHint}>
+                还没连上云端称呼表（本地库需要执行 0004 迁移），当前显示的是本机缓存
+              </div>
+            )}
+          </Card>
+        </section>
+      )}
+
+      {/* ================= 第二层：家长管理（仅家长可见） ================= */}
+      {section === "admin" && isParent && (
+        <section className={styles.group}>
+          {renderBackBar()}
           <h2 className={styles.groupTitle}>家长管理</h2>
           <p className={styles.groupDesc}>口令和打卡照片，只有家长身份看得到</p>
 
@@ -539,7 +640,7 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {/* ================= 关于 ================= */}
+      {/* ================= 第一层：关于（不参与第二层，位置与内容不变） ================= */}
       <section className={styles.group}>
         <h2 className={styles.groupTitle}>关于</h2>
         <p className={styles.groupDesc}>这是什么版本、改过什么</p>
@@ -565,7 +666,7 @@ export default function SettingsPage() {
           </div>
         </Card>
 
-        {/* 版本日志 */}
+        {/* 版本日志：默认收起只显示最近几个，展开看全部 */}
         <Card
           className={styles.logCard}
           variant="borderless"
@@ -574,9 +675,21 @@ export default function SettingsPage() {
               <InfoCircleOutlined /> 版本日志
             </span>
           }
+          extra={
+            logExpanded ? (
+              <Button
+                size="small"
+                type="text"
+                icon={<UpOutlined />}
+                onClick={() => setLogExpanded(false)}
+              >
+                收起
+              </Button>
+            ) : null
+          }
         >
           <Timeline
-            items={CHANGELOG.map((entry) => ({
+            items={visibleLog.map((entry) => ({
               color: palette.primary,
               children: (
                 <div className={styles.logEntry}>
@@ -594,6 +707,32 @@ export default function SettingsPage() {
               ),
             }))}
           />
+
+          <div className={styles.logFooter}>
+            {logExpanded ? (
+              <Button
+                block
+                type="text"
+                icon={<UpOutlined />}
+                onClick={() => setLogExpanded(false)}
+              >
+                收起，只看最近 {RECENT_LOG_COUNT} 个版本
+              </Button>
+            ) : (
+              <>
+                <Button
+                  block
+                  icon={<DownOutlined />}
+                  onClick={() => setLogExpanded(true)}
+                >
+                  展开全部（共 {CHANGELOG.length} 个版本）
+                </Button>
+                <div className={styles.logHint}>
+                  收起时只显示最近 {RECENT_LOG_COUNT} 个版本，还有 {hiddenLogCount} 个更早的在里面
+                </div>
+              </>
+            )}
+          </div>
         </Card>
       </section>
 
