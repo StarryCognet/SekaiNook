@@ -174,8 +174,8 @@ export default function KidHome() {
         <Progress
           percent={gardenPercent}
           showInfo={false}
-          strokeColor="#B791FA"
-          trailColor="#EFEAFB"
+          strokeColor="#3F8AE0"
+          trailColor="#E6F0FB"
           size="small"
         />
         {todoTasks.length === 0 ? (

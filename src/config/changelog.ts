@@ -11,10 +11,18 @@ export interface ChangelogEntry {
 }
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '1.14.0';
+export const APP_VERSION = '1.14.1';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.14.1',
+    date: '2026-09-29 17:16:00',
+    title: '女儿首页改为蓝色主色',
+    changes: [
+      '女儿的首页换成蓝色系（天空蓝渐变头图 + 蓝色进度条、任务格、按钮、图标），妈妈版仍是深色，两套一眼分得开',
+    ],
+  },
   {
     version: '1.14.0',
     date: '2026-09-29 16:58:00',
