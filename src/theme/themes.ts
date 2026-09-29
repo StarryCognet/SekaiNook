@@ -16,7 +16,14 @@ import { designTokens } from './tokens';
  * 默认主题是 original（原始浅色），出厂什么都不用设。
  */
 
-export type ThemeId = 'original' | 'midnight' | 'sakura' | 'forest' | 'sunset' | 'crimson';
+export type ThemeId =
+  | 'original'
+  | 'midnight'
+  | 'sakura'
+  | 'forest'
+  | 'sunset'
+  | 'crimson'
+  | 'graphite';
 
 /** 供 TS 里用颜色（图表轴、图标等，CSS 变量到不了的地方） */
 export interface ThemePalette {
@@ -218,6 +225,32 @@ export const THEMES: readonly ThemePreset[] = [
       surfaceSoftGlass: 'rgba(42, 18, 24, 0.7)',
     },
   },
+  {
+    id: 'graphite',
+    name: '石墨黑',
+    description: '近黑底 + 白墨 + 玻璃胶囊，笔记工具风（夜里最安静）',
+    swatch: ['#141414', '#242424', '#0f77f0'],
+    dark: true,
+    palette: {
+      primary: '#0f77f0',
+      primarySoft: '#0a4f9e',
+      success: '#3ddc97',
+      danger: '#ff4538',
+      warning: '#ffdd55',
+      bg: '#141414',
+      surface: '#1f1f1f',
+      surfaceSoft: '#242424',
+      text: '#ffffff',
+      textSecondary: '#b4b4b4',
+      textTertiary: '#808080',
+      border: '#383838',
+      sider: '#0d0d0d',
+      siderSelected: '#2a2a2a',
+      segmentedSelected: '#3f3f3f',
+      surfaceGlass: 'rgba(31, 31, 31, 0.82)',
+      surfaceSoftGlass: 'rgba(36, 36, 36, 0.7)',
+    },
+  },
 ];
 
 export const DEFAULT_THEME_ID: ThemeId = 'original';
@@ -268,6 +301,8 @@ export function buildAntdTheme(id: ThemeId, hasBackground = false): ThemeConfig 
       Menu: {
         darkItemBg: palette.sider,
         darkItemSelectedBg: palette.siderSelected,
+        /* 侧边栏导航项也走胶囊：选中项是一块圆角底，而不是整行铺满 */
+        itemBorderRadius: 999,
       },
       Card: {
         borderRadiusLG: designTokens.radius.lg,

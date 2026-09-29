@@ -40,15 +40,17 @@
   z-index: 10;
 }
 
-/* ===== 顶栏右上角：深浅主题一键切换 ===== */
+/* ===== 顶栏右上角：深浅主题一键切换 =====
+   形态与底部导航同一套（附件里的「动作胶囊」）：圆形 + 发丝描边，不抢内容 */
 .themeToggle {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   font-size: 18px;
   color: var(--color-text-secondary);
   background: var(--color-surface-soft);
   border: 1px solid var(--color-border);
+  border-radius: 999px;
 }
 
 .themeToggle:hover {
@@ -87,7 +89,7 @@
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  background: linear-gradient(135deg, #0f9b6c, #1a1a2e);
+  background: var(--gradient-hero);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -122,8 +124,9 @@
 }
 
 /* ===== 移动端底部 Tab 栏：悬浮玻璃胶囊 =====
-   两个平台统一成苹果那套 —— 不是实心白板 + 分割线，而是浮在内容之上的一层材质，
-   底下的内容透出来（毛玻璃 + 高光描边 + 柔和投影），两端观感一致。 */
+   形态按附件那套 Mobile App UI 的规范：整条是「胶囊（r=100）+ 玻璃 + 1px 落影」；
+   选中项不用主色文字，而是给自己垫一层淡胶囊底（--nav-active-bg）——
+   七套主题共用同一套结构，颜色全走变量。 */
 .bottomNav {
   position: fixed;
   left: 12px;
@@ -132,7 +135,10 @@
   z-index: 20;
   display: flex;
   align-items: stretch;
-  border-radius: 26px;
+  gap: 2px;
+  padding: 6px;
+  /* 附件实测条高 59 = 项 47 + 上下各 6 */
+  border-radius: 100px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   backdrop-filter: blur(24px) saturate(180%);
@@ -144,8 +150,8 @@
 .bottomNavItem {
   flex: 1;
   min-width: 0;
-  /* 苹果的 tab 比 Material 的厚一点、标签小一点（10pt 量级） */
-  height: 58px;
+  /* 附件实测：项 47 高、图标 24、标签 10px 满行高 */
+  height: 47px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -153,24 +159,28 @@
   gap: 2px;
   padding: 0;
   border: none;
+  border-radius: 100px;
   background: transparent;
   color: var(--color-text-secondary);
   font-family: inherit;
   font-size: 10px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transition: background 0.16s ease;
 }
 
+/* 选中态 = 淡胶囊底 + 单色文字（不用主色文字，这是附件规范的写法） */
 .bottomNavItemActive {
-  color: var(--color-primary);
+  background: var(--nav-active-bg);
+  color: var(--color-text);
   font-weight: 600;
 }
 
 .bottomNavIcon {
   display: flex;
   align-items: center;
-  /* 25pt 量级：图标比文字大得多，靠它撑住整条栏的识别度 */
-  font-size: 25px;
+  /* 附件实测图标 24px：比文字大得多，靠它撑住整条栏的识别度 */
+  font-size: 24px;
   line-height: 1;
   transition: transform 0.16s ease;
 }

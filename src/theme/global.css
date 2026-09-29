@@ -3,8 +3,9 @@
    ------------------------------------------------------------
    主题切换的机制：<html data-theme="..."> 上挂变量集，
    所有组件只读变量（禁止硬编码 hex），换主题 = 换一组变量。
-   目前六套：original（原始）/ midnight（午夜蓝）/ sakura（樱花粉）
+   目前七套：original（原始）/ midnight（午夜蓝）/ sakura（樱花粉）
             / forest（森林绿）/ sunset（暖阳橙）/ crimson（暗夜红）
+            / graphite（石墨黑）
    加新主题：本文件加一段 :root[data-theme='新id']，
             再到 theme/themes.ts 的 THEMES 加一条（两处字段要对齐）。
    自定义背景图：JS 设置 --app-bg-image 与 data-bg="on"，
@@ -15,7 +16,7 @@
   /* ===== 原始主题（出厂默认）===== */
   --color-primary: #1a1a2e;
   --color-primary-soft: #2a2a4a;
-  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证六套主题下白字都看得清 */
+  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证七套主题下白字都看得清 */
   --gradient-hero: linear-gradient(135deg, #1a1a2e 0%, #2a2a4a 100%);
   --color-success: #0f9b6c;
   --color-danger: #e94560;
@@ -36,6 +37,8 @@
   --glass-bg: rgba(255, 255, 255, 0.66);
   --glass-ring: rgba(255, 255, 255, 0.7);
   --glass-shadow: 0 8px 28px rgba(26, 26, 46, 0.16);
+  /* 底部导航选中项的「淡胶囊底」（浅色主题共用这个默认值，深色主题各自覆盖） */
+  --nav-active-bg: rgba(26, 26, 46, 0.06);
   /* 自定义背景图（JS 写入 url(...)；none = 没设） */
   --app-bg-image: none;
   /* 压在照片上的一层薄纱，保证文字够清楚 */
@@ -54,7 +57,7 @@
 :root[data-theme='midnight'] {
   --color-primary: #2b7fe0;
   --color-primary-soft: #1b4a8f;
-  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证六套主题下白字都看得清 */
+  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证七套主题下白字都看得清 */
   --gradient-hero: linear-gradient(135deg, #2470cc 0%, #123a72 100%);
   --color-success: #34d399;
   --color-danger: #ff6b81;
@@ -71,6 +74,7 @@
   --glass-bg: rgba(16, 30, 58, 0.68);
   --glass-ring: rgba(120, 180, 255, 0.22);
   --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --nav-active-bg: rgba(255, 255, 255, 0.1);
   --app-bg-veil: rgba(6, 12, 28, 0.32);
   --surface-glass: rgba(14, 26, 51, 0.82);
   --surface-soft-glass: rgba(19, 34, 65, 0.7);
@@ -84,7 +88,7 @@
 :root[data-theme='sakura'] {
   --color-primary: #e8628f;
   --color-primary-soft: #f6a8c4;
-  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证六套主题下白字都看得清 */
+  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证七套主题下白字都看得清 */
   --gradient-hero: linear-gradient(135deg, #d94a7c 0%, #a8305a 100%);
   --color-success: #2fae86;
   --color-danger: #e8455f;
@@ -114,7 +118,7 @@
 :root[data-theme='forest'] {
   --color-primary: #2f9e6e;
   --color-primary-soft: #8fd3b4;
-  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证六套主题下白字都看得清 */
+  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证七套主题下白字都看得清 */
   --gradient-hero: linear-gradient(135deg, #268a5f 0%, #175735 100%);
   --color-success: #2f9e6e;
   --color-danger: #e0603f;
@@ -144,7 +148,7 @@
 :root[data-theme='sunset'] {
   --color-primary: #e07b39;
   --color-primary-soft: #f5b183;
-  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证六套主题下白字都看得清 */
+  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证七套主题下白字都看得清 */
   --gradient-hero: linear-gradient(135deg, #c25f22 0%, #8a3f10 100%);
   --color-success: #3d9e6d;
   --color-danger: #d8452f;
@@ -174,7 +178,7 @@
 :root[data-theme='crimson'] {
   --color-primary: #f04a5a;
   --color-primary-soft: #8c1f2d;
-  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证六套主题下白字都看得清 */
+  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证七套主题下白字都看得清 */
   --gradient-hero: linear-gradient(135deg, #d93a4c 0%, #7d1b28 100%);
   --color-success: #3ddc97;
   --color-danger: #ff7b7b;
@@ -191,6 +195,7 @@
   --glass-bg: rgba(31, 12, 17, 0.68);
   --glass-ring: rgba(255, 140, 150, 0.22);
   --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --nav-active-bg: rgba(255, 255, 255, 0.1);
   --app-bg-veil: rgba(20, 6, 9, 0.32);
   --surface-glass: rgba(31, 12, 17, 0.82);
   --surface-soft-glass: rgba(42, 18, 24, 0.7);
@@ -198,6 +203,40 @@
   --tint-warning-text: #f2b44c;
   --tint-brand-bg: rgba(240, 74, 90, 0.18);
   --tint-brand-text: #ff9aa4;
+}
+
+/* ===== 石墨黑（深色，笔记工具风）=====
+   规范来自附件那套 Mobile App UI：近黑底 #141414 / 面板 #1f1f1f / 卡 #242424、
+   白墨 #ffffff→#b4b4b4→#808080、发丝线 #383838、玻璃（白 10–11% 填充）、
+   胶囊圆角与 1px 落影；强调色取它的蓝 #0f77f0 与黄 #ffdd55。 */
+:root[data-theme='graphite'] {
+  --color-primary: #0f77f0;
+  --color-primary-soft: #0a4f9e;
+  /* 头图 / 品牌条这类「一定有白色文字压在上面」的主色渐变：尾端刻意压深，保证七套主题下白字都看得清 */
+  --gradient-hero: linear-gradient(135deg, #2b2b2b 0%, #141414 100%);
+  --color-success: #3ddc97;
+  --color-danger: #ff4538;
+  --color-warning: #ffdd55;
+  --color-bg: #141414;
+  --app-bg-base: #141414;
+  --color-surface: #1f1f1f;
+  --color-surface-soft: #242424;
+  --color-text: #ffffff;
+  --color-text-secondary: #b4b4b4;
+  --color-text-tertiary: #808080;
+  --color-border: #383838;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.55), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --glass-bg: rgba(255, 255, 255, 0.11);
+  --glass-ring: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --nav-active-bg: rgba(255, 255, 255, 0.1);
+  --app-bg-veil: rgba(20, 20, 20, 0.32);
+  --surface-glass: rgba(31, 31, 31, 0.82);
+  --surface-soft-glass: rgba(36, 36, 36, 0.7);
+  --tint-warning-bg: rgba(255, 221, 85, 0.16);
+  --tint-warning-text: #ffdd55;
+  --tint-brand-bg: rgba(15, 119, 240, 0.18);
+  --tint-brand-text: #6cb2ff;
 }
 
 /* ===== 设了自定义背景图：底色透明 + 卡片半透明，照片透出来 ===== */
