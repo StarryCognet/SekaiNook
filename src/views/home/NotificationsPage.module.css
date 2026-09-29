@@ -46,8 +46,8 @@
 .notReady {
   padding: 12px 14px;
   border-radius: 14px;
-  background: #fff3d6;
-  color: #8a5a00;
+  background: var(--tint-warning-bg);
+  color: var(--tint-warning-text);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -73,7 +73,7 @@
 }
 
 .unread {
-  background: #f3edff;
+  background: var(--tint-brand-bg);
 }
 
 .icon {
@@ -84,7 +84,7 @@
   width: 34px;
   height: 34px;
   border-radius: 12px;
-  background: #fff;
+  background: var(--color-surface);
   font-size: 16px;
   color: var(--color-text-secondary);
 }
@@ -92,7 +92,7 @@
 /* 按类型上色：待审批=橙、通过=绿、驳回=红、兑现=金 */
 .checkin_pending,
 .resubmitted {
-  color: #f5a623;
+  color: var(--color-warning);
 }
 
 .approved {
@@ -104,11 +104,11 @@
 }
 
 .recorded {
-  color: #8f6cf0;
+  color: var(--tint-brand-text);
 }
 
 .payout {
-  color: #d4a017;
+  color: var(--color-warning);
 }
 
 .body {

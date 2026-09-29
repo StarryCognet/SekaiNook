@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
@@ -6,7 +6,8 @@ import MainLayout from "./layouts/MainLayout";
 import RoleGate from "./components/RoleGate";
 import { PageLoading } from "./components/StateViews";
 import { useFamilyStore } from "./store/useFamilyStore";
-import { antdTheme } from "./theme/tokens";
+import { useThemeStore } from "./store/useThemeStore";
+import { buildAntdTheme } from "./theme/themes";
 
 /**
  * 路由级页面按需加载：首屏只保留应用壳（主题 + 路由 + 身份门 + 主布局）。
@@ -50,10 +51,41 @@ function AppRoutes() {
   );
 }
 
-/** 应用根组件 */
+/**
+ * 应用根组件。
+ * 全局外观（主题 + 背景图）在这里落地：
+ *   - 主题：<html data-theme="..."> 换一组 CSS 变量（见 theme/global.css），
+ *     antd 组件跟着换算法（buildAntdTheme）；
+ *   - 背景图：把地址写进 --app-bg-image，并打上 data-bg="on"，
+ *     底色与卡片据此变半透明，让照片透出来。
+ * 主题存本机（每台设备各选各的），背景图存服务端（两台设备一致）。
+ */
 export default function App() {
+  const themeId = useThemeStore((s) => s.themeId);
+  const background = useThemeStore((s) => s.background);
+  const loadBackground = useThemeStore((s) => s.loadBackground);
+  const hasBackground = background !== "";
+
+  // 打开 App 时问一次服务端要背景图（读不到就当没设）
+  useEffect(() => {
+    void loadBackground();
+  }, [loadBackground]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = themeId;
+    root.dataset.bg = hasBackground ? "on" : "off";
+    root.style.setProperty("--app-bg-image", hasBackground ? `url("${background}")` : "none");
+
+    // 手机浏览器地址栏 / 状态栏跟着主题变色
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", themeId === "midnight" ? "#060c1c" : "#f5f6fa");
+  }, [themeId, background, hasBackground]);
+
+  const themeConfig = useMemo(() => buildAntdTheme(themeId, hasBackground), [themeId, hasBackground]);
+
   return (
-    <ConfigProvider locale={zhCN} theme={antdTheme}>
+    <ConfigProvider locale={zhCN} theme={themeConfig}>
       <BrowserRouter>
         <AppRoutes />
       </BrowserRouter>

@@ -1,19 +1,90 @@
+/* ============================================================
+   全局样式 + 主题变量
+   ------------------------------------------------------------
+   主题切换的机制：<html data-theme="original|midnight"> 上挂变量集，
+   所有组件只读变量（禁止硬编码 hex），换主题 = 换一组变量。
+   自定义背景图：JS 设置 --app-bg-image 与 data-bg="on"，
+   底色与卡片自动变半透明，让照片透出来。
+   ============================================================ */
+
 :root {
+  /* ===== 原始主题（出厂默认）===== */
   --color-primary: #1a1a2e;
+  --color-primary-soft: #2a2a4a;
   --color-success: #0f9b6c;
   --color-danger: #e94560;
+  --color-warning: #f5a623;
   --color-bg: #f5f6fa;
+  /* 页面最底层的实色（背景图关掉时它就是 --color-bg；开着时兜在照片下面） */
+  --app-bg-base: #f5f6fa;
   --color-surface: #ffffff;
+  --color-surface-soft: #f9fafb;
   --color-text: #1a1a2e;
   --color-text-secondary: #6b7280;
+  --color-text-tertiary: #9ca3af;
   --color-border: #e5e7eb;
   --radius-md: 10px;
   --radius-lg: 16px;
   --shadow-card: 0 2px 12px rgba(26, 26, 46, 0.08);
+  /* 底部导航的毛玻璃层 */
+  --glass-bg: rgba(255, 255, 255, 0.66);
+  --glass-ring: rgba(255, 255, 255, 0.7);
+  --glass-shadow: 0 8px 28px rgba(26, 26, 46, 0.16);
+  /* 自定义背景图（JS 写入 url(...)；none = 没设） */
+  --app-bg-image: none;
+  /* 压在照片上的一层薄纱，保证文字够清楚 */
+  --app-bg-veil: rgba(255, 255, 255, 0);
+  /* 提示色块：浅底深字（午夜蓝主题里换成深底亮字） */
+  --tint-warning-bg: #fff3d6;
+  --tint-warning-text: #8a5a00;
+  --tint-brand-bg: #f3edff;
+  --tint-brand-text: #8f6cf0;
+}
+
+/* ===== 午夜蓝主题 ===== */
+:root[data-theme='midnight'] {
+  --color-primary: #2b7fe0;
+  --color-primary-soft: #1b4a8f;
+  --color-success: #34d399;
+  --color-danger: #ff6b81;
+  --color-warning: #f7b955;
+  --color-bg: #060c1c;
+  --app-bg-base: #060c1c;
+  --color-surface: #0e1a33;
+  --color-surface-soft: #132241;
+  --color-text: #e8f1ff;
+  --color-text-secondary: #92a8c9;
+  --color-text-tertiary: #6c82a5;
+  --color-border: #22355a;
+  --shadow-card: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --glass-bg: rgba(16, 30, 58, 0.68);
+  --glass-ring: rgba(120, 180, 255, 0.22);
+  --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --app-bg-veil: rgba(6, 12, 28, 0.32);
+  --tint-warning-bg: rgba(247, 185, 85, 0.16);
+  --tint-warning-text: #f7b955;
+  --tint-brand-bg: rgba(43, 127, 224, 0.18);
+  --tint-brand-text: #7fe8ff;
+}
+
+/* ===== 设了自定义背景图：底色透明 + 卡片半透明，照片透出来 ===== */
+:root[data-bg='on'] {
+  --color-bg: transparent;
+  --color-surface: rgba(255, 255, 255, 0.82);
+  --color-surface-soft: rgba(255, 255, 255, 0.7);
+}
+
+:root[data-theme='midnight'][data-bg='on'] {
+  --color-surface: rgba(14, 26, 51, 0.82);
+  --color-surface-soft: rgba(19, 34, 65, 0.7);
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  background-color: var(--app-bg-base);
 }
 
 html,
@@ -25,6 +96,11 @@ body,
 body {
   margin: 0;
   background-color: var(--color-bg);
+  background-image: linear-gradient(var(--app-bg-veil), var(--app-bg-veil)), var(--app-bg-image);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-attachment: fixed;
   color: var(--color-text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;

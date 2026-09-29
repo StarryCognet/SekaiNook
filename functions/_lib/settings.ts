@@ -105,3 +105,59 @@ export async function writeFamilyNames(db: D1Database, patch: Partial<FamilyName
 
   return readFamilyNames(db);
 }
+
+/* ===== 全局背景图 =====
+   用户上传的背景图地址也寄存在 settings 表（键名 background）。
+   放服务端的理由和称呼一样：换台手机要看到同一张背景图；
+   顺带让闲置照片清理知道它「有人用着」，不会把背景图当垃圾删掉。 */
+
+/** 背景图在 settings 表里的键名（值是图片 URL，空 = 没设） */
+export const BACKGROUND_KEY = 'background';
+
+/** 只接受站内上传的图片地址（防外链，也保证清理逻辑认得出） */
+const IMAGE_URL_MARK = '/api/images/';
+
+/** 背景图地址最长多少字符（URL 长度兜底） */
+export const MAX_BACKGROUND_LENGTH = 400;
+
+/** 清洗背景图地址：非字符串、太长、不是站内图片都算非法（返回 null）；空串合法（= 移除） */
+export function sanitizeBackground(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (trimmed.length > MAX_BACKGROUND_LENGTH) return null;
+  if (trimmed && !trimmed.includes(IMAGE_URL_MARK)) return null;
+  return trimmed;
+}
+
+/** 读取全局背景图地址；表不存在或没设都返回空串 */
+export async function readBackground(db: D1Database): Promise<string> {
+  try {
+    const row = await db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .bind(BACKGROUND_KEY)
+      .first<{ value: string }>();
+    return sanitizeBackground(row?.value ?? '') ?? '';
+  } catch (error) {
+    // 常见原因：库里还没跑 0004 迁移（老库）。按「没设背景图」处理。
+    console.error('readBackground failed', error);
+    return '';
+  }
+}
+
+/** 写入全局背景图（传空串 = 恢复纯色背景）；表没迁移时会抛错，由接口转成 503 */
+export async function writeBackground(db: D1Database, url: string): Promise<string> {
+  if (!url) {
+    await db.prepare('DELETE FROM settings WHERE key = ?').bind(BACKGROUND_KEY).run();
+    return '';
+  }
+
+  await db
+    .prepare(
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+    )
+    .bind(BACKGROUND_KEY, url, new Date().toISOString())
+    .run();
+
+  return readBackground(db);
+}

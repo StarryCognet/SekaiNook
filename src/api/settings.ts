@@ -1,24 +1,32 @@
 /**
- * 家庭称呼设置接口。
- * 路由：GET /api/settings（读）、PATCH /api/settings（改自己那一半）
+ * 家庭设置接口（跨设备同步的那一份）。
+ * 路由：GET /api/settings（读）、PATCH /api/settings（改）
+ *
+ * 目前两类设置共用这张 settings 表：
+ *   - names：家庭称呼（女儿怎么叫妈妈、妈妈怎么叫女儿）
+ *   - background：全局背景图的图片地址（空字符串 = 没设）
  */
 
 import { http } from './http';
 import type { FamilyNames } from '../types/settings';
 
-interface SettingsResponse {
+export interface SettingsResponse {
   names: FamilyNames;
-  /** false = 服务端 settings 表还没迁移，用的是默认称呼 */
+  /** 全局背景图地址，'' = 没设 */
+  background: string;
+  /** false = 服务端 settings 表还没迁移，用的是默认值 */
   ready?: boolean;
 }
 
-/** 读取家庭称呼（女儿怎么叫妈妈、妈妈怎么叫女儿） */
-export function fetchFamilyNames(): Promise<SettingsResponse> {
+/** 只提交要改的字段：称呼各改各的那一半，背景图单独改 */
+export type SettingsPatch = Partial<FamilyNames> & { background?: string };
+
+/** 读取家庭设置 */
+export function fetchSettings(): Promise<SettingsResponse> {
   return http.get<SettingsResponse>('/api/settings');
 }
 
-/** 保存部分称呼，返回保存后的完整称呼 */
-export async function saveFamilyNames(patch: Partial<FamilyNames>): Promise<SettingsResponse> {
-  const result = await http.patch<SettingsResponse>('/api/settings', patch);
-  return result;
+/** 保存部分设置，返回保存后的完整设置 */
+export function saveSettings(patch: SettingsPatch): Promise<SettingsResponse> {
+  return http.patch<SettingsResponse>('/api/settings', patch);
 }

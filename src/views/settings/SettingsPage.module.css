@@ -1,14 +1,36 @@
+/* 设置页：四个分组（外观 / 家庭 / 家长管理 / 关于），颜色全走主题变量 */
 .settings {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 22px;
   max-width: 720px;
 }
 
-/* ===== 应用信息卡片 ===== */
+/* ===== 分组标题 ===== */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: 0.5px;
+}
+
+.groupDesc {
+  margin: -8px 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* ===== 通用卡片 ===== */
 .infoCard {
   border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(26, 26, 46, 0.06);
+  box-shadow: var(--shadow-card);
 }
 
 .infoHeader {
@@ -22,7 +44,7 @@
   width: 56px;
   height: 56px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #1a1a2e, #2a2a4a);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-soft));
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -39,13 +61,14 @@
 .appName {
   font-size: 22px;
   font-weight: 700;
-  color: #1a1a2e;
+  color: var(--color-text);
 }
 
 .appDesc {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-secondary);
   margin-top: 2px;
+  line-height: 1.6;
 }
 
 .versionRow {
@@ -53,12 +76,12 @@
   align-items: center;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-border);
 }
 
 .versionLabel {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--color-text-secondary);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -77,8 +100,9 @@
 .roleHint {
   margin-top: 12px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-secondary);
   text-align: center;
+  line-height: 1.6;
 }
 
 .changePinBtn {
@@ -88,20 +112,126 @@
 
 .pinHint {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-text-tertiary);
   margin-top: 4px;
+}
+
+/* ===== 主题选择 ===== */
+.themeList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.themeItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease;
+}
+
+.themeItemActive {
+  border-color: var(--color-primary);
+}
+
+.themeSwatch {
+  display: flex;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.themeSwatch i {
+  display: block;
+  width: 14px;
+  height: 28px;
+}
+
+.themeBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.themeName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.themeDesc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.themeCheck {
+  flex-shrink: 0;
+  color: var(--color-primary);
+  font-size: 16px;
+}
+
+/* ===== 全局背景图 ===== */
+.bgPreview {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 12px;
+  border-radius: 12px;
+}
+
+.bgPreviewImg {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+}
+
+.bgPreviewNote {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+}
+
+.bgEmpty {
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.bgActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ===== 版本日志卡片 ===== */
 .logCard {
   border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(26, 26, 46, 0.06);
+  box-shadow: var(--shadow-card);
 }
 
 .logTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #1a1a2e;
+  color: var(--color-text);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -123,25 +253,25 @@
 .logVersion {
   font-size: 15px;
   font-weight: 700;
-  color: #1a1a2e;
+  color: var(--color-text);
 }
 
 .logDate {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-text-tertiary);
 }
 
 .logTitleText {
   font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text);
 }
 
 .logChanges {
   margin: 4px 0 0;
   padding-left: 18px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-secondary);
   line-height: 1.7;
 }
 
@@ -164,16 +294,16 @@
 
 .nameLabel {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-secondary);
 }
 
 .namePreview {
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: 10px;
-  background: #f9fafb;
+  background: var(--color-surface-soft);
   font-size: 13px;
-  color: #1a1a2e;
+  color: var(--color-text);
 }
 
 .nameSaveBtn {
@@ -184,10 +314,10 @@
 /* ===== 打卡图片清理（仅家长可见） ===== */
 .scanResult {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-secondary);
   padding: 10px 12px;
   border-radius: 10px;
-  background: #f9fafb;
+  background: var(--color-surface-soft);
   margin-bottom: 12px;
 }
 

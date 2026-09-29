@@ -22,7 +22,7 @@
 .balanceCard {
   text-align: center;
   padding: 8px 0;
-  background: linear-gradient(135deg, #1a1a2e 0%, #2a2a4a 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-soft) 100%);
   border-radius: 16px;
   overflow: hidden;
   position: relative;
@@ -108,7 +108,7 @@
 .actionGroupLabel {
   font-size: 14px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--color-text-secondary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -140,7 +140,7 @@
 
 /* ===== Tab 切换 ===== */
 .tabs {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 16px;
   padding: 8px 16px 16px;
   box-shadow: 0 4px 16px rgba(26, 26, 46, 0.06);
@@ -161,14 +161,14 @@
 /* ===== 自定义任务卡片 ===== */
 .customCard {
   border-radius: 16px;
-  background: linear-gradient(135deg, #f8faff 0%, #f0f4ff 100%);
-  border: 1px solid #e3e9f5;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
 }
 
 .customTitle {
   font-size: 15px;
   font-weight: 600;
-  color: #1a1a2e;
+  color: var(--color-text);
   margin-bottom: 12px;
   display: flex;
   align-items: center;
@@ -226,7 +226,7 @@
 
 .recordNote {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-secondary);
   max-width: 160px;
   text-align: right;
   overflow: hidden;
@@ -275,13 +275,13 @@
 .clock {
   font-size: 44px;
   font-weight: 600;
-  color: #1a1a2e;
+  color: var(--color-text);
   line-height: 1.1;
 }
 
 .dateText {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--color-text-secondary);
   margin-top: 4px;
 }
 

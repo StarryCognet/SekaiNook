@@ -6,7 +6,7 @@
  */
 
 import { create } from 'zustand';
-import { fetchFamilyNames, saveFamilyNames } from '../api/settings';
+import { fetchSettings, saveSettings } from '../api/settings';
 import { DEFAULT_FAMILY_NAMES, displayName, type FamilyNames } from '../types/settings';
 
 const CACHE_KEY = 'sekainook_family_names';
@@ -55,7 +55,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     if (get().loading) return;
     set({ loading: true });
     try {
-      const { names, ready } = await fetchFamilyNames();
+      const { names, ready } = await fetchSettings();
       saveCache(names);
       set({ names, ready: ready !== false, loading: false });
     } catch {
@@ -65,7 +65,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   /** 保存自己那一半称呼，成功后把服务端返回的完整称呼写回状态与缓存 */
   save: async (patch) => {
-    const { names } = await saveFamilyNames(patch);
+    const { names } = await saveSettings(patch);
     saveCache(names);
     set({ names, ready: true });
     return names;

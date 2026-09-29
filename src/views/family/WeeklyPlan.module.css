@@ -18,10 +18,10 @@
 .weekLabel {
   font-size: 18px;
   font-weight: 700;
-  color: #1a1a2e;
+  color: var(--color-text);
   padding: 2px 12px;
   border-radius: 999px;
-  background: rgba(26, 26, 46, 0.06);
+  background: var(--color-surface-soft);
 }
 
 .headerTitle {
@@ -37,7 +37,7 @@
 
 .overallLabel {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
@@ -61,11 +61,11 @@
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: rgba(26, 26, 46, 0.06);
+  background: var(--color-surface-soft);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #1a1a2e;
+  color: var(--color-text);
 }
 
 .row {
@@ -74,7 +74,7 @@
   gap: 16px;
   padding: 12px 12px;
   border-radius: 10px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border);
   transition: background 0.2s ease;
 }
 
@@ -83,7 +83,7 @@
 }
 
 .row:hover {
-  background: rgba(26, 26, 46, 0.02);
+  background: var(--color-surface-soft);
 }
 
 .rowDone {
@@ -108,12 +108,12 @@
 }
 
 .doneIcon {
-  color: #0f9b6c;
+  color: var(--color-success);
 }
 
 .rowMeta {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-secondary);
 }
 
 .rowBar {
@@ -130,7 +130,7 @@
 
 .noData {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
 }
 

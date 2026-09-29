@@ -5,8 +5,11 @@
  *
  * 「闲置照片」= R2 中 tasks/ 前缀下存在、但没有任何 family_ledger.image_url 引用它的对象
  * （打卡记录被删除后，照片仍留在云端的那种）。
+ * 设置页设的全局背景图同样算「被引用」——它寄存在 settings 表里，不能被当垃圾清掉。
  * 上传接口（functions/api/upload.ts）把图片写入 tasks/ 前缀，故扫描只针对该前缀，其他前缀一律不碰。
  */
+
+import { readBackground } from '../../_lib/settings';
 
 interface Env {
   DB: D1Database;
@@ -53,7 +56,7 @@ async function listImageKeys(bucket: R2Bucket): Promise<string[]> {
   return keys;
 }
 
-/** 查询 family_ledger.image_url 并归一化为被引用的 R2 key 集合 */
+/** 查询 family_ledger.image_url 与设置里的全局背景图，归一化为被引用的 R2 key 集合 */
 async function collectReferencedKeys(db: D1Database): Promise<Set<string>> {
   const { results } = await db
     .prepare('SELECT image_url FROM family_ledger WHERE image_url IS NOT NULL')
@@ -65,6 +68,11 @@ async function collectReferencedKeys(db: D1Database): Promise<Set<string>> {
     const key = extractImageKey(row.image_url);
     if (key) referenced.add(key);
   }
+
+  // 设置页上传的全局背景图也是「有人在用」的图
+  const backgroundKey = extractImageKey(await readBackground(db));
+  if (backgroundKey) referenced.add(backgroundKey);
+
   return referenced;
 }
 
