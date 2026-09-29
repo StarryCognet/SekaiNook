@@ -1,39 +1,47 @@
+/* 语文练习页：颜色全走主题变量（原始 / 午夜蓝两套通用），不再用花园紫色令牌 */
 .chinese {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
+/* ===== 区块标题 ===== */
 .sectionTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #3a3a5c;
+  color: var(--color-text);
 }
 
+/* ===== 练习卡片列表 ===== */
 .previewList {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
 .previewCard {
-  border-radius: 16px;
-  border: 2px solid transparent;
-  box-shadow: 0 4px 16px rgba(183, 145, 250, 0.12);
-  transition: all 0.25s ease;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .previewCard:hover {
-  box-shadow: 0 8px 24px rgba(183, 145, 250, 0.2);
+  border-color: var(--color-primary);
   transform: translateY(-1px);
 }
 
-.previewDone {
-  background: #e8f8e8;
-  border-color: #52c41a;
-  box-shadow: 0 4px 16px rgba(82, 196, 26, 0.15);
+/* 今天已练完：成功色描边 + 次级块底 */
+.previewDone,
+.previewDone:hover {
+  border-color: var(--color-success);
+  background: var(--color-surface-soft);
 }
 
+/* ===== 卡片内容 ===== */
 .previewHeader {
   display: flex;
   align-items: center;
@@ -44,15 +52,23 @@
 .previewTitle {
   font-size: 15px;
   font-weight: 600;
-  color: #3a3a5c;
+  color: var(--color-text);
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
+.previewTitleIcon {
+  color: var(--color-primary);
+}
+
+.previewDoneIcon {
+  color: var(--color-success);
+}
+
 .previewDesc {
   font-size: 13px;
-  color: #8a8aa8;
+  color: var(--color-text-secondary);
   margin-bottom: 8px;
 }
 
@@ -60,8 +76,10 @@
   margin-bottom: 10px;
 }
 
+/* 触控目标最小高度（安卓手机上的小朋友友好） */
 .previewBtn {
-  border-radius: 999px;
+  min-height: 48px;
+  border-radius: var(--radius-md);
 }
 
 @media (max-width: 768px) {

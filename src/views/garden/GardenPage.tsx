@@ -2,11 +2,8 @@ import { Button, Card, Progress, message } from 'antd';
 import { EnvironmentOutlined, SmileOutlined, SunOutlined } from '@ant-design/icons';
 import { GARDEN_BADGE_TARGETS } from '../../config/garden';
 import { todayKey, useGardenStore } from '../../store/useGardenStore';
-import { gardenTokens } from '../../theme/gardenTokens';
+import { useThemePalette } from '../../store/useThemeStore';
 import styles from './GardenPage.module.css';
-
-/** 触控目标最小高度（安卓手机上的小朋友友好）：由令牌间距组合得到 */
-const TOUCH_HEIGHT = gardenTokens.spacing.xl + gardenTokens.spacing.md;
 
 /** 花园植物 */
 const PLANTS = [
@@ -17,6 +14,8 @@ const PLANTS = [
 
 /** 阳光花园页面 */
 export default function GardenPage() {
+  // 进度条这类 antd 属性色到不了 CSS 变量，从当前主题调色板取
+  const palette = useThemePalette();
   const { completedCount, gardenCareDays, lastCareDate, careForGarden } = useGardenStore();
   // 花园成长度基于今日完成任务数
   const growth = Math.min(100, completedCount * 10);
@@ -47,7 +46,7 @@ export default function GardenPage() {
           <div className={styles.gardenTitle}>花园成长度</div>
           <Progress
             percent={growth}
-            strokeColor={gardenTokens.colors.success}
+            strokeColor={palette.success}
             format={() => `${growth}%`}
           />
           <div className={styles.gardenDesc}>完成更多任务，让花园更茂盛！</div>
@@ -56,14 +55,14 @@ export default function GardenPage() {
 
       {/* 照顾花园：累计自然日，满 7 天解锁「植物战士」 */}
       <Card className={styles.gardenStatus} variant="borderless">
-        <div className={styles.gardenSun} style={{ background: gardenTokens.colors.primary }}>
+        <div className={styles.gardenSun}>
           <EnvironmentOutlined />
         </div>
         <div className={styles.gardenInfo}>
           <div className={styles.gardenTitle}>照顾花园 · 植物战士</div>
           <Progress
             percent={carePercent}
-            strokeColor={gardenTokens.colors.primary}
+            strokeColor={palette.primary}
             format={() => `${gardenCareDays}/${careTarget} 天`}
           />
           <div className={styles.gardenDesc}>
@@ -73,12 +72,7 @@ export default function GardenPage() {
           </div>
           <Button
             type="primary"
-            style={{
-              marginTop: gardenTokens.spacing.sm,
-              minHeight: TOUCH_HEIGHT,
-              background: caredToday ? gardenTokens.colors.gray : gardenTokens.colors.primary,
-              borderColor: caredToday ? gardenTokens.colors.gray : gardenTokens.colors.primary,
-            }}
+            className={styles.careBtn}
             icon={<EnvironmentOutlined />}
             disabled={caredToday}
             onClick={handleCare}
@@ -98,12 +92,7 @@ export default function GardenPage() {
             <div className={styles.plantName}>{plant.name}</div>
             <div className={styles.plantDesc}>{plant.desc}</div>
             <Button
-              style={{
-                marginTop: gardenTokens.spacing.sm,
-                minHeight: TOUCH_HEIGHT,
-                color: caredToday ? gardenTokens.colors.textSecondary : gardenTokens.colors.primary,
-                borderColor: caredToday ? gardenTokens.colors.gray : gardenTokens.colors.primary,
-              }}
+              className={`${styles.careBtn} ${styles.plantCareBtn}`}
               disabled={caredToday}
               onClick={handleCare}
             >

@@ -4,7 +4,7 @@ import { SunOutlined, FireOutlined, ReloadOutlined } from '@ant-design/icons';
 import { GARDEN_MENUS } from '../config/garden';
 import { useGardenStore } from '../store/useGardenStore';
 import { getGardenIcon } from '../components/garden/GardenIcon';
-import { gardenTokens } from '../theme/gardenTokens';
+import { useThemePalette } from '../store/useThemeStore';
 import { PageLoading } from '../components/StateViews';
 import { useViewState } from '../utils/useViewState';
 import styles from './GardenLayout.module.css';
@@ -36,6 +36,8 @@ export default function GardenLayout() {
   // 花园里选的是哪个子页也要跨页面切换保留（切去「家庭」再回来还停在原处）
   const [active, setActive] = useViewState('garden.activeMenu', 'tasks');
   const { balance, tasks, completedCount, streakDays, init, resetTasks } = useGardenStore();
+  // 主题色（antd 属性拿不到 CSS 变量，只能从主题取）
+  const palette = useThemePalette();
 
   // 初始化状态
   useEffect(() => {
@@ -100,7 +102,7 @@ export default function GardenLayout() {
           </div>
 
           <div className={styles.balanceChip}>
-            <SunOutlined style={{ color: gardenTokens.colors.sun }} />
+            <SunOutlined style={{ color: palette.warning }} />
             <span className={styles.balanceNum}>{balance}</span>
             <span className={styles.balanceLabel}>阳光</span>
           </div>
@@ -110,14 +112,15 @@ export default function GardenLayout() {
             <Progress
               percent={percent}
               size="small"
-              strokeColor={gardenTokens.colors.success}
+              strokeColor={palette.primary}
+              trailColor="var(--color-surface-soft)"
               className={styles.progressBar}
             />
             <span className={styles.progressText}>{completedCount}/{totalTasks}</span>
           </div>
 
           <div className={styles.streakChip}>
-            <FireOutlined style={{ color: gardenTokens.colors.sun }} />
+            <FireOutlined style={{ color: palette.warning }} />
             <span className={styles.streakNum}>{streakDays}</span>
             <span className={styles.streakLabel}>天</span>
           </div>

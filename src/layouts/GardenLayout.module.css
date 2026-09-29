@@ -1,3 +1,7 @@
+/**
+ * 花园外壳 —— 与全站（账本页 / 设置页）同一套视觉语言：
+ * 颜色一律走主题变量（浅色 / 午夜蓝两套主题都跟着变），不再有独立的紫色系。
+ */
 .garden {
   display: flex;
   flex-direction: column;
@@ -10,9 +14,10 @@
   align-items: center;
   gap: 14px;
   padding: 18px 20px;
-  background: linear-gradient(135deg, #b791fa 0%, #9d7bf0 50%, #c8a9fc 100%);
-  border-radius: 18px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-soft) 100%);
+  border-radius: var(--radius-lg);
   color: #ffffff;
+  box-shadow: var(--shadow-card);
   position: relative;
   overflow: hidden;
 }
@@ -41,13 +46,13 @@
 .logo {
   width: 54px;
   height: 54px;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-card);
   position: relative;
   z-index: 1;
 }
@@ -55,7 +60,7 @@
 .logoText {
   font-size: 18px;
   font-weight: 700;
-  color: #b791fa;
+  color: var(--color-primary);
 }
 
 .brandText {
@@ -85,11 +90,16 @@
   z-index: 1;
 }
 
-/* ===== 导航 ===== */
+/* ===== 导航（与账本页卡片同一张面） ===== */
 .nav {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  padding: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
 
 .navItem {
@@ -98,21 +108,22 @@
   gap: 8px;
   padding: 8px 14px;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: transparent;
-  color: #ffffff;
+  color: var(--color-text-secondary);
   cursor: pointer;
   font-size: 14px;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .navItem:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-soft);
+  color: var(--color-text);
 }
 
 .navItemActive {
-  background: #dcc9fd;
-  color: #3a3a5c;
+  background: var(--color-primary);
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -120,7 +131,7 @@
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: rgba(200, 169, 252, 0.3);
+  background: var(--color-surface-soft);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -128,7 +139,8 @@
 }
 
 .navItemActive .navIcon {
-  background: rgba(183, 145, 250, 0.25);
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
 }
 
 /* ===== 顶部信息栏 ===== */
@@ -139,9 +151,10 @@
   gap: 16px;
   flex-wrap: wrap;
   padding: 14px 16px;
-  background: #ffffff;
-  border-radius: 14px;
-  box-shadow: 0 4px 16px rgba(183, 145, 250, 0.12);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
 
 .topbarLeft {
@@ -153,12 +166,12 @@
 .pageTitle {
   font-size: 18px;
   font-weight: 700;
-  color: #3a3a5c;
+  color: var(--color-text);
 }
 
 .date {
   font-size: 12px;
-  color: #8a8aa8;
+  color: var(--color-text-secondary);
 }
 
 .topbarRight {
@@ -176,16 +189,21 @@
   gap: 6px;
   padding: 6px 12px;
   border-radius: 999px;
-  background: #f3edff;
+  background: var(--color-surface-soft);
   font-size: 13px;
-  color: #3a3a5c;
+  color: var(--color-text);
+}
+
+.balanceChip {
+  background: var(--tint-warning-bg);
+  color: var(--tint-warning-text);
 }
 
 .userAvatar {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #b791fa;
+  background: var(--color-primary);
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -202,7 +220,12 @@
 .balanceLabel,
 .streakLabel {
   font-size: 12px;
-  color: #8a8aa8;
+  color: var(--color-text-secondary);
+}
+
+.balanceChip .balanceLabel {
+  color: inherit;
+  opacity: 0.75;
 }
 
 .progressChip {
@@ -211,12 +234,12 @@
   gap: 8px;
   padding: 6px 12px;
   border-radius: 999px;
-  background: #e8f8e8;
+  background: var(--color-surface-soft);
 }
 
 .progressLabel {
   font-size: 12px;
-  color: #3a3a5c;
+  color: var(--color-text-secondary);
 }
 
 .progressBar {
@@ -227,7 +250,7 @@
 .progressText {
   font-size: 12px;
   font-weight: 600;
-  color: #52c41a;
+  color: var(--color-primary);
 }
 
 .resetBtn {
@@ -265,7 +288,7 @@
   .nav {
     flex-wrap: nowrap;
     overflow-x: auto;
-    padding-bottom: 4px;
+    padding: 6px;
     -webkit-overflow-scrolling: touch;
   }
 

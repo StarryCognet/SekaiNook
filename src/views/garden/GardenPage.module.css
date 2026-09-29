@@ -1,28 +1,38 @@
+/* 阳光花园：颜色全走主题变量（原始 / 午夜蓝），版式与账本页、设置页统一 */
 .garden {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .sectionTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #3a3a5c;
+  color: var(--color-text);
 }
 
+/* ===== 状态卡（花园成长度 / 照顾花园） =====
+   antd 把 children 包在 .ant-card-body 里，横向排布得下到 body 上。
+   注意样式标签注入顺序：antd 的 cssinjs 走 prepend，模块样式在后，能盖住组件默认值 */
 .gardenStatus {
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+}
+
+.gardenStatus :global(.ant-card-body) {
   display: flex;
   align-items: center;
   gap: 16px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #e8f8e8, #f3edff);
 }
 
+/* 圆形图标底：与设置页 .infoIcon 同一套主色渐变 */
 .gardenSun {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: #ffc53d;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-soft));
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -39,14 +49,32 @@
 .gardenTitle {
   font-size: 15px;
   font-weight: 600;
-  color: #3a3a5c;
+  color: var(--color-text);
   margin-bottom: 4px;
 }
 
 .gardenDesc {
   font-size: 12px;
-  color: #8a8aa8;
+  color: var(--color-text-secondary);
   margin-top: 4px;
+}
+
+/* 浇水按钮：安卓手机上的小朋友友好，触控高度 ≥48px（原 32+16 令牌间距） */
+.careBtn {
+  margin-top: 8px;
+  min-height: 48px;
+  border-radius: var(--radius-md);
+}
+
+/* 植物卡里的默认按钮：描边走主色，禁用时退回中性灰 */
+.plantCareBtn {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.plantCareBtn:disabled {
+  color: var(--color-text-tertiary);
+  border-color: var(--color-border);
 }
 
 .plantGrid {
@@ -56,14 +84,14 @@
 }
 
 .plantCard {
-  border-radius: 16px;
-  text-align: center;
-  box-shadow: 0 4px 16px rgba(183, 145, 250, 0.12);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
   transition: all 0.25s ease;
 }
 
 .plantCard:hover {
-  box-shadow: 0 8px 24px rgba(183, 145, 250, 0.2);
+  border-color: var(--color-primary);
   transform: translateY(-2px);
 }
 
@@ -71,8 +99,8 @@
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f3edff, #e8f8e8);
-  color: #b791fa;
+  background: var(--tint-brand-bg);
+  color: var(--tint-brand-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -83,12 +111,12 @@
 .plantName {
   font-size: 14px;
   font-weight: 600;
-  color: #3a3a5c;
+  color: var(--color-text);
 }
 
 .plantDesc {
   font-size: 12px;
-  color: #8a8aa8;
+  color: var(--color-text-secondary);
   margin-top: 4px;
 }
 

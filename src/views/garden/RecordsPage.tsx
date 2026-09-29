@@ -1,7 +1,6 @@
 import { Card, List, Tag } from 'antd';
 import { CheckCircleOutlined, SunOutlined } from '@ant-design/icons';
 import { useGardenStore } from '../../store/useGardenStore';
-import { gardenTokens } from '../../theme/gardenTokens';
 import styles from './RecordsPage.module.css';
 
 /** 学习记录页面 */
@@ -22,7 +21,7 @@ export default function RecordsPage() {
         </div>
         <div className={styles.summaryItem}>
           <div className={styles.summaryLabel}>获得阳光</div>
-          <div className={`num ${styles.summaryValue}`}>
+          <div className={`num ${styles.summaryValue} ${styles.summaryValueWarm}`}>
             {doneTasks.reduce((sum, t) => sum + t.reward, 0)}
           </div>
           <div className={styles.summarySub}>积分</div>
@@ -39,11 +38,7 @@ export default function RecordsPage() {
             renderItem={(task) => (
               <List.Item>
                 <List.Item.Meta
-                  avatar={
-                    <CheckCircleOutlined
-                      style={{ color: gardenTokens.colors.success, fontSize: 20 }}
-                    />
-                  }
+                  avatar={<CheckCircleOutlined className={styles.doneIcon} />}
                   title={task.name}
                   description={
                     task.completedAt
@@ -54,7 +49,7 @@ export default function RecordsPage() {
                       : ''
                   }
                 />
-                <Tag color="gold" icon={<SunOutlined />}>
+                <Tag className={styles.rewardTag} icon={<SunOutlined />}>
                   +{task.reward}
                 </Tag>
               </List.Item>

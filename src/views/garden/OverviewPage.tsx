@@ -1,12 +1,14 @@
 import { Card, Progress } from 'antd';
 import { SunOutlined, FireOutlined, TrophyOutlined } from '@ant-design/icons';
 import { useGardenStore } from '../../store/useGardenStore';
-import { gardenTokens } from '../../theme/gardenTokens';
+import { useThemePalette } from '../../store/useThemeStore';
 import styles from './OverviewPage.module.css';
 
 /** 学习总览页面 */
 export default function OverviewPage() {
   const { balance, tasks, completedCount, streakDays, badges } = useGardenStore();
+  // 进度条等 antd 属性拿不到 CSS 变量，颜色从当前主题调色板取
+  const palette = useThemePalette();
   const total = tasks.length;
   const percent = total > 0 ? Math.round((completedCount / total) * 100) : 0;
   const earnedBadges = badges.filter((b) => b.earned).length;
@@ -16,7 +18,7 @@ export default function OverviewPage() {
       {/* 数据卡片 */}
       <div className={styles.statGrid}>
         <Card className={styles.statCard} variant="borderless">
-          <div className={styles.statIcon} style={{ background: '#FFF7E0', color: '#FFC53D' }}>
+          <div className={`${styles.statIcon} ${styles.statIconWarm}`}>
             <SunOutlined />
           </div>
           <div className={styles.statInfo}>
@@ -25,7 +27,7 @@ export default function OverviewPage() {
           </div>
         </Card>
         <Card className={styles.statCard} variant="borderless">
-          <div className={styles.statIcon} style={{ background: '#F3EDFF', color: '#B791FA' }}>
+          <div className={`${styles.statIcon} ${styles.statIconBrand}`}>
             <FireOutlined />
           </div>
           <div className={styles.statInfo}>
@@ -34,7 +36,7 @@ export default function OverviewPage() {
           </div>
         </Card>
         <Card className={styles.statCard} variant="borderless">
-          <div className={styles.statIcon} style={{ background: '#E8F8E8', color: '#52C41A' }}>
+          <div className={`${styles.statIcon} ${styles.statIconSuccess}`}>
             <TrophyOutlined />
           </div>
           <div className={styles.statInfo}>
@@ -49,7 +51,8 @@ export default function OverviewPage() {
         <div className={styles.progressTitle}>今日学习进度</div>
         <Progress
           percent={percent}
-          strokeColor={gardenTokens.colors.success}
+          strokeColor={palette.primary}
+          trailColor="var(--color-surface-soft)"
           format={() => `${completedCount}/${total} 个任务`}
         />
       </Card>

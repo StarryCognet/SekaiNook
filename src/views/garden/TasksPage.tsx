@@ -2,19 +2,18 @@ import { message } from "antd";
 import { CheckOutlined, SunOutlined, ClockCircleOutlined } from "@ant-design/icons";
 import { useGardenStore } from "../../store/useGardenStore";
 import { getGardenIcon } from "../../components/garden/GardenIcon";
-import { gardenTokens } from "../../theme/gardenTokens";
 import styles from "./TasksPage.module.css";
 
-/** 每个任务的图标主题色（让卡片更生动） */
-const TASK_COLORS: Record<string, { bg: string; color: string }> = {
-  poem: { bg: "#F3EDFF", color: "#B791FA" },
-  chinese: { bg: "#E8F4FF", color: "#4A9DE0" },
-  math: { bg: "#FFF3E0", color: "#F5A623" },
-  reading: { bg: "#E8F8E8", color: "#52C41A" },
-  writing: { bg: "#FFE9F0", color: "#E94560" },
-  eyes: { bg: "#E6F7FF", color: "#13C2C2" },
-  sport: { bg: "#FFF7E0", color: "#FFC53D" },
-  chore: { bg: "#F0F0FF", color: "#7B61FF" },
+/** 每个任务图标的配色类（颜色只能用主题变量，故按强调色归类，让卡片保持生动） */
+const TASK_ICON_CLASS: Record<string, string> = {
+  poem: styles.taskIconBrand,
+  chinese: styles.taskIconPrimary,
+  math: styles.taskIconWarm,
+  reading: styles.taskIconSuccess,
+  writing: styles.taskIconDanger,
+  eyes: styles.taskIconPrimary,
+  sport: styles.taskIconWarm,
+  chore: styles.taskIconBrand,
 };
 
 /** 今日任务页面 */
@@ -34,7 +33,7 @@ export default function TasksPage() {
       {/* 顶部统计 */}
       <div className={styles.stats}>
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: "#FFF7E0", color: "#FFC53D" }}>
+          <div className={`${styles.statIcon} ${styles.statIconWarm}`}>
             <CheckOutlined />
           </div>
           <div className={styles.statInfo}>
@@ -44,7 +43,7 @@ export default function TasksPage() {
           </div>
         </div>
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: "#E8F8E8", color: "#52C41A" }}>
+          <div className={`${styles.statIcon} ${styles.statIconSuccess}`}>
             <SunOutlined />
           </div>
           <div className={styles.statInfo}>
@@ -56,7 +55,7 @@ export default function TasksPage() {
           </div>
         </div>
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: "#F3EDFF", color: "#B791FA" }}>
+          <div className={`${styles.statIcon} ${styles.statIconBrand}`}>
             <ClockCircleOutlined />
           </div>
           <div className={styles.statInfo}>
@@ -70,20 +69,14 @@ export default function TasksPage() {
       {/* 任务列表 */}
       <div className={styles.taskList}>
         {tasks.map((task) => {
-          const color = TASK_COLORS[task.id] ?? { bg: "#F3EDFF", color: "#B791FA" };
+          const iconClass = TASK_ICON_CLASS[task.id] ?? styles.taskIconPrimary;
           return (
             <div key={task.id} className={`${styles.taskCard} ${task.done ? styles.taskCardDone : ""}`}>
               <button className={`${styles.taskCheck} ${task.done ? styles.taskCheckDone : ""}`} onClick={() => handleComplete(task.id, task.name, task.reward)} disabled={task.done}>
                 {task.done && <CheckOutlined />}
               </button>
 
-              <div
-                className={styles.taskIcon}
-                style={{
-                  background: task.done ? "rgba(82,196,26,0.12)" : color.bg,
-                  color: task.done ? gardenTokens.colors.success : color.color,
-                }}
-              >
+              <div className={`${styles.taskIcon} ${task.done ? styles.taskIconDone : iconClass}`}>
                 {getGardenIcon(task.icon)}
               </div>
 
@@ -98,7 +91,7 @@ export default function TasksPage() {
               </div>
 
               <div className={`${styles.taskReward} ${task.done ? styles.taskRewardDone : ""}`}>
-                <SunOutlined style={{ color: gardenTokens.colors.sun }} />
+                <SunOutlined className={styles.taskRewardIcon} />
                 <span className={`num ${styles.taskRewardNum}`}>+{task.reward}</span>
                 <span className={styles.taskRewardLabel}>阳光</span>
               </div>

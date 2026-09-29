@@ -3,7 +3,7 @@ import { TrophyOutlined } from '@ant-design/icons';
 import { GARDEN_BADGE_TARGETS } from '../../config/garden';
 import { useGardenStore } from '../../store/useGardenStore';
 import { getGardenIcon } from '../../components/garden/GardenIcon';
-import { gardenTokens } from '../../theme/gardenTokens';
+import { useThemePalette } from '../../store/useThemeStore';
 import styles from './RewardsPage.module.css';
 
 /** 累计型勋章的进度（未解锁也可见） */
@@ -16,6 +16,7 @@ interface BadgeProgress {
 /** 我的奖励页面：成就面板 + 勋章墙 */
 export default function RewardsPage() {
   const { badges, poemCount, gardenCareDays } = useGardenStore();
+  const palette = useThemePalette();
 
   const earnedCount = badges.filter((b) => b.earned).length;
   const totalCount = badges.length;
@@ -37,7 +38,7 @@ export default function RewardsPage() {
 
   return (
     <div className={styles.rewards}>
-      {/* 顶部成就面板（淡黄色） */}
+      {/* 顶部成就面板（暖色提示块） */}
       <div className={styles.achievement}>
         <div className={styles.achievementIcon}>
           <TrophyOutlined />
@@ -80,17 +81,12 @@ export default function RewardsPage() {
                       }
                       size="small"
                       showInfo={false}
-                      strokeColor={
-                        badge.earned ? gardenTokens.colors.success : gardenTokens.colors.primary
-                      }
+                      strokeColor={badge.earned ? palette.success : palette.primary}
                     />
                     <div
-                      className={styles.badgeProgressText}
-                      style={{
-                        color: badge.earned
-                          ? gardenTokens.colors.success
-                          : gardenTokens.colors.textSecondary,
-                      }}
+                      className={`${styles.badgeProgressText} ${
+                        badge.earned ? styles.badgeProgressTextEarned : ''
+                      }`}
                     >
                       {progress.text}
                     </div>

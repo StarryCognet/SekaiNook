@@ -2,15 +2,14 @@ import { Button, Card, Progress, message } from 'antd';
 import { CheckOutlined, ReadOutlined } from '@ant-design/icons';
 import { GARDEN_CHINESE_PRACTICES } from '../../config/garden';
 import { todayKey, useGardenStore } from '../../store/useGardenStore';
-import { gardenTokens } from '../../theme/gardenTokens';
+import { useThemePalette } from '../../store/useThemeStore';
 import styles from './ChinesePage.module.css';
-
-/** 触控目标最小高度（安卓手机上的小朋友友好）：由令牌间距组合得到 */
-const TOUCH_HEIGHT = gardenTokens.spacing.xl + gardenTokens.spacing.md;
 
 /** 语文练习页面：每次打卡计一次花园任务完成并持久化 */
 export default function ChinesePage() {
   const { chineseSteps, chineseDate, completeChineseStep } = useGardenStore();
+  // 进度条 / 按钮等 CSS 变量到不了的地方，用当前主题调色板
+  const palette = useThemePalette();
   const today = todayKey();
   // 跨天后今日打卡次数自动归零
   const steps = chineseDate === today ? chineseSteps : {};
@@ -39,26 +38,25 @@ export default function ChinesePage() {
             >
               <div className={styles.previewHeader}>
                 <div className={styles.previewTitle}>
-                  <ReadOutlined style={{ color: gardenTokens.colors.primary }} />
+                  <ReadOutlined className={styles.previewTitleIcon} />
                   {item.title}
                 </div>
-                {done && <CheckOutlined style={{ color: gardenTokens.colors.success }} />}
+                {done && <CheckOutlined className={styles.previewDoneIcon} />}
               </div>
               <div className={styles.previewDesc}>{item.desc}</div>
               <div className={styles.previewProgress}>
                 <Progress
                   percent={percent}
                   size="small"
-                  strokeColor={done ? gardenTokens.colors.success : gardenTokens.colors.primary}
+                  strokeColor={done ? palette.success : palette.primary}
                 />
               </div>
               <Button
                 type="primary"
                 className={styles.previewBtn}
                 style={{
-                  background: done ? gardenTokens.colors.success : gardenTokens.colors.primary,
-                  borderColor: done ? gardenTokens.colors.success : gardenTokens.colors.primary,
-                  minHeight: TOUCH_HEIGHT,
+                  background: done ? palette.success : palette.primary,
+                  borderColor: done ? palette.success : palette.primary,
                 }}
                 icon={done ? <CheckOutlined /> : undefined}
                 onClick={() =>

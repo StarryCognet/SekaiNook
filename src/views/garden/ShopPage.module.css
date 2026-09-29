@@ -1,57 +1,59 @@
+/* 阳光商城：余额卡 + 按分类的商品网格，颜色全走主题变量 */
 .shop {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .sectionTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #3a3a5c;
+  color: var(--color-text);
 }
 
+/* ===== 余额卡（暖色提示块，同顶栏阳光 chip） ===== */
 .balanceCard {
   display: flex;
   align-items: center;
   gap: 8px;
-  border-radius: 14px;
-  background: #fff7e0;
+  background: var(--tint-warning-bg);
+  color: var(--tint-warning-text);
+  border-radius: var(--radius-lg);
+}
+
+.balanceIcon {
+  font-size: 22px;
+  color: inherit;
 }
 
 .balanceText {
   font-size: 14px;
-  color: #3a3a5c;
+  opacity: 0.85;
 }
 
 .balanceNum {
   font-size: 22px;
   font-weight: 700;
-  color: #ffc53d;
+  color: inherit;
   margin-left: auto;
 }
 
 .balanceLabel {
   font-size: 12px;
-  color: #8a8aa8;
+  opacity: 0.7;
 }
 
-/* 分类区块（颜色/间距取自 gardenTokens，见 ShopPage.tsx） */
+/* ===== 分类区块 ===== */
 .categoryBlock {
   display: flex;
   flex-direction: column;
 }
 
 .categoryTitle {
+  margin-bottom: 8px;
   font-size: 14px;
   font-weight: 600;
-}
-
-.itemOwned {
-  box-shadow: none;
-}
-
-.itemStatus {
-  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
 .itemGrid {
@@ -60,24 +62,36 @@
   gap: 12px;
 }
 
+/* ===== 商品卡 ===== */
 .itemCard {
-  border-radius: 16px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   text-align: center;
-  box-shadow: 0 4px 16px rgba(183, 145, 250, 0.12);
   transition: all 0.25s ease;
 }
 
 .itemCard:hover {
-  box-shadow: 0 8px 24px rgba(183, 145, 250, 0.2);
   transform: translateY(-2px);
+}
+
+/* 已拥有：绿边 + 次级底色 */
+.itemOwned {
+  border: 2px solid var(--color-success);
+  background: var(--color-surface-soft);
+}
+
+/* 阳光不足：虚线描边，压暗不抢眼 */
+.itemLocked {
+  border: 2px dashed var(--color-border);
 }
 
 .itemIcon {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f3edff, #fff7e0);
-  color: #b791fa;
+  background: var(--tint-brand-bg);
+  color: var(--tint-brand-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -88,13 +102,13 @@
 .itemName {
   font-size: 14px;
   font-weight: 600;
-  color: #3a3a5c;
+  color: var(--color-text);
 }
 
 .itemDesc {
-  font-size: 12px;
-  color: #8a8aa8;
   margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
 .itemCost {
@@ -103,21 +117,46 @@
   justify-content: center;
   gap: 4px;
   margin: 10px 0;
+  color: var(--color-warning);
+}
+
+/* 阳光不足：价格整体转灰 */
+.itemCostLocked {
+  color: var(--color-text-tertiary);
 }
 
 .itemCostNum {
   font-size: 16px;
   font-weight: 700;
-  color: #ffc53d;
+  color: inherit;
 }
 
 .itemCostLabel {
   font-size: 12px;
-  color: #8a8aa8;
+  color: var(--color-text-secondary);
+}
+
+.itemStatus {
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.itemStatusOwned {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.itemStatusReady {
+  color: var(--color-text-secondary);
+}
+
+.itemStatusLocked {
+  color: var(--color-text-tertiary);
 }
 
 .exchangeBtn {
-  border-radius: 999px;
+  min-height: 48px;
+  border-radius: var(--radius-md);
 }
 
 @media (max-width: 768px) {

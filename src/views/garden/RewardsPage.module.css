@@ -1,32 +1,34 @@
+/* 我的奖励：成就面板 + 勋章墙，颜色全走主题变量 */
 .rewards {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-/* ===== 成就面板（淡黄色） ===== */
+/* ===== 成就面板（暖色提示块） ===== */
 .achievement {
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 20px;
-  background: #fff7e0;
-  border-radius: 16px;
-  border: 2px solid #ffe9b8;
+  background: var(--tint-warning-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
 
 .achievementIcon {
   width: 68px;
   height: 68px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ffc53d, #ffb020);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-soft));
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 32px;
   flex-shrink: 0;
-  box-shadow: 0 6px 18px rgba(255, 197, 61, 0.45);
+  box-shadow: var(--shadow-card);
   position: relative;
 }
 
@@ -35,7 +37,7 @@
   position: absolute;
   inset: -5px;
   border-radius: 50%;
-  border: 2px dashed rgba(255, 197, 61, 0.4);
+  border: 2px dashed var(--color-border);
 }
 
 .achievementInfo {
@@ -46,24 +48,24 @@
 .achievementTitle {
   font-size: 20px;
   font-weight: 700;
-  color: #3a3a5c;
+  color: var(--color-text);
 }
 
 .achievementDesc {
   font-size: 13px;
-  color: #8a8aa8;
+  color: var(--color-text-secondary);
   margin-top: 2px;
 }
 
 .achievementNum {
-  color: #ffc53d;
+  color: var(--tint-warning-text);
   font-weight: 700;
 }
 
 .achievementBar {
   height: 8px;
   border-radius: 999px;
-  background: rgba(255, 197, 61, 0.2);
+  background: var(--color-surface-soft);
   overflow: hidden;
   margin-top: 8px;
 }
@@ -71,13 +73,13 @@
 .achievementBarFill {
   height: 100%;
   border-radius: 999px;
-  background: #ffc53d;
+  background: var(--color-warning);
   transition: width 0.3s ease;
 }
 
 .achievementProgress {
   font-size: 12px;
-  color: #8a8aa8;
+  color: var(--color-text-secondary);
   margin-top: 6px;
 }
 
@@ -91,7 +93,7 @@
 .sectionTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #3a3a5c;
+  color: var(--color-text);
 }
 
 .badgeGrid {
@@ -106,25 +108,26 @@
   align-items: center;
   gap: 6px;
   padding: 18px 12px;
-  border-radius: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   text-align: center;
   transition: all 0.25s ease;
 }
 
+/* 已获得：主色描边 + 卡片阴影 */
 .badgeEarned {
-  background: linear-gradient(180deg, #ffffff, #f8f4ff);
-  border: 2px solid #b791fa;
-  box-shadow: 0 6px 20px rgba(183, 145, 250, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-card);
 }
 
 .badgeEarned:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 28px rgba(183, 145, 250, 0.3);
 }
 
+/* 未获得：次级底色 + 整体压暗 */
 .badgeLocked {
-  background: #f5f5f8;
-  border: 2px solid #e5e5ec;
+  background: var(--color-surface-soft);
   opacity: 0.85;
 }
 
@@ -137,12 +140,13 @@
   justify-content: center;
   font-size: 28px;
   position: relative;
+  background: var(--color-surface);
+  color: var(--color-text-tertiary);
 }
 
 .badgeEarned .badgeIcon {
-  background: linear-gradient(135deg, #b791fa, #9d7bf0);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-soft));
   color: #ffffff;
-  box-shadow: 0 4px 14px rgba(183, 145, 250, 0.4);
 }
 
 .badgeEarned .badgeIcon::after {
@@ -150,30 +154,30 @@
   position: absolute;
   inset: -4px;
   border-radius: 50%;
-  border: 2px solid rgba(183, 145, 250, 0.3);
+  border: 2px solid var(--color-border);
 }
 
 .badgeLocked .badgeIcon {
-  background: #e5e5ec;
-  color: #c0c0d0;
+  background: var(--color-surface-soft);
+  color: var(--color-text-tertiary);
 }
 
 .badgeName {
   font-size: 14px;
   font-weight: 600;
-  color: #3a3a5c;
+  color: var(--color-text);
 }
 
 .badgeLocked .badgeName {
-  color: #c0c0d0;
+  color: var(--color-text-tertiary);
 }
 
 .badgeDesc {
   font-size: 11px;
-  color: #8a8aa8;
+  color: var(--color-text-secondary);
 }
 
-/* 累计型勋章进度条（颜色取自 gardenTokens，见 RewardsPage.tsx） */
+/* 累计型勋章进度条（描边色由 palette 传入，见 RewardsPage.tsx） */
 .badgeProgress {
   width: 100%;
   display: flex;
@@ -182,17 +186,22 @@
 
 .badgeProgressText {
   font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.badgeProgressTextEarned {
+  color: var(--color-success);
 }
 
 .badgeStatus {
   font-size: 12px;
-  color: #52c41a;
+  color: var(--color-success);
   font-weight: 600;
 }
 
 .badgeStatusLocked {
   font-size: 12px;
-  color: #c0c0d0;
+  color: var(--color-text-tertiary);
 }
 
 /* ===== 移动端 ===== */

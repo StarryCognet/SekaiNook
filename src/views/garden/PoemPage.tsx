@@ -2,15 +2,14 @@ import { Button, Card, Progress, message } from 'antd';
 import { BookOutlined, CheckOutlined } from '@ant-design/icons';
 import { GARDEN_BADGE_TARGETS, GARDEN_POEMS } from '../../config/garden';
 import { todayKey, useGardenStore } from '../../store/useGardenStore';
-import { gardenTokens } from '../../theme/gardenTokens';
+import { useThemePalette } from '../../store/useThemeStore';
 import styles from './PoemPage.module.css';
-
-/** 触控目标最小高度（安卓手机上的小朋友友好）：由令牌间距组合得到 */
-const TOUCH_HEIGHT = gardenTokens.spacing.xl + gardenTokens.spacing.md;
 
 /** 古诗背诵页面 */
 export default function PoemPage() {
   const { poemCount, todayPoemIds, poemDate, recitePoem } = useGardenStore();
+  // 进度条 / 按钮等 CSS 变量到不了的地方，用当前主题调色板
+  const palette = useThemePalette();
   const today = todayKey();
   // 跨天后今日打卡记录自动失效
   const doneToday = poemDate === today ? todayPoemIds : [];
@@ -29,26 +28,12 @@ export default function PoemPage() {
   return (
     <div className={styles.poem}>
       {/* 小诗人进度 */}
-      <Card
-        className={styles.poemProgressCard}
-        variant="borderless"
-        style={{
-          borderRadius: gardenTokens.radius.lg,
-          background: gardenTokens.colors.primaryBg,
-        }}
-      >
-        <div
-          className={styles.poemProgressText}
-          style={{ color: gardenTokens.colors.text, marginBottom: gardenTokens.spacing.sm }}
-        >
-          累计背会{' '}
-          <span className="num" style={{ color: gardenTokens.colors.primary }}>
-            {poemCount}
-          </span>{' '}
-          首
+      <Card className={styles.poemProgressCard} variant="borderless">
+        <div className={styles.poemProgressText}>
+          累计背会 <span className={`num ${styles.poemCount}`}>{poemCount}</span> 首
           {poetRemain > 0 ? `，还差 ${poetRemain} 首解锁「小诗人」` : '，已经解锁「小诗人」啦'}
         </div>
-        <Progress percent={poetPercent} size="small" strokeColor={gardenTokens.colors.primary} />
+        <Progress percent={poetPercent} size="small" strokeColor={palette.primary} />
       </Card>
 
       <div className={styles.sectionTitle}>今日古诗</div>
@@ -63,7 +48,7 @@ export default function PoemPage() {
             >
               <div className={styles.poemHeader}>
                 <div className={styles.poemTitle}>
-                  <BookOutlined style={{ color: gardenTokens.colors.primary }} />
+                  <BookOutlined className={styles.poemTitleIcon} />
                   《{poem.title}》
                 </div>
                 <div className={styles.poemAuthor}>{poem.author}</div>
@@ -73,9 +58,8 @@ export default function PoemPage() {
                 type="primary"
                 className={styles.reciteBtn}
                 style={{
-                  background: done ? gardenTokens.colors.success : gardenTokens.colors.primary,
-                  borderColor: done ? gardenTokens.colors.success : gardenTokens.colors.primary,
-                  minHeight: TOUCH_HEIGHT,
+                  background: done ? palette.success : palette.primary,
+                  borderColor: done ? palette.success : palette.primary,
                 }}
                 icon={done ? <CheckOutlined /> : <BookOutlined />}
                 onClick={() => handleRecite(poem.id, poem.title, poem.reward)}
