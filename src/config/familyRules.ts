@@ -38,7 +38,7 @@ export const TASK_RULES: TaskConfig[] = [
   },
   {
     id: 'sleep_penalty',
-    name: '未按时作息(晚于21:00)',
+    name: '未按时作息(晚于21:30)',
     type: 'spending',
     value: -20,
     unit: '积分',

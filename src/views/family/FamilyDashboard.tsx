@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Image, message, Badge, Popconfirm, Segmented } from 'antd';
+import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Image, message, Badge, Popconfirm, Segmented, Modal } from 'antd';
 import {
   PlusOutlined,
   MinusOutlined,
@@ -56,6 +56,7 @@ export default function FamilyDashboard() {
     loadLedger,
     refreshPending,
     approve,
+    approveMany,
     reject,
     removeRecord,
   } = useFamilyStore();
@@ -64,6 +65,11 @@ export default function FamilyDashboard() {
   // 当前分页（任务区 / 待审批 / 历史记录）—— 切到别的页面再回来要还在原来那页
   const [activeTab, setActiveTab] = useViewState('family.activeTab', 'tasks');
   const [form] = Form.useForm<CustomTaskForm>();
+  /** 驳回弹窗：正在驳回哪一条 + 家长写给孩子的那句话 */
+  const [rejectTarget, setRejectTarget] = useState<LedgerRecord | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejecting, setRejecting] = useState(false);
+  const [approvingAll, setApprovingAll] = useState(false);
 
   const isParent = role === 'parent';
 
@@ -207,7 +213,8 @@ export default function FamilyDashboard() {
       const recordId = await addLedgerRecord(
         task,
         undefined,
-        { status: isParent ? 'approved' : 'pending' }
+        // 家长自己记的账让服务端立刻入账，女儿提交的一律进待审批
+        { autoApprove: isParent }
       );
       await loadLedger();
       notifySuccess(task, recordId);
@@ -231,7 +238,7 @@ export default function FamilyDashboard() {
       const recordId = await addLedgerRecord(
         task,
         undefined,
-        { status: isParent ? 'approved' : 'pending' }
+        { autoApprove: isParent }
       );
       await loadLedger();
       form.resetFields();
@@ -271,13 +278,32 @@ export default function FamilyDashboard() {
     }
   };
 
-  /** 审批驳回 */
-  const handleReject = async (id: string) => {
+  /** 审批驳回：先让家长写一句原因，这句话会进女儿的通知 */
+  const handleReject = async () => {
+    if (!rejectTarget) return;
+    setRejecting(true);
     try {
-      await reject(id);
-      message.success('已驳回该申请');
+      await reject(rejectTarget.id, rejectReason.trim() || undefined);
+      message.success('已驳回，女儿会看到你的话');
+      setRejectTarget(null);
+      setRejectReason('');
     } catch (e) {
       message.error('操作失败，请重试');
+    } finally {
+      setRejecting(false);
+    }
+  };
+
+  /** 批量通过：一次把待审批全部入账（孩子一口气交好几条时最省事） */
+  const handleApproveAll = async () => {
+    setApprovingAll(true);
+    try {
+      await approveMany(pendingRecords.map((r) => r.id));
+      message.success(`已通过 ${pendingRecords.length} 条`);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '操作失败，请重试');
+    } finally {
+      setApprovingAll(false);
     }
   };
 
@@ -331,7 +357,7 @@ export default function FamilyDashboard() {
       await addLedgerRecord(
         task,
         { note: '结算兑现，余额清零' },
-        { status: 'approved' }
+        { autoApprove: true }
       );
       await loadLedger();
       message.success(`已兑现 ${amount} 积分，余额清零`);
@@ -579,7 +605,22 @@ export default function FamilyDashboard() {
       {pendingRecords.length === 0 ? (
         <EmptyState description="暂无待审批申请" />
       ) : (
-        <List
+        <>
+          <div className={styles.pendingHead}>
+            <span className={styles.pendingCount}>共 {pendingRecords.length} 条待审批</span>
+            <Popconfirm
+              title={`一次通过全部 ${pendingRecords.length} 条？`}
+              description="确认后才入账；要驳回的请单独处理"
+              okText="全部通过"
+              cancelText="再想想"
+              onConfirm={handleApproveAll}
+            >
+              <Button size="small" type="primary" loading={approvingAll} icon={<CheckCircleOutlined />}>
+                全部通过
+              </Button>
+            </Popconfirm>
+          </div>
+          <List
           dataSource={pendingRecords}
           renderItem={(record) => (
             <List.Item className={styles.recordItem}>
@@ -633,7 +674,14 @@ export default function FamilyDashboard() {
                   >
                     通过
                   </Button>
-                  <Button size="small" icon={<CloseCircleOutlined />} onClick={() => handleReject(record.id)}>
+                  <Button
+                    size="small"
+                    icon={<CloseCircleOutlined />}
+                    onClick={() => {
+                      setRejectTarget(record);
+                      setRejectReason('');
+                    }}
+                  >
                     驳回
                   </Button>
                 </div>
@@ -641,6 +689,7 @@ export default function FamilyDashboard() {
             </List.Item>
           )}
         />
+        </>
       )}
     </Card>
   );
@@ -795,6 +844,34 @@ export default function FamilyDashboard() {
           <BalanceTrend records={records} />
         </div>
       </div>
+
+      {/* ===== 驳回弹窗：写一句话给女儿，而不是点一下就走 ===== */}
+      <Modal
+        open={!!rejectTarget}
+        title={rejectTarget ? `驳回「${rejectTarget.task_name}」` : ''}
+        okText="确认驳回"
+        cancelText="取消"
+        okButtonProps={{ danger: true }}
+        confirmLoading={rejecting}
+        onOk={handleReject}
+        onCancel={() => {
+          setRejectTarget(null);
+          setRejectReason('');
+        }}
+        destroyOnHidden
+      >
+        <p className={styles.rejectHint}>
+          写一句为什么不行 —— 女儿会收到这句话；不写的话她只看到「已驳回」。
+        </p>
+        <Input.TextArea
+          value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+          placeholder="例如：照片看不清，重新拍一张"
+          rows={3}
+          maxLength={60}
+          showCount
+        />
+      </Modal>
 
       {/* ===== 任务打卡弹窗（照片与备注草稿由组件内部管理） ===== */}
       <CheckInModal

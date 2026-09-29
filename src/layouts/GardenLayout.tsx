@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Progress, Button } from 'antd';
-import { SunOutlined, FireOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Progress } from 'antd';
+import { SunOutlined, FireOutlined } from '@ant-design/icons';
 import { GARDEN_MENUS } from '../config/garden';
 import { useGardenStore } from '../store/useGardenStore';
 import { getGardenIcon } from '../components/garden/GardenIcon';
@@ -35,7 +35,8 @@ const PAGE_MAP: Record<string, React.ComponentType> = {
 export default function GardenLayout() {
   // 花园里选的是哪个子页也要跨页面切换保留（切去「家庭」再回来还停在原处）
   const [active, setActive] = useViewState('garden.activeMenu', 'tasks');
-  const { balance, tasks, completedCount, streakDays, init, resetTasks } = useGardenStore();
+  // 花园状态：任务是「今日任务」，跨天自动重置（见 store 里的 tasksDate）
+  const { balance, tasks, completedCount, streakDays, init } = useGardenStore();
   // 主题色（antd 属性拿不到 CSS 变量，只能从主题取）
   const palette = useThemePalette();
 
@@ -124,15 +125,6 @@ export default function GardenLayout() {
             <span className={styles.streakNum}>{streakDays}</span>
             <span className={styles.streakLabel}>天</span>
           </div>
-
-          <Button
-            size="small"
-            icon={<ReloadOutlined />}
-            className={styles.resetBtn}
-            onClick={resetTasks}
-          >
-            重置
-          </Button>
         </div>
       </div>
 

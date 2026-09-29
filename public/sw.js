@@ -11,13 +11,25 @@
  *   5. 同源静态资源（js/css/图片/字体/webmanifest）→ cache-first + 运行时写入缓存
  * ========================================================================== */
 
-/** 缓存版本号：改动缓存策略或需要强制刷新缓存时，把 v1 往上加 */
-const CACHE_VERSION = 'v1';
+/**
+ * 构建标识：注册时由 /sw.js?v=<构建标识> 传入（见 src/utils/swUpdate.ts 与
+ * vite.config.ts 注入的 __BUILD_ID__）。每次发布它都会变，于是缓存名随之变化，
+ * activate 阶段按 CACHE_PREFIX 把上一代缓存整批清掉。
+ * 直接访问 /sw.js（没有 ?v=，例如浏览器主动发起的更新检查）时回退为 v1。
+ */
+const BUILD_ID = new URL(self.location.href).searchParams.get('v') || 'v1';
+
+/**
+ * 缓存版本号：直接取构建标识（不再手改）。
+ * 注意不要再拼 CACHE_PREFIX——CACHE_NAME 已经会在下面拼一次，重复拼会得到
+ * sekainook-sekainook-xxx 这种双前缀。
+ */
+const CACHE_VERSION = BUILD_ID;
 
 /** 缓存名前缀：activate 阶段按此前缀清理旧版本缓存 */
 const CACHE_PREFIX = 'sekainook-';
 
-/** 当前生效的缓存名，例如 sekainook-v1 */
+/** 当前生效的缓存名，例如 sekainook-m1abcd23 */
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 
 /** Service Worker 自身路径：绝不缓存它，否则浏览器永远拿不到新版本 */

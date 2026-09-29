@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Input, Modal, message } from 'antd';
+import { Alert, Button, Input, Modal, message } from 'antd';
 import { CameraOutlined, PictureOutlined } from '@ant-design/icons';
 import { addLedgerRecord } from '../api/familyLedger';
 import { uploadImage } from '../api/upload';
@@ -39,6 +39,8 @@ export default function CheckInModal({
   const [uploading, setUploading] = useState(false);
   /** 记住上一次打卡的任务：换任务（或关闭再打开）时清空草稿 */
   const draftTaskId = useRef<string | null>(null);
+  /** 扣分任务（消费 / 罚款）：金额是负的，要显示扣多少、并要求写清原因 */
+  const isDeduct = !!task && task.value < 0;
 
   useEffect(() => {
     const id = task?.id ?? null;
@@ -81,6 +83,12 @@ export default function CheckInModal({
       return;
     }
 
+    // 扣分（消费 / 罚款）必须写清原因：这句话会原样出现在女儿的通知里
+    if (isDeduct && !note.trim()) {
+      message.warning('写一句原因，让女儿知道为什么扣分');
+      return;
+    }
+
     setUploading(true);
     let imageUrl: string | undefined;
     let uploadError: string | null = null;
@@ -101,7 +109,9 @@ export default function CheckInModal({
       const recordId = await addLedgerRecord(
         task,
         { note: note.trim() || undefined, imageUrl },
-        { status: isParent ? 'approved' : 'pending' }
+        // 审批状态不再由前端说了算：家长自己记的账走 autoApprove（服务端会立刻置为已入账），
+        // 女儿提交的一律进待审批
+        { autoApprove: isParent }
       );
       // 先关弹窗再刷新：网络慢时不要让人盯着转圈的弹窗
       close();
@@ -122,7 +132,13 @@ export default function CheckInModal({
       title={task ? `${isParent ? '打卡' : '申请打卡'}：${task.name}` : ''}
       onCancel={close}
       onOk={handleSubmit}
-      okText={isParent ? '确认打卡' : '提交申请'}
+      okText={
+        isParent
+          ? isDeduct
+            ? `确认扣 ${Math.abs(task?.value ?? 0)} ${task?.unit ?? '分'}`
+            : '确认打卡'
+          : '提交申请'
+      }
       cancelText="取消"
       confirmLoading={uploading}
       // 手机端键盘弹出时不要把弹窗顶出屏幕：贴顶 + 内容区自己滚动
@@ -130,6 +146,17 @@ export default function CheckInModal({
       styles={{ body: { maxHeight: '60vh', overflowY: 'auto' } }}
       destroyOnHidden
     >
+      {/* 最上面先把「这一下是多少分」说清楚：以前扣分弹窗里看不到金额 */}
+      {task && (
+        <Alert
+          style={{ marginBottom: 12 }}
+          type={isDeduct ? 'warning' : 'success'}
+          showIcon
+          message={`本次${isDeduct ? '扣' : '获得'} ${Math.abs(task.value)} ${task.unit}`}
+          description={task.description}
+        />
+      )}
+
       {/* 上方：拍照 / 相册 双入口 */}
       <div className={styles.modalSection}>
         <div className={styles.modalLabel}>
@@ -186,12 +213,12 @@ export default function CheckInModal({
       {/* 下方：备注 */}
       <div className={styles.modalSection}>
         <div className={styles.modalLabel}>
-          <PictureOutlined /> 备注
+          <PictureOutlined /> {isDeduct ? '为什么扣分（必填，女儿会看到）' : '备注'}
         </div>
         <Input.TextArea
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="填写任务备注（可选）"
+          placeholder={isDeduct ? '写清原因，例如：说好只看 30 分钟却看了一下午' : '填写任务备注（可选）'}
           rows={3}
           maxLength={200}
           showCount

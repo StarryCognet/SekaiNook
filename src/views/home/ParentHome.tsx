@@ -82,7 +82,10 @@ export default function ParentHome() {
   const planTarget = plans.reduce((sum, p) => sum + p.target, 0);
   const planPercent = planTarget > 0 ? Math.round((planCurrent / planTarget) * 100) : 0;
   // 均速基准：今天是一周的第几天，就该完成约几分之几
-  const expectedPercent = Math.round(((now.getDay() + 1) / 7) * 100);
+  // 均速基准：今天是一周的第几天，就该完成约几分之几（周一算第 1 天；以前用 getDay()，
+  // 周日算成第 1 天 → 基准只有 14%，周末永远显示「进度领先」）
+  const weekdayIndex = ((now.getDay() + 6) % 7) + 1;
+  const expectedPercent = Math.round((weekdayIndex / 7) * 100);
   const planBehind = planTarget > 0 && planPercent + 10 < expectedPercent;
 
   /** 去账本：顺手把 Tab 选到待审批 / 历史记录 */
@@ -107,7 +110,7 @@ export default function ParentHome() {
         value: -amount,
         unit: '元',
       };
-      await addLedgerRecord(task, { note: '结算兑现，余额清零' }, { status: 'approved' });
+      await addLedgerRecord(task, { note: '结算兑现，余额清零' }, { autoApprove: true });
       await loadLedger();
       message.success(`已兑现 ${amount} 积分，余额清零`);
     } catch (e) {

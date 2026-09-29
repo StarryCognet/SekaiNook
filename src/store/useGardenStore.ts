@@ -43,13 +43,13 @@ interface GardenStore {
   chineseDate: string;
   /** 最近一次「照顾花园」的自然日 */
   lastCareDate: string | null;
+  /** tasks / completedCount 所属的自然日（跨天要自动归零） */
+  tasksDate: string;
 
   /** 初始化（从 localStorage 恢复或使用默认） */
   init: () => void;
   /** 完成任务：增加阳光积分，更新完成状态 */
   completeTask: (taskId: string) => void;
-  /** 重置今日任务 */
-  resetTasks: () => void;
   /** 背会一首古诗：同日同诗只计一次；返回是否计入 */
   recitePoem: (poemId: string) => boolean;
   /** 语文练习打卡一次：计一次花园任务完成；返回是否计入 */
@@ -78,6 +78,7 @@ type PersistedGarden = Pick<
   | 'chineseSteps'
   | 'chineseDate'
   | 'lastCareDate'
+  | 'tasksDate'
 >;
 
 /** 本地日期键（YYYY-MM-DD） */
@@ -208,6 +209,7 @@ function toPersisted(state: GardenStore): PersistedGarden {
     chineseSteps: state.chineseSteps,
     chineseDate: state.chineseDate,
     lastCareDate: state.lastCareDate,
+    tasksDate: state.tasksDate,
   };
 }
 
@@ -242,6 +244,7 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
   chineseSteps: {},
   chineseDate: '',
   lastCareDate: null,
+  tasksDate: '',
 
   init: () => {
     const saved = loadState();
@@ -254,10 +257,13 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
     // 旧 state 没有这些字段时视为「今天还没有打卡记录」
     const samePoemDay = saved.poemDate === today;
     const sameChineseDay = saved.chineseDate === today;
+    // 今日任务跨天要自动归零：旧存档没有 tasksDate，一律当作「不是今天」，
+    // 于是第二天打开就是崭新的一天（以前会一直停在昨天「全部完成」的状态）
+    const sameTaskDay = saved.tasksDate === today;
 
     const next: PersistedGarden = {
       balance,
-      tasks: saved.tasks ?? GARDEN_TASKS,
+      tasks: sameTaskDay ? (saved.tasks ?? GARDEN_TASKS) : GARDEN_TASKS,
       badges: resolveBadges(saved.badges ?? GARDEN_BADGES, {
         totalCompleted,
         balance,
@@ -266,7 +272,7 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
         gardenCareDays,
       }),
       streakDays,
-      completedCount: toSafeCount(saved.completedCount),
+      completedCount: sameTaskDay ? toSafeCount(saved.completedCount) : 0,
       totalCompleted,
       lastActiveDate: saved.lastActiveDate ?? null,
       poemCount,
@@ -277,6 +283,7 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
       chineseSteps: sameChineseDay ? toSafeCountRecord(saved.chineseSteps) : {},
       chineseDate: today,
       lastCareDate: typeof saved.lastCareDate === 'string' ? saved.lastCareDate : null,
+      tasksDate: today,
     };
     set(next);
     // 回写一次：旧用户缺失的新字段被补成默认值，后续读取不再有 undefined
@@ -314,6 +321,8 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
       poemDate: today,
       chineseSteps: state.chineseDate === today ? state.chineseSteps : {},
       chineseDate: today,
+      // 今日任务这一批属于今天（跨天判断的基准）
+      tasksDate: today,
     };
     set(next);
     saveState(next);
@@ -447,17 +456,5 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
     set(next);
     saveState(next);
     return 'ok';
-  },
-
-  resetTasks: () => {
-    // 仅重置今日任务与今日计数，保留余额、累计数、连续天数、勋章、已购物品与今日打卡记录
-    const state = get();
-    const next: PersistedGarden = {
-      ...toPersisted(state),
-      tasks: GARDEN_TASKS,
-      completedCount: 0,
-    };
-    set(next);
-    saveState(next);
   },
 }));

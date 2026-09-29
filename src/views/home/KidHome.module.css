@@ -91,6 +91,13 @@
   opacity: 0.9;
 }
 
+/* 「阳光只能在花园里花」的一行小字：把两种钱说清楚，免得孩子以为能兑现 */
+.heroSunHint {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
 .heroChips {
   display: flex;
   flex-wrap: wrap;

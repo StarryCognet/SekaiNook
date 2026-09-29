@@ -21,5 +21,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   object.writeHttpMetadata(headers);
   headers.set('etag', object.httpEtag);
   headers.set('Access-Control-Allow-Origin', '*');
+  // 图片 key 由上传接口生成且不可变（tasks/<时间戳>-<随机>.<ext>），内容换不掉，
+  // 因此可以放心长缓存：省回源与流量，也不会出现「改了图还看到旧图」。
+  headers.set('Cache-Control', 'public, max-age=31536000, immutable');
   return new Response(object.body, { headers });
 };

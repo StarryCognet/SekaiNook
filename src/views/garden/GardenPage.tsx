@@ -16,9 +16,11 @@ const PLANTS = [
 export default function GardenPage() {
   // 进度条这类 antd 属性色到不了 CSS 变量，从当前主题调色板取
   const palette = useThemePalette();
-  const { completedCount, gardenCareDays, lastCareDate, careForGarden } = useGardenStore();
+  const { tasks, completedCount, gardenCareDays, lastCareDate, careForGarden } = useGardenStore();
   // 花园成长度基于今日完成任务数
-  const growth = Math.min(100, completedCount * 10);
+  // 成长度 = 今天任务的完成比例。以前写死 `completedCount * 10`，而任务只有 8 个，
+  // 于是全做完也只有 80%，孩子会觉得「明明做完了却没满」
+  const growth = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
   const today = todayKey();
   const caredToday = lastCareDate === today;

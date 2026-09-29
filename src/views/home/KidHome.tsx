@@ -147,6 +147,8 @@ export default function KidHome() {
           <span className={`num ${styles.heroSunValue}`}>{sunBalance}</span>
           <span className={styles.heroSunUnit}>阳光</span>
         </div>
+        {/* 两种钱要分清：阳光是花园里的游戏币，下面的积分才是能跟妈妈兑现的 */}
+        <div className={styles.heroSunHint}>花园里的阳光，只能在花园里花</div>
 
         <div className={styles.heroChips}>
           <span className={styles.heroChip}>
@@ -215,7 +217,9 @@ export default function KidHome() {
       <section className={styles.card}>
         <div className={styles.cardHead}>
           <span className={styles.cardTitle}>我的积分</span>
-          <span className={styles.cardExtra}>今天打卡 {todayCount} 次</span>
+          <span className={styles.cardExtra}>
+            攒够可以跟{momName}兑现 · 今天打卡 {todayCount} 次
+          </span>
         </div>
 
         <div className={styles.moneyRow}>

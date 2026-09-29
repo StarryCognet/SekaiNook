@@ -12,6 +12,8 @@ interface Env {
 }
 
 const LEDGER_STATUSES: readonly string[] = ['pending', 'approved', 'rejected'];
+/** 驳回理由长度上限 */
+const REASON_MAX_LENGTH = 60;
 
 /** 从图片 URL（.../api/images/<key>）中还原 R2 对象 key，非法则返回 null */
 function extractImageKey(imageUrl: string): string | null {
@@ -41,6 +43,10 @@ export const onRequestPatch: PagesFunction<Env> = async ({ params, request, env 
   if (typeof status !== 'string' || !LEDGER_STATUSES.includes(status)) {
     return Response.json({ error: 'status 非法' }, { status: 400 });
   }
+
+  // 驳回时家长可以留一句话，会原样带给女儿（比固定文案有用得多）
+  const reason =
+    typeof body.reason === 'string' ? body.reason.trim().slice(0, REASON_MAX_LENGTH) : '';
 
   // 先读原记录：既用于 404 判定，也用于给通知拼文案、判断状态是否真的变了
   const record = await env.DB.prepare(
@@ -79,7 +85,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ params, request, env 
           audience: 'child',
           type: 'rejected',
           title: `${mom}驳回了「${record.task_name}」`,
-          body: '看看哪里不对，改好可以再提交一次',
+          body: reason ? `${mom}说：${reason}` : '看看哪里不对，改好可以再提交一次',
           link: '/family',
           dedupeKey: `ledger:${id}:rejected:${record.status}`,
         },

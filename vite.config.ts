@@ -1,8 +1,20 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+/**
+ * 构建标识：每次构建（含 dev server 启动）生成一次，注入为全局常量 __BUILD_ID__。
+ * 用途：注册 Service Worker 时带上它（/sw.js?v=<id>），让 sw.js 的缓存名随构建变化。
+ * 这是「上线要刷好几次才更新」的根因修复——sw.js 由 public/ 原样拷贝，字节永不变化，
+ * 浏览器因此永远认为没有新 SW，activate 里的旧缓存清理也就从不执行。
+ */
+const BUILD_ID = Date.now().toString(36);
+
 // https://vitejs.dev/config/
 export default defineConfig({
+  // 构建时常量替换（dev 与 build 都会注入，见 src/vite-env.d.ts 的声明）
+  define: {
+    __BUILD_ID__: JSON.stringify(BUILD_ID),
+  },
   plugins: [react()],
   server: {
     port: 5173,

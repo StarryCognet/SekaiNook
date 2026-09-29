@@ -49,8 +49,10 @@ interface FamilyState {
   refreshPending: () => Promise<void>;
   /** 审批通过 */
   approve: (id: string) => Promise<void>;
-  /** 审批驳回 */
-  reject: (id: string) => Promise<void>;
+  /** 批量审批通过（逐条提交，最后统一刷新一次） */
+  approveMany: (ids: string[]) => Promise<void>;
+  /** 审批驳回（reason 会原样带给孩子看） */
+  reject: (id: string, reason?: string) => Promise<void>;
   /** 删除一条流水（仅家长），后端会一并删除关联图片 */
   removeRecord: (id: string) => Promise<void>;
 }
@@ -108,8 +110,18 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
     await get().loadLedger();
   },
 
-  reject: async (id) => {
-    await rejectRequest(id);
+  approveMany: async (ids) => {
+    // 一条失败不拖累其余：整批先跑完，再统一刷新一次账本
+    const results = await Promise.allSettled(ids.map((id) => approveRequest(id)));
+    await get().loadLedger();
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed > 0) {
+      throw new Error(`有 ${failed} 条没通过，请重试`);
+    }
+  },
+
+  reject: async (id, reason) => {
+    await rejectRequest(id, reason);
     await get().loadLedger();
   },
 

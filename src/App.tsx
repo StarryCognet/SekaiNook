@@ -4,6 +4,7 @@ import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import MainLayout from "./layouts/MainLayout";
 import RoleGate from "./components/RoleGate";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { PageLoading } from "./components/StateViews";
 import { useFamilyStore } from "./store/useFamilyStore";
 import { useThemeStore } from "./store/useThemeStore";
@@ -85,10 +86,13 @@ export default function App() {
   const themeConfig = useMemo(() => buildAntdTheme(themeId, hasBackground), [themeId, hasBackground]);
 
   return (
-    <ConfigProvider locale={zhCN} theme={themeConfig}>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </ConfigProvider>
+    // 最外层错误边界：渲染期异常（含懒加载 chunk 404）不再白屏，见 components/ErrorBoundary
+    <ErrorBoundary>
+      <ConfigProvider locale={zhCN} theme={themeConfig}>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </ConfigProvider>
+    </ErrorBoundary>
   );
 }

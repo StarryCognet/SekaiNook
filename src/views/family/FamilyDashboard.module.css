@@ -387,3 +387,23 @@
 .trendWrap {
   min-width: 0;
 }
+
+/* ===== 待审批：批量通过 + 驳回理由 ===== */
+.pendingHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pendingCount {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.rejectHint {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
