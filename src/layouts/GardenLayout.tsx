@@ -5,6 +5,7 @@ import { GARDEN_MENUS } from '../config/garden';
 import { useGardenStore } from '../store/useGardenStore';
 import { getGardenIcon } from '../components/garden/GardenIcon';
 import { useThemePalette } from '../store/useThemeStore';
+import { useKidName } from '../store/useSettingsStore';
 import { PageLoading } from '../components/StateViews';
 import { useViewState } from '../utils/useViewState';
 import styles from './GardenLayout.module.css';
@@ -39,6 +40,8 @@ export default function GardenLayout() {
   const { balance, tasks, completedCount, streakDays, init } = useGardenStore();
   // 主题色（antd 属性拿不到 CSS 变量，只能从主题取）
   const palette = useThemePalette();
+  // 孩子的昵称（设置里能改）—— 页面上别写死「小朋友」
+  const kidName = useKidName();
 
   // 初始化状态
   useEffect(() => {
@@ -98,8 +101,8 @@ export default function GardenLayout() {
 
         <div className={styles.topbarRight}>
           <div className={styles.userChip}>
-            <span className={styles.userAvatar}>小</span>
-            <span>小朋友</span>
+            <span className={styles.userAvatar}>{kidName.slice(0, 1)}</span>
+            <span>{kidName}</span>
           </div>
 
           <div className={styles.balanceChip}>

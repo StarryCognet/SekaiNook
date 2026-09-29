@@ -17,6 +17,7 @@ import CheckInModal from '../../components/CheckInModal';
 import RefreshFailedBar from '../../components/RefreshFailedBar';
 import { getGardenIcon } from '../../components/garden/GardenIcon';
 import { getTasksByType } from '../../config/familyRules';
+import { GARDEN_SHOP_ITEMS, toShopItemShortName } from '../../config/garden';
 import { useFamilyStore } from '../../store/useFamilyStore';
 import { useGardenStore } from '../../store/useGardenStore';
 import { useNotificationStore } from '../../store/useNotificationStore';
@@ -25,6 +26,7 @@ import { useThemePalette } from '../../store/useThemeStore';
 import { setViewState } from '../../utils/useViewState';
 import { checkTask, isTaskDone } from '../../utils/taskRules';
 import type { TaskConfig } from '../../types/family';
+import type { Badge } from '../../types/garden';
 import {
   dateText,
   greetingText,
@@ -49,6 +51,31 @@ const QUICK_TASK_IDS = [
 const SEEN_REJECTS_KEY = 'sekainook_kid_seen_rejects';
 const SEEN_REJECTS_MAX = 50;
 
+/** 新勋章只庆祝一次：本机记住已经庆祝过的勋章 id，免得每次打开都弹一遍 */
+const CELEBRATED_BADGES_KEY = 'sekainook_badges_celebrated';
+
+/** 读「已经庆祝过的勋章」；本机从来没记过时返回 null（= 第一次在这台设备上打开） */
+function readCelebratedBadges(): string[] | null {
+  try {
+    const raw = localStorage.getItem(CELEBRATED_BADGES_KEY);
+    if (raw === null) return null;
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    // 存档坏了就当作第一次打开：只记不弹，总比每次刷新弹一堆好
+    return null;
+  }
+}
+
+/** 记下已经庆祝过的勋章（存不了也不影响页面） */
+function writeCelebratedBadges(ids: string[]): void {
+  try {
+    localStorage.setItem(CELEBRATED_BADGES_KEY, JSON.stringify(ids));
+  } catch {
+    /* 本机存储不可用：退化成「不弹」 */
+  }
+}
+
 /**
  * 妹妹版首页：一眼看到「今天要做什么、我赚了多少、妈妈说了什么」。
  * 大数字、大按钮，全部操作一次点击可达。
@@ -63,6 +90,8 @@ export default function KidHome() {
     badges,
     streakDays,
     completedCount: gardenDone,
+    equippedAvatar,
+    equippedTitle,
     init: initGarden,
     completeTask,
   } = useGardenStore();
@@ -87,6 +116,8 @@ export default function KidHome() {
       return [];
     }
   });
+  // 刚解锁的勋章：有一个就弹一次（仪式感），点掉就没了
+  const [newBadge, setNewBadge] = useState<Badge | null>(null);
 
   // 花园存档放在 localStorage 里，原来只有花园页会 init —— 首页要用它，就得自己装一次
   useEffect(() => {
@@ -122,10 +153,30 @@ export default function KidHome() {
     };
   }, [refresh]);
 
+  // 解锁新勋章要有仪式感，但同一枚不能每次打开都弹：
+  // 本机记一份「已经庆祝过」的，第一次打开时把当时已有的都算作早就知道
+  useEffect(() => {
+    const earnedIds = badges.filter((b) => b.earned).map((b) => b.id);
+    const stored = readCelebratedBadges();
+    if (stored === null) {
+      writeCelebratedBadges(earnedIds);
+      return;
+    }
+    const fresh = badges.find((b) => b.earned && !stored.includes(b.id));
+    if (!fresh) return;
+    writeCelebratedBadges([...stored, fresh.id]);
+    setNewBadge(fresh);
+  }, [badges]);
+
   const gardenTotal = gardenTasks.length;
   const gardenPercent = gardenTotal > 0 ? Math.round((gardenDone / gardenTotal) * 100) : 0;
   const learningLeft = gardenTotal - gardenDone;
   const earnedBadges = badges.filter((b) => b.earned).length;
+  // 孩子买到的东西要看得见：头像框与称号从商城物品里翻出来（称号名字去掉「称号・」前缀）；
+  // 两样都没买时下面一个多余的元素都不渲染，视觉与以前完全一致
+  const avatarItem = GARDEN_SHOP_ITEMS.find((item) => item.id === equippedAvatar);
+  const titleItem = GARDEN_SHOP_ITEMS.find((item) => item.id === equippedTitle);
+  const titleText = titleItem ? toShopItemShortName(titleItem.name) : null;
 
   const week = recentSummary(records, 7, now);
   const todayCount = todayRecords(records, now).length;
@@ -198,11 +249,23 @@ export default function KidHome() {
       <section className={styles.hero}>
         <div className={styles.heroTop}>
           <div>
-            <div className={styles.heroGreeting}>{greetingText(now)}，{kidName}</div>
+            <div className={styles.heroGreeting}>
+              {greetingText(now)}，{kidName}
+              {/* 买到称号才挂这个胶囊：没买的时候不留空位 */}
+              {titleText && <span className={styles.heroTitleTag}>{titleText}</span>}
+            </div>
             <div className={styles.heroDate}>{dateText(now)}</div>
           </div>
-          <button className={styles.heroAvatar} onClick={() => goGarden('rewards')} aria-label="我的勋章">
+          <button
+            className={`${styles.heroAvatar} ${avatarItem ? styles.heroAvatarFramed : ''}`}
+            onClick={() => goGarden('rewards')}
+            aria-label="我的勋章"
+          >
             🏅
+            {/* 戴了头像框：右下角别上这件头像框自己的图标（太阳 / 星星） */}
+            {avatarItem && (
+              <span className={styles.heroAvatarBadge}>{getGardenIcon(avatarItem.icon)}</span>
+            )}
           </button>
         </div>
 
@@ -317,6 +380,15 @@ export default function KidHome() {
                 className={styles.taskItem}
                 onClick={() => {
                   completeTask(task.id);
+                  // store 会挡下重复打卡（含连点两次）：这时不能报喜，
+                  // 不然孩子以为又赚了一份阳光，翻过去数字却没变
+                  const done = useGardenStore
+                    .getState()
+                    .tasks.some((t) => t.id === task.id && t.done);
+                  if (!done) {
+                    message.info(`「${task.name}」今天已经完成过啦`);
+                    return;
+                  }
                   message.success(`+${task.reward} 阳光，${task.name}完成啦`);
                 }}
               >
@@ -418,6 +490,20 @@ export default function KidHome() {
           message.success(`已提交，等${momName}审批`);
         }}
       />
+      {/* 解锁新勋章的仪式感：压暗整屏，中间弹一张卡，点掉即收下 */}
+      {newBadge && (
+        <div className={styles.badgeCelebrate} role="dialog" aria-modal="true">
+          <div className={styles.badgeCelebrateCard}>
+            <div className={styles.badgeCelebrateIcon}>{getGardenIcon(newBadge.icon)}</div>
+            <div className={styles.badgeCelebrateLabel}>解锁新勋章</div>
+            <div className={styles.badgeCelebrateName}>{newBadge.name}</div>
+            <div className={styles.badgeCelebrateDesc}>{newBadge.description}</div>
+            <button className={styles.badgeCelebrateBtn} onClick={() => setNewBadge(null)}>
+              好耶，收下啦
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

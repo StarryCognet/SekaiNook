@@ -16,14 +16,15 @@ const PLANTS = [
 export default function GardenPage() {
   // 进度条这类 antd 属性色到不了 CSS 变量，从当前主题调色板取
   const palette = useThemePalette();
-  const { tasks, completedCount, gardenCareDays, lastCareDate, careForGarden } = useGardenStore();
+  const { tasks, completedCount, gardenCareDays, lastWaterDate, careForGarden } = useGardenStore();
   // 花园成长度基于今日完成任务数
   // 成长度 = 今天任务的完成比例。以前写死 `completedCount * 10`，而任务只有 8 个，
   // 于是全做完也只有 80%，孩子会觉得「明明做完了却没满」
   const growth = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
   const today = todayKey();
-  const caredToday = lastCareDate === today;
+  // 「今天浇过水没有」只看浇水自己的记录：做完任务不该把浇水按钮顶掉（以前会白点）
+  const caredToday = lastWaterDate === today;
   const careTarget = GARDEN_BADGE_TARGETS.plant_warrior;
   const carePercent = careTarget > 0 ? Math.min(100, Math.round((gardenCareDays / careTarget) * 100)) : 0;
 

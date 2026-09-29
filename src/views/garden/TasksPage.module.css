@@ -123,6 +123,7 @@
 
 /* 完成按钮（空心圆） */
 .taskCheck {
+  position: relative;
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -136,6 +137,14 @@
   font-size: 14px;
   flex-shrink: 0;
   transition: all 0.2s ease;
+}
+
+/* 手指点得准：看起来还是 28 的小圆圈，实际能点到的范围撑到 48×48 */
+.taskCheck::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
 }
 
 .taskCheck:hover {

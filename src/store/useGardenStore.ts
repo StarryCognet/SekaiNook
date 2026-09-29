@@ -5,6 +5,7 @@ import {
   GARDEN_POEMS,
   GARDEN_CHINESE_PRACTICES,
   GARDEN_SHOP_ITEMS,
+  GARDEN_MAX_DECOR,
 } from '../config/garden';
 import type { GardenTask, Badge } from '../types/garden';
 
@@ -33,6 +34,12 @@ interface GardenStore {
   gardenCareDays: number;
   /** 已拥有的商城物品 id */
   ownedItems: string[];
+  /** 正戴着的头像框 id（null = 没戴） */
+  equippedAvatar: string | null;
+  /** 正挂着的称号 id（null = 没挂） */
+  equippedTitle: string | null;
+  /** 正挂在花园里的装饰 id（最多 GARDEN_MAX_DECOR 件，先挂的排在前面） */
+  equippedDecor: string[];
   /** 今日已背会的古诗 id（自然日维度去重） */
   todayPoemIds: string[];
   /** todayPoemIds 所属的自然日 */
@@ -41,8 +48,17 @@ interface GardenStore {
   chineseSteps: Record<string, number>;
   /** chineseSteps 所属的自然日 */
   chineseDate: string;
-  /** 最近一次「照顾花园」的自然日 */
-  lastCareDate: string | null;
+  /** 今日实际入账的阳光（商城花掉的不算，跨天自动归零） */
+  todayEarned: number;
+  /** todayEarned 所属的自然日 */
+  todayEarnedDate: string;
+  /** 最近一次浇水的自然日：浇水的「今天浇过没有」只看它，完成任务不再顶掉 */
+  lastWaterDate: string | null;
+  /**
+   * 最近一次「照顾花园」的自然日（完成任务或浇水都算），只用于 gardenCareDays 按自然日去重。
+   * 「今天浇过水没有」由 lastWaterDate 单独管，两者分开维护。
+   */
+  lastGardenedDate: string | null;
   /** tasks / completedCount 所属的自然日（跨天要自动归零） */
   tasksDate: string;
 
@@ -58,6 +74,13 @@ interface GardenStore {
   careForGarden: () => boolean;
   /** 用阳光积分兑换商城物品 */
   buyItem: (itemId: string) => ShopBuyResult;
+  /**
+   * 戴上 / 挂上已经拥有的物品（按物品 category 落到对应字段）。
+   * 没拥有返回 'owned'（不生效），物品不存在返回 'unknown'。
+   */
+  equipItem: (itemId: string) => 'ok' | 'owned' | 'unknown';
+  /** 取下 / 摘下物品（没戴着也安全，什么也不做） */
+  unequipItem: (itemId: string) => void;
 }
 
 /** 需要持久化的字段（完整写入，避免局部保存覆盖其它字段） */
@@ -73,11 +96,17 @@ type PersistedGarden = Pick<
   | 'poemCount'
   | 'gardenCareDays'
   | 'ownedItems'
+  | 'equippedAvatar'
+  | 'equippedTitle'
+  | 'equippedDecor'
   | 'todayPoemIds'
   | 'poemDate'
   | 'chineseSteps'
   | 'chineseDate'
-  | 'lastCareDate'
+  | 'todayEarned'
+  | 'todayEarnedDate'
+  | 'lastWaterDate'
+  | 'lastGardenedDate'
   | 'tasksDate'
 >;
 
@@ -102,6 +131,11 @@ function toSafeCount(value: unknown): number {
 /** 安全读取字符串数组（兼容旧 state） */
 function toSafeStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+/** 安全读取「可能为空的字符串」（兼容旧 state）：空串与脏数据一律当作没设 */
+function toSafeId(value: unknown): string | null {
+  return typeof value === 'string' && value ? value : null;
 }
 
 /** 安全读取「每项打卡次数」映射（兼容旧 state） */
@@ -153,8 +187,9 @@ interface CompletionStats {
   completedCount: number;
   totalCompleted: number;
   lastActiveDate: string;
+  todayEarned: number;
   gardenCareDays: number;
-  lastCareDate: string;
+  lastGardenedDate: string;
 }
 
 /** 计算累计数据时所需的现有字段 */
@@ -165,14 +200,17 @@ type CounterSource = Pick<
   | 'completedCount'
   | 'totalCompleted'
   | 'lastActiveDate'
+  | 'todayEarned'
+  | 'todayEarnedDate'
   | 'gardenCareDays'
-  | 'lastCareDate'
+  | 'lastGardenedDate'
 >;
 
 /**
  * 计算完成一次花园活动后的累计数据。
  * countToday=false 表示今日任务数已经计过（不重复 +1，避免今日进度超过任务总数）。
- * 任意一天在花园里活动即算作一次「照顾花园」，同一天只记一次。
+ * 任意一天在花园里活动即算作一次「照顾花园」，同一天只记一次（按 lastGardenedDate 去重）。
+ * todayEarned 只累加入账的奖励，商城兑换（buyItem）不走这里，所以「花掉的」不会冲掉「赚到的」。
  */
 function nextCompletionStats(
   source: CounterSource,
@@ -186,8 +224,10 @@ function nextCompletionStats(
     completedCount: countToday ? source.completedCount + 1 : source.completedCount,
     totalCompleted: source.totalCompleted + 1,
     lastActiveDate: today,
-    gardenCareDays: source.lastCareDate === today ? source.gardenCareDays : source.gardenCareDays + 1,
-    lastCareDate: today,
+    todayEarned: (source.todayEarnedDate === today ? source.todayEarned : 0) + reward,
+    gardenCareDays:
+      source.lastGardenedDate === today ? source.gardenCareDays : source.gardenCareDays + 1,
+    lastGardenedDate: today,
   };
 }
 
@@ -204,11 +244,17 @@ function toPersisted(state: GardenStore): PersistedGarden {
     poemCount: state.poemCount,
     gardenCareDays: state.gardenCareDays,
     ownedItems: state.ownedItems,
+    equippedAvatar: state.equippedAvatar,
+    equippedTitle: state.equippedTitle,
+    equippedDecor: state.equippedDecor,
     todayPoemIds: state.todayPoemIds,
     poemDate: state.poemDate,
     chineseSteps: state.chineseSteps,
     chineseDate: state.chineseDate,
-    lastCareDate: state.lastCareDate,
+    todayEarned: state.todayEarned,
+    todayEarnedDate: state.todayEarnedDate,
+    lastWaterDate: state.lastWaterDate,
+    lastGardenedDate: state.lastGardenedDate,
     tasksDate: state.tasksDate,
   };
 }
@@ -239,11 +285,17 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
   poemCount: 0,
   gardenCareDays: 0,
   ownedItems: [],
+  equippedAvatar: null,
+  equippedTitle: null,
+  equippedDecor: [],
   todayPoemIds: [],
   poemDate: '',
   chineseSteps: {},
   chineseDate: '',
-  lastCareDate: null,
+  todayEarned: 0,
+  todayEarnedDate: '',
+  lastWaterDate: null,
+  lastGardenedDate: null,
   tasksDate: '',
 
   init: () => {
@@ -260,6 +312,19 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
     // 今日任务跨天要自动归零：旧存档没有 tasksDate，一律当作「不是今天」，
     // 于是第二天打开就是崭新的一天（以前会一直停在昨天「全部完成」的状态）
     const sameTaskDay = saved.tasksDate === today;
+    const sameEarnedDay = saved.todayEarnedDate === today;
+    // 浇水与照顾花园是两个口径：lastWaterDate 缺失（老存档）时当作「今天还没浇水」，
+    // 于是孩子当天还能浇一次；gardenCareDays 的去重基准改用 lastGardenedDate。
+    const lastWaterDate = toSafeId(saved.lastWaterDate);
+    // 这次改造前的存档只有 lastCareDate（那时任务完成也写它）：拿它当「最近一次照顾花园」的兜底
+    const legacyCareDate = (saved as Record<string, unknown>).lastCareDate;
+    const lastGardenedDate = toSafeId(saved.lastGardenedDate) ?? toSafeId(legacyCareDate);
+    // 老存档没有「今日入账」这个字段：拿今天已完成任务的奖励和兜底一次，
+    // 免得刚升级的那一天记录页显示 0（之后的每一笔入账会继续累加在上面）
+    const legacyEarned =
+      sameTaskDay && Array.isArray(saved.tasks)
+        ? saved.tasks.reduce((sum, task) => sum + (task?.done ? toSafeCount(task.reward) : 0), 0)
+        : 0;
 
     const next: PersistedGarden = {
       balance,
@@ -278,11 +343,17 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
       poemCount,
       gardenCareDays,
       ownedItems: toSafeStringArray(saved.ownedItems),
+      equippedAvatar: toSafeId(saved.equippedAvatar),
+      equippedTitle: toSafeId(saved.equippedTitle),
+      equippedDecor: toSafeStringArray(saved.equippedDecor).slice(0, GARDEN_MAX_DECOR),
       todayPoemIds: samePoemDay ? toSafeStringArray(saved.todayPoemIds) : [],
       poemDate: today,
       chineseSteps: sameChineseDay ? toSafeCountRecord(saved.chineseSteps) : {},
       chineseDate: today,
-      lastCareDate: typeof saved.lastCareDate === 'string' ? saved.lastCareDate : null,
+      todayEarned: sameEarnedDay ? toSafeCount(saved.todayEarned) : legacyEarned,
+      todayEarnedDate: today,
+      lastWaterDate,
+      lastGardenedDate,
       tasksDate: today,
     };
     set(next);
@@ -315,7 +386,9 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
       totalCompleted: stats.totalCompleted,
       lastActiveDate: stats.lastActiveDate,
       gardenCareDays: stats.gardenCareDays,
-      lastCareDate: stats.lastCareDate,
+      lastGardenedDate: stats.lastGardenedDate,
+      todayEarned: stats.todayEarned,
+      todayEarnedDate: today,
       // 跨天后今日打卡记录自动失效
       todayPoemIds: state.poemDate === today ? state.todayPoemIds : [],
       poemDate: today,
@@ -363,7 +436,9 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
       lastActiveDate: stats.lastActiveDate,
       poemCount,
       gardenCareDays: stats.gardenCareDays,
-      lastCareDate: stats.lastCareDate,
+      lastGardenedDate: stats.lastGardenedDate,
+      todayEarned: stats.todayEarned,
+      todayEarnedDate: today,
       todayPoemIds: [...todayPoemIds, poemId],
       poemDate: today,
       chineseSteps: state.chineseDate === today ? state.chineseSteps : {},
@@ -407,7 +482,9 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
       totalCompleted: stats.totalCompleted,
       lastActiveDate: stats.lastActiveDate,
       gardenCareDays: stats.gardenCareDays,
-      lastCareDate: stats.lastCareDate,
+      lastGardenedDate: stats.lastGardenedDate,
+      todayEarned: stats.todayEarned,
+      todayEarnedDate: today,
       todayPoemIds: state.poemDate === today ? state.todayPoemIds : [],
       poemDate: today,
       chineseSteps: { ...steps, [practiceId]: done + 1 },
@@ -421,13 +498,17 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
   careForGarden: () => {
     const state = get();
     const today = toDateKey(new Date());
-    if (state.lastCareDate === today) return false;
+    // 「今天浇过水没有」只看浇水自己的记录：做完任务不再把浇水顶掉（以前会白点）
+    if (state.lastWaterDate === today) return false;
 
-    const gardenCareDays = state.gardenCareDays + 1;
+    // 任务与浇水都算「照顾花园」，但同一天只累加一天（「植物战士」勋章口径不变）
+    const gardenCareDays =
+      state.lastGardenedDate === today ? state.gardenCareDays : state.gardenCareDays + 1;
     const next: PersistedGarden = {
       ...toPersisted(state),
+      lastWaterDate: today,
+      lastGardenedDate: today,
       gardenCareDays,
-      lastCareDate: today,
       badges: resolveBadges(state.badges, {
         totalCompleted: state.totalCompleted,
         balance: state.balance,
@@ -456,5 +537,50 @@ export const useGardenStore = create<GardenStore>((set, get) => ({
     set(next);
     saveState(next);
     return 'ok';
+  },
+
+  equipItem: (itemId) => {
+    const state = get();
+    const item = GARDEN_SHOP_ITEMS.find((i) => i.id === itemId);
+    if (!item) return 'unknown';
+    // 没买过就不让用：商城页只给已拥有的物品显示「戴上 / 挂上」
+    if (!state.ownedItems.includes(itemId)) return 'owned';
+
+    const next: PersistedGarden = { ...toPersisted(state) };
+    if (item.category === 'avatar') {
+      // 头像框一次只戴一个：换上新的就把旧的换下来
+      next.equippedAvatar = itemId;
+    } else if (item.category === 'title') {
+      // 称号同理，一次只挂一个
+      next.equippedTitle = itemId;
+    } else {
+      // 装饰可以同时挂好几件：先去掉可能重复的同一件，再挂到最后
+      const rest = state.equippedDecor.filter((id) => id !== itemId);
+      // 挂满 GARDEN_MAX_DECOR 件时，替换掉最早挂上的那件（数组头部）
+      const kept =
+        rest.length >= GARDEN_MAX_DECOR ? rest.slice(rest.length - (GARDEN_MAX_DECOR - 1)) : rest;
+      next.equippedDecor = [...kept, itemId];
+    }
+    set(next);
+    saveState(next);
+    return 'ok';
+  },
+
+  unequipItem: (itemId) => {
+    const state = get();
+    const item = GARDEN_SHOP_ITEMS.find((i) => i.id === itemId);
+    // 不认识的物品直接忽略，页面不会因此崩
+    if (!item) return;
+
+    const next: PersistedGarden = { ...toPersisted(state) };
+    if (item.category === 'avatar') {
+      if (state.equippedAvatar === itemId) next.equippedAvatar = null;
+    } else if (item.category === 'title') {
+      if (state.equippedTitle === itemId) next.equippedTitle = null;
+    } else {
+      next.equippedDecor = state.equippedDecor.filter((id) => id !== itemId);
+    }
+    set(next);
+    saveState(next);
   },
 }));

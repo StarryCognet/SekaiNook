@@ -102,6 +102,25 @@ export const GARDEN_SHOP_ITEMS: GardenShopItem[] = [
   { id: 'decor_lantern', name: '装饰・星星灯串', cost: 200, icon: 'star', desc: '夜里给花园挂上小灯', category: 'decor' },
 ];
 
+/**
+ * 今日任务全部完成能拿到的阳光总数。
+ * 由 GARDEN_TASKS 的 reward 求和算出（现在是 110），以后改任务奖励这里自动跟着变，
+ * 页面与文案里不要再写死一个数字。
+ */
+export const GARDEN_DAILY_TASK_REWARD = GARDEN_TASKS.reduce((sum, task) => sum + task.reward, 0);
+
+/** 花园里同时挂着的装饰上限：挂满之后再挂新的，替换掉最早挂上的那件 */
+export const GARDEN_MAX_DECOR = 3;
+
+/** 商品名里的分类前缀分隔符（如「称号・小诗人」里的那个点） */
+const SHOP_ITEM_NAME_SEPARATOR = '\u30FB';
+
+/** 去掉商品名里的分类前缀：孩子看到的就只是「小诗人」「彩虹花架」 */
+export function toShopItemShortName(name: string): string {
+  const index = name.indexOf(SHOP_ITEM_NAME_SEPARATOR);
+  return index >= 0 ? name.slice(index + 1) : name;
+}
+
 /** 累计型勋章的进度目标（id -> 目标值） */
 export const GARDEN_BADGE_TARGETS: Record<string, number> = {
   poet: 10,

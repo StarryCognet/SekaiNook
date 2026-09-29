@@ -79,6 +79,48 @@
   color: var(--color-text);
 }
 
+/* ===== 花园里多了什么（已挂上的装饰） ===== */
+.decorCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.decorTitle {
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.decorList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.decorItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--tint-brand-bg);
+  color: var(--tint-brand-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.decorIcon {
+  display: inline-flex;
+  font-size: 15px;
+}
+
+.decorName {
+  line-height: 1;
+}
+
 /* ===== 今日进度 / 小贴士 ===== */
 .progressCard,
 .tipCard {

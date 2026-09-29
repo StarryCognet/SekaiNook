@@ -1,12 +1,17 @@
 import { Card, List, Tag } from 'antd';
 import { CheckCircleOutlined, SunOutlined } from '@ant-design/icons';
-import { useGardenStore } from '../../store/useGardenStore';
+import { todayKey, useGardenStore } from '../../store/useGardenStore';
 import styles from './RecordsPage.module.css';
 
 /** 学习记录页面 */
 export default function RecordsPage() {
-  const { tasks, completedCount } = useGardenStore();
+  const { tasks, completedCount, todayEarned, todayEarnedDate } = useGardenStore();
   const doneTasks = tasks.filter((t) => t.done);
+  // 「获得阳光」按今天实际入账的奖励求和：背诗、语文练习都可能一天入账多次
+  // （任务本身只记一次奖励），以前按任务固定奖励求和会和真实到手的对不上。
+  // 商城兑换只扣余额、不动 todayEarned，所以「赚到的」与「花掉的」不会互相污染。
+  // 存档里的日期不是今天（跨天还没重置）时一律按 0 算。
+  const earnedToday = todayEarnedDate === todayKey() ? todayEarned : 0;
 
   return (
     <div className={styles.records}>
@@ -22,7 +27,7 @@ export default function RecordsPage() {
         <div className={styles.summaryItem}>
           <div className={styles.summaryLabel}>获得阳光</div>
           <div className={`num ${styles.summaryValue} ${styles.summaryValueWarm}`}>
-            {doneTasks.reduce((sum, t) => sum + t.reward, 0)}
+            {earnedToday}
           </div>
           <div className={styles.summarySub}>积分</div>
         </div>

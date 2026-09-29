@@ -58,7 +58,15 @@ const RECENT_LOG_COUNT = 3;
  *   版本日志默认收起（只看最新 3 个），展开后顶部与底部各有收起按钮。
  */
 export default function SettingsPage() {
-  const { role, setRole, getParentPin, setParentPin } = useFamilyStore();
+  const {
+    role,
+    setRole,
+    verifyParentPin,
+    setParentPin,
+    pinLockRemainingMs,
+    pinAttemptsLeft,
+    hasCustomParentPin,
+  } = useFamilyStore();
   const { names, ready: namesReady, save: saveNames } = useSettingsStore();
   // 主题（本机）与背景图（跨设备同步）
   const { themeId, setThemeId, background, saveBackground } = useThemeStore();
@@ -80,6 +88,10 @@ export default function SettingsPage() {
   const [oldPin, setOldPin] = useState("");
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
+
+  // 口令校验中（异步比对摘要）与剩余锁定秒数（0 = 未锁定）
+  const [pinChecking, setPinChecking] = useState(false);
+  const [pinLockSeconds, setPinLockSeconds] = useState(0);
 
   // 打卡图片清理（家长）
   const [scanning, setScanning] = useState(false);
@@ -161,43 +173,105 @@ export default function SettingsPage() {
   useBackButton(pinModalOpen, () => setPinModalOpen(false));
   useBackButton(changePinOpen, () => setChangePinOpen(false));
 
+  // 锁定中每秒刷新剩余秒数；剩余时间读的是 localStorage，刷新页面也绕不过去
+  useEffect(() => {
+    if (pinLockSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setPinLockSeconds(Math.ceil(pinLockRemainingMs() / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [pinLockSeconds, pinLockRemainingMs]);
+
+  /** 距解锁的剩余秒数（0 = 未锁定）。剩余时间存在 localStorage，刷新页面也绕不过去 */
+  const lockSecondsLeft = () => Math.ceil(pinLockRemainingMs() / 1000);
+
+  /**
+   * 口令校验失败的统一提示：锁定中只说要等多久，否则提示还剩几次机会。
+   * 两种情况都不透露任何关于正确口令的信息。
+   */
+  const warnPinFailed = (label: string) => {
+    const left = lockSecondsLeft();
+    if (left > 0) {
+      setPinLockSeconds(left);
+      message.warning(`${label}错得太多次，请等 ${left} 秒再试`);
+      return;
+    }
+    message.error(`${label}不对，还可以试 ${pinAttemptsLeft()} 次`);
+  };
+
   /** 身份切换：切到家长需验证口令，切到小孩直接切换 */
   const handleRoleChange = (value: string | number) => {
     const next = value as FamilyRole;
     if (next === "parent" && role === "child") {
       setPinInput("");
+      // 上次锁定可能一直持续到刷新之后，开弹窗时就把倒计时同步进来
+      setPinLockSeconds(lockSecondsLeft());
       setPinModalOpen(true);
       return;
     }
     setRole(next);
   };
 
-  /** 验证口令并切换为家长 */
-  const handlePinConfirm = () => {
-    if (pinInput === getParentPin()) {
+  /** 验证口令并切换为家长（异步校验 + 失败锁定） */
+  const handlePinConfirm = async () => {
+    if (pinChecking) return;
+    const left = lockSecondsLeft();
+    if (left > 0) {
+      setPinLockSeconds(left);
+      message.warning(`口令已锁定，请等 ${left} 秒再试`);
+      return;
+    }
+
+    setPinChecking(true);
+    let ok = false;
+    try {
+      ok = await verifyParentPin(pinInput);
+    } finally {
+      // 校验抛错（例如存储不可用）也要把 loading 收掉，不能卡住按钮
+      setPinChecking(false);
+    }
+    if (ok) {
       setRole("parent");
       setPinModalOpen(false);
       message.success("已切换为家长");
-    } else {
-      message.error("口令错误");
+      return;
     }
+    warnPinFailed("口令");
   };
 
-  /** 修改家长口令 */
-  const handleChangePin = () => {
-    if (oldPin !== getParentPin()) {
-      message.error("原口令错误");
+  /** 修改家长口令（原口令走同一套异步校验，试错一样会被锁定） */
+  const handleChangePin = async () => {
+    if (pinChecking) return;
+    const left = lockSecondsLeft();
+    if (left > 0) {
+      setPinLockSeconds(left);
+      message.warning(`口令已锁定，请等 ${left} 秒再试`);
       return;
     }
-    if (newPin.length < 4 || newPin.length > 8) {
-      message.error("新口令需为 4-8 位");
+
+    setPinChecking(true);
+    try {
+      // 先确认身份，不通过就不碰新口令
+      if (!(await verifyParentPin(oldPin))) {
+        warnPinFailed("原口令");
+        return;
+      }
+      if (newPin.length < 4 || newPin.length > 8) {
+        message.error("新口令需为 4-8 位");
+        return;
+      }
+      if (newPin !== confirmPin) {
+        message.error("两次输入的新口令不一致");
+        return;
+      }
+      await setParentPin(newPin);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "口令保存失败，请重试");
       return;
+    } finally {
+      setPinChecking(false);
     }
-    if (newPin !== confirmPin) {
-      message.error("两次输入的新口令不一致");
-      return;
-    }
-    setParentPin(newPin);
+
     setChangePinOpen(false);
     setOldPin("");
     setNewPin("");
@@ -583,7 +657,10 @@ export default function SettingsPage() {
               <div className={styles.infoText}>
                 <div className={styles.appName}>家长口令</div>
                 <div className={styles.appDesc}>
-                  切到家长身份要输它；出厂是 1234，建议改成只有你知道的
+                  切到家长身份要输它；
+                  {hasCustomParentPin()
+                    ? "已经改成你自己的口令了（忘了只能清掉这台手机的浏览器数据重来）"
+                    : "现在还是出厂口令 1234，建议改成只有你知道的"}
                 </div>
               </div>
             </div>
@@ -595,6 +672,8 @@ export default function SettingsPage() {
                 setOldPin("");
                 setNewPin("");
                 setConfirmPin("");
+                // 上次锁定可能一直持续到刷新之后，开弹窗时就把倒计时同步进来
+                setPinLockSeconds(lockSecondsLeft());
                 setChangePinOpen(true);
               }}
             >
@@ -746,6 +825,8 @@ export default function SettingsPage() {
         onCancel={() => setPinModalOpen(false)}
         okText="确认"
         cancelText="取消"
+        confirmLoading={pinChecking}
+        okButtonProps={{ disabled: pinLockSeconds > 0 }}
         destroyOnHidden
         style={{ top: 24 }}
       >
@@ -756,11 +837,16 @@ export default function SettingsPage() {
               value={pinInput}
               onChange={(e) => setPinInput(e.target.value)}
               maxLength={8}
+              disabled={pinLockSeconds > 0}
               onPressEnter={handlePinConfirm}
             />
           </Form.Item>
         </Form>
-        <div className={styles.pinHint}>口令不正确将无法切换到家长模式</div>
+        <div className={styles.pinHint}>
+          {pinLockSeconds > 0
+            ? `口令锁定中，请等 ${pinLockSeconds} 秒再试`
+            : "口令不正确将无法切换到家长模式"}
+        </div>
       </Modal>
 
       {/* 修改家长口令弹窗 */}
@@ -771,6 +857,8 @@ export default function SettingsPage() {
         onCancel={() => setChangePinOpen(false)}
         okText="保存"
         cancelText="取消"
+        confirmLoading={pinChecking}
+        okButtonProps={{ disabled: pinLockSeconds > 0 }}
         destroyOnHidden
         style={{ top: 24 }}
       >
@@ -781,6 +869,7 @@ export default function SettingsPage() {
               value={oldPin}
               onChange={(e) => setOldPin(e.target.value)}
               maxLength={8}
+              disabled={pinLockSeconds > 0}
             />
           </Form.Item>
           <Form.Item label="新口令">
@@ -789,6 +878,7 @@ export default function SettingsPage() {
               value={newPin}
               onChange={(e) => setNewPin(e.target.value)}
               maxLength={8}
+              disabled={pinLockSeconds > 0}
             />
           </Form.Item>
           <Form.Item label="确认新口令">
@@ -797,11 +887,16 @@ export default function SettingsPage() {
               value={confirmPin}
               onChange={(e) => setConfirmPin(e.target.value)}
               maxLength={8}
+              disabled={pinLockSeconds > 0}
               onPressEnter={handleChangePin}
             />
           </Form.Item>
         </Form>
-        <div className={styles.pinHint}>出厂口令为 1234，请尽快修改</div>
+        <div className={styles.pinHint}>
+          {pinLockSeconds > 0
+            ? `口令锁定中，请等 ${pinLockSeconds} 秒再试`
+            : "出厂口令为 1234，请尽快修改"}
+        </div>
       </Modal>
     </div>
   );

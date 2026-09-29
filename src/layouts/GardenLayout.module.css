@@ -259,30 +259,37 @@
 
 /* ===== 移动端 ===== */
 @media (max-width: 768px) {
+  /* 手机上「三层说同一件事」的头部收掉两层：App 顶栏的胶囊已经写着
+     「花园 · 当前页」，这里再摆一遍品牌区和页面名只是占掉孩子的屏幕。
+     留下真正有信息的那排数字（阳光 / 进度 / 连续天数），菜单保持一行横滑。 */
   .brand {
-    padding: 12px;
-    gap: 10px;
+    display: none;
   }
 
-  .logo {
-    width: 44px;
-    height: 44px;
+  .topbarLeft {
+    display: none;
   }
 
-  .logoText {
-    font-size: 15px;
+  .userChip {
+    display: none;
   }
 
-  .title {
-    font-size: 17px;
+  .topbar {
+    padding: 8px 10px;
+    gap: 8px;
   }
 
-  .subtitle {
-    font-size: 12px;
+  .topbarRight {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 8px;
   }
 
-  .brandSun {
-    font-size: 30px;
+  .balanceChip,
+  .streakChip,
+  .progressChip {
+    padding: 6px 10px;
   }
 
   .nav {
@@ -290,11 +297,18 @@
     overflow-x: auto;
     padding: 6px;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
 
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 手指点得准：整块至少 44 像素高 */
   .navItem {
     flex-shrink: 0;
-    padding: 6px 10px;
+    min-height: 44px;
+    padding: 8px 12px;
     font-size: 13px;
   }
 
@@ -304,19 +318,8 @@
     font-size: 13px;
   }
 
-  .topbar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .topbarRight {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
   .progressChip {
     flex: 1;
-    min-width: 160px;
+    min-width: 0;
   }
 }

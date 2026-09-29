@@ -43,6 +43,55 @@
   opacity: 0.7;
 }
 
+/* ===== 现在戴着 / 挂着的（顶部一眼看清买过的东西） ===== */
+.wearingCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.wearingTitle {
+  margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.wearingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.wearingLabel {
+  flex-shrink: 0;
+  width: 52px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.wearingValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.wearingIcon {
+  display: inline-flex;
+  font-size: 14px;
+  color: var(--color-primary);
+}
+
+.wearingEmpty {
+  color: var(--color-text-tertiary);
+}
+
 /* ===== 分类区块 ===== */
 .categoryBlock {
   display: flex;
@@ -79,6 +128,13 @@
 .itemOwned {
   border: 2px solid var(--color-success);
   background: var(--color-surface-soft);
+}
+
+/* 正在用：在已拥有的基础上再套一圈品牌色光边，一眼看出哪个是当前生效的 */
+.itemInUse {
+  border: 2px solid var(--color-success);
+  background: var(--color-surface-soft);
+  box-shadow: 0 0 0 3px var(--tint-brand-bg), var(--shadow-card);
 }
 
 /* 阳光不足：虚线描边，压暗不抢眼 */

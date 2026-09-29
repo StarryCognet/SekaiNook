@@ -25,6 +25,13 @@ export default function TasksPage() {
 
   const handleComplete = (taskId: string, name: string, reward: number) => {
     completeTask(taskId);
+    // store 会挡下「今天已经做过」的重复打卡（含连点两次），这时不能再报喜 ——
+    // 否则孩子以为又赚了一份阳光，刷新后数字却没变，比不报还糟
+    const done = useGardenStore.getState().tasks.some((task) => task.id === taskId && task.done);
+    if (!done) {
+      message.info(`「${name}」今天已经完成过啦`);
+      return;
+    }
     message.success(`+${reward} 阳光！${name}完成啦`);
   };
 
