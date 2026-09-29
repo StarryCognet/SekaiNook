@@ -279,7 +279,7 @@ export default function SettingsPage() {
             <Input
               value={nicknameInput}
               maxLength={MAX_NAME_LENGTH}
-              placeholder={isParent ? "例如：妹妹" : "例如：老妈"}
+              placeholder={isParent ? "例如：宝贝" : "例如：老妈"}
               onChange={(e) => setNicknameInput(e.target.value)}
             />
           </label>
