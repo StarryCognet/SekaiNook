@@ -1,84 +1,167 @@
+/* ============================================================
+   女儿首页 —— 女神异闻录 3 Reload（P3R）风
+   深蓝墨底 + 青色霓虹 + 斜切几何 + 大写英文小标
+   参考要素：午夜蓝底、青蓝高光、硬边框、斜纹、发光数字
+   ============================================================ */
+
 .page {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding-bottom: 8px;
+  /* 铺满整块内容区（含底部导航那一带），让墨蓝底一直延到屏幕底 */
+  margin: -12px;
+  margin-bottom: calc(-1 * (var(--bottom-nav-space) + env(safe-area-inset-bottom)));
+  padding: 14px 12px calc(var(--bottom-nav-space) + env(safe-area-inset-bottom) + 8px);
+  min-height: 100%;
+  overflow: hidden;
+  color: #eaf4ff;
+  background:
+    radial-gradient(circle at 86% -8%, #16436f 0%, rgba(10, 22, 48, 0) 52%),
+    radial-gradient(circle at -10% 104%, #0f2b52 0%, rgba(5, 10, 24, 0) 58%),
+    linear-gradient(180deg, #08142c 0%, #050a18 100%);
 }
 
-/* 顶部渐变头图（天空蓝主色：女儿这边整页以蓝为主） */
+/* 右上角斜排线（P3R 界面里的斜切纹理） */
+.page::before {
+  content: '';
+  position: absolute;
+  top: -30px;
+  right: -70px;
+  width: 230px;
+  height: 230px;
+  transform: rotate(16deg);
+  background: repeating-linear-gradient(
+    112deg,
+    rgba(43, 217, 255, 0.16) 0 3px,
+    rgba(43, 217, 255, 0) 3px 13px
+  );
+  pointer-events: none;
+}
+
+/* ===== 顶部头图 ===== */
 .hero {
   position: relative;
+  z-index: 1;
   overflow: hidden;
-  padding: 18px 18px 16px;
-  border-radius: 20px;
-  color: #fff;
-  background: linear-gradient(135deg, #5eb3f6 0%, #3f8ae0 55%, #2f6fcc 100%);
-  box-shadow: 0 8px 24px rgba(63, 138, 224, 0.28);
+  padding: 16px 16px 14px 20px;
+  border: 1px solid rgba(43, 217, 255, 0.34);
+  border-radius: 4px;
+  background: linear-gradient(118deg, #0e2c58 0%, #071633 58%, #050e22 100%);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.45),
+    inset 0 0 44px rgba(43, 217, 255, 0.07);
 }
 
+/* 左侧那道青色竖条 */
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5px;
+  background: linear-gradient(180deg, #7fe8ff 0%, #2bd9ff 45%, #0a63b8 100%);
+}
+
+/* 右上角的青色弧光 */
 .hero::after {
   content: '';
   position: absolute;
-  top: -70px;
-  right: -50px;
-  width: 180px;
-  height: 180px;
+  top: -80px;
+  right: -60px;
+  width: 190px;
+  height: 190px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(43, 217, 255, 0.28);
+  background: radial-gradient(circle, rgba(43, 217, 255, 0.16) 0%, rgba(43, 217, 255, 0) 70%);
 }
 
 .heroTop {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
 }
 
-.heroGreeting {
-  font-size: 20px;
+.heroEyebrow {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 1px 8px 2px;
+  border-left: 3px solid #2bd9ff;
+  background: rgba(43, 217, 255, 0.12);
+  color: #7fe8ff;
+  font-size: 10px;
   font-weight: 700;
+  letter-spacing: 3px;
+}
+
+.heroGreeting {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 18px rgba(43, 217, 255, 0.45);
 }
 
 .heroDate {
-  margin-top: 2px;
-  font-size: 12px;
-  opacity: 0.85;
+  margin-top: 3px;
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  color: #8fb6dd;
 }
 
 .heroAvatar {
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.22);
-  font-size: 22px;
-  line-height: 1;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(43, 217, 255, 0.5);
+  border-radius: 3px;
+  background: rgba(43, 217, 255, 0.1);
+  color: #2bd9ff;
+  font-size: 20px;
   cursor: pointer;
 }
 
 .heroSun {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: baseline;
   gap: 6px;
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .heroSunIcon {
-  font-size: 22px;
+  font-size: 20px;
+  color: #2bd9ff;
+  filter: drop-shadow(0 0 8px rgba(43, 217, 255, 0.7));
 }
 
 .heroSunValue {
-  font-size: 42px;
-  font-weight: 700;
+  font-size: 44px;
+  font-weight: 800;
   line-height: 1;
   letter-spacing: -1px;
+  text-shadow:
+    0 0 24px rgba(43, 217, 255, 0.65),
+    0 0 4px rgba(255, 255, 255, 0.6);
 }
 
 .heroSunUnit {
-  font-size: 13px;
-  opacity: 0.9;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #7fe8ff;
 }
 
 .heroChips {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -89,55 +172,83 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 12px 4px 14px;
+  clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%);
+  background: rgba(43, 217, 255, 0.14);
+  color: #d8f4ff;
   font-size: 12px;
+  font-weight: 600;
 }
 
-/* 21 点提醒条 */
+/* 21 点提醒条（暗底 + 琥珀色警示） */
 .alertBar {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   width: 100%;
   padding: 12px 14px;
-  border: none;
-  border-radius: 14px;
-  background: #fff3d6;
-  color: #8a5a00;
+  border: 1px solid rgba(255, 210, 63, 0.45);
+  border-radius: 3px;
+  background: linear-gradient(100deg, rgba(255, 210, 63, 0.18), rgba(255, 210, 63, 0.04));
+  color: #ffd76a;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(245, 166, 35, 0.22);
 }
 
-/* 通用卡片 */
+/* ===== 通用卡片 ===== */
 .card {
+  position: relative;
+  z-index: 1;
   padding: 14px;
-  border-radius: 18px;
-  background: var(--color-surface);
-  box-shadow: 0 4px 16px rgba(63, 138, 224, 0.14);
+  border: 1px solid rgba(43, 217, 255, 0.18);
+  border-radius: 4px;
+  background: linear-gradient(160deg, rgba(13, 32, 64, 0.9) 0%, rgba(7, 16, 34, 0.92) 100%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+/* 卡片左上角那道青色短线 */
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28px;
+  height: 2px;
+  background: linear-gradient(90deg, #2bd9ff 0%, rgba(43, 217, 255, 0) 100%);
 }
 
 .cardHead {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 10px;
 }
 
 .cardTitle {
   font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #f2f8ff;
+}
+
+.cardTitleEn {
+  margin-left: 7px;
+  color: #2bd9ff;
+  font-size: 9px;
   font-weight: 700;
-  color: #2f3f5f;
+  letter-spacing: 2.4px;
 }
 
 .cardExtra {
   font-size: 12px;
-  color: #8a97b0;
+  color: #8fb6dd;
 }
 
 .cardLink {
@@ -147,12 +258,14 @@
   gap: 4px;
   width: 100%;
   margin-top: 10px;
-  padding: 6px 0;
-  border: none;
-  background: none;
-  color: #3f8ae0;
-  font-size: 13px;
-  font-weight: 600;
+  padding: 7px 0;
+  border: 1px solid rgba(43, 217, 255, 0.3);
+  border-radius: 2px;
+  background: rgba(43, 217, 255, 0.07);
+  color: #7fe8ff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
   cursor: pointer;
 }
 
@@ -160,10 +273,10 @@
   padding: 14px 0 6px;
   text-align: center;
   font-size: 13px;
-  color: #8a97b0;
+  color: #9fc0e0;
 }
 
-/* 今日学习任务 */
+/* ===== 今日学习任务 ===== */
 .taskList {
   display: flex;
   flex-direction: column;
@@ -177,8 +290,9 @@
   gap: 10px;
   padding: 10px 12px;
   border: none;
-  border-radius: 14px;
-  background: #eaf4ff;
+  border-left: 3px solid rgba(43, 217, 255, 0.55);
+  border-radius: 2px;
+  background: rgba(43, 217, 255, 0.07);
   text-align: left;
   cursor: pointer;
 }
@@ -190,9 +304,9 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 10px;
-  background: #fff;
-  color: #3f8ae0;
+  border-radius: 3px;
+  background: rgba(43, 217, 255, 0.14);
+  color: #2bd9ff;
   font-size: 16px;
 }
 
@@ -205,26 +319,27 @@
 
 .taskName {
   font-size: 14px;
-  font-weight: 600;
-  color: #2f3f5f;
+  font-weight: 700;
+  color: #eaf4ff;
 }
 
 .taskMeta {
   font-size: 11px;
-  color: #8a97b0;
+  color: #8fb6dd;
 }
 
 .taskGo {
   flex-shrink: 0;
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: #4a9af0;
-  color: #fff;
+  padding: 5px 13px 5px 15px;
+  clip-path: polygon(7px 0, 100% 0, 100% 100%, 0 100%);
+  background: linear-gradient(100deg, #7fe8ff 0%, #2bd9ff 40%, #0a84d8 100%);
+  color: #04122a;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 1px;
 }
 
-/* 我的积分 */
+/* ===== 我的积分 ===== */
 .moneyRow {
   display: flex;
   align-items: center;
@@ -240,29 +355,32 @@
 
 .moneyNumber {
   font-size: 32px;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1;
-  color: #2f3f5f;
+  color: #ffffff;
+  text-shadow: 0 0 18px rgba(43, 217, 255, 0.55);
 }
 
 .moneyUnit {
   font-size: 12px;
-  color: #8a97b0;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #7fe8ff;
 }
 
 .moneySide {
   font-size: 12px;
   line-height: 1.7;
-  color: #8a97b0;
+  color: #8fb6dd;
   text-align: right;
 }
 
 .income {
-  color: #52c41a;
+  color: #4ade80;
 }
 
 .expense {
-  color: #e94560;
+  color: #ff6b81;
 }
 
 .checkinGrid {
@@ -278,22 +396,23 @@
   justify-content: space-between;
   gap: 6px;
   padding: 12px;
-  border: 1px solid #e2eefb;
-  border-radius: 14px;
-  background: #fff;
+  border: 1px solid rgba(43, 217, 255, 0.35);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
 }
 
 .checkinBtn:disabled {
-  background: #f7f7fa;
-  opacity: 0.5;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+  opacity: 0.45;
   cursor: default;
 }
 
 .checkinName {
   overflow: hidden;
   font-size: 13px;
-  color: #2f3f5f;
+  color: #e2eefc;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -301,19 +420,21 @@
 .checkinValue {
   flex-shrink: 0;
   font-size: 13px;
-  font-weight: 700;
-  color: #52c41a;
+  font-weight: 800;
+  color: #2bd9ff;
 }
 
-/* 妈妈说的话 */
+/* ===== 妈妈说的话 ===== */
 .noticeCard {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   padding: 14px;
-  border: none;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #fff7e0, #fffdf6);
-  box-shadow: 0 4px 16px rgba(255, 197, 61, 0.18);
+  border: 1px solid rgba(255, 210, 63, 0.4);
+  border-radius: 4px;
+  background: linear-gradient(120deg, rgba(255, 210, 63, 0.16) 0%, rgba(255, 210, 63, 0.04) 100%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   text-align: left;
   cursor: pointer;
 }
@@ -323,31 +444,34 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  font-weight: 600;
-  color: #b58a2b;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #ffd76a;
 }
 
 .noticeTime {
   margin-left: auto;
   font-weight: 400;
-  color: #c0a468;
+  color: #bda86a;
 }
 
 .noticeTitle {
   margin-top: 6px;
   font-size: 14px;
   font-weight: 700;
-  color: #5a4a20;
+  color: #fff6da;
 }
 
 .noticeBody {
   margin-top: 2px;
   font-size: 12px;
-  color: #8a7a50;
+  color: #d3c396;
 }
 
-/* 宫格入口 */
+/* ===== 宫格入口 ===== */
 .grid {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
@@ -360,10 +484,10 @@
   align-items: center;
   gap: 6px;
   padding: 12px 4px;
-  border: none;
-  border-radius: 16px;
-  background: var(--color-surface);
-  box-shadow: 0 2px 10px rgba(63, 138, 224, 0.12);
+  border: 1px solid rgba(43, 217, 255, 0.2);
+  border-radius: 3px;
+  background: linear-gradient(160deg, rgba(15, 36, 70, 0.92) 0%, rgba(7, 16, 34, 0.92) 100%);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
   cursor: pointer;
 }
 
@@ -376,7 +500,8 @@
   position: relative;
   font-size: 20px;
   line-height: 1;
-  color: #3f8ae0;
+  color: #2bd9ff;
+  filter: drop-shadow(0 0 7px rgba(43, 217, 255, 0.55));
 }
 
 .gridBadge {
@@ -387,7 +512,7 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: #e94560;
+  background: #ff3b57;
   color: #fff;
   font-size: 10px;
   line-height: 16px;
@@ -396,10 +521,16 @@
 
 .gridLabel {
   font-size: 11px;
-  color: #2f3f5f;
+  color: #cfe2fa;
 }
 
 @media (min-width: 768px) {
+  .page {
+    margin: -24px;
+    margin-bottom: -24px;
+    padding: 24px;
+  }
+
   .checkinGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -409,10 +540,10 @@
   }
 
   .hero {
-    padding: 22px;
+    padding: 22px 24px;
   }
 
   .heroSunValue {
-    font-size: 52px;
+    font-size: 54px;
   }
 }

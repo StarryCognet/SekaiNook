@@ -131,11 +131,14 @@ export default function KidHome() {
       <section className={styles.hero}>
         <div className={styles.heroTop}>
           <div>
-            <div className={styles.heroGreeting}>{greetingText(now)}，{kidName}</div>
+            <span className={styles.heroEyebrow}>TODAY</span>
+            <div className={styles.heroGreeting}>
+              {greetingText(now)}，{kidName}
+            </div>
             <div className={styles.heroDate}>{dateText(now)}</div>
           </div>
           <button className={styles.heroAvatar} onClick={() => goGarden('rewards')} aria-label="我的勋章">
-            🏅
+            <TrophyOutlined />
           </button>
         </div>
 
@@ -166,7 +169,10 @@ export default function KidHome() {
       {/* 今日学习任务 */}
       <section className={styles.card}>
         <div className={styles.cardHead}>
-          <span className={styles.cardTitle}>今日学习任务</span>
+          <span>
+            <span className={styles.cardTitle}>今日学习任务</span>
+            <span className={styles.cardTitleEn}>DAILY TASKS</span>
+          </span>
           <span className={styles.cardExtra}>
             {gardenDone}/{gardenTotal}
           </span>
@@ -174,8 +180,8 @@ export default function KidHome() {
         <Progress
           percent={gardenPercent}
           showInfo={false}
-          strokeColor="#3F8AE0"
-          trailColor="#E6F0FB"
+          strokeColor={{ '0%': '#7fe8ff', '100%': '#0a84d8' }}
+          trailColor="rgba(255, 255, 255, 0.1)"
           size="small"
         />
         {todoTasks.length === 0 ? (
@@ -211,7 +217,10 @@ export default function KidHome() {
       {/* 我的积分（家庭账本这一本账，跟妈妈兑现用） */}
       <section className={styles.card}>
         <div className={styles.cardHead}>
-          <span className={styles.cardTitle}>我的积分</span>
+          <span>
+            <span className={styles.cardTitle}>我的积分</span>
+            <span className={styles.cardTitleEn}>MY POINTS</span>
+          </span>
           <span className={styles.cardExtra}>今天打卡 {todayCount} 次</span>
         </div>
 
@@ -257,6 +266,7 @@ export default function KidHome() {
         <button className={styles.noticeCard} onClick={() => navigate('/home/notifications')}>
           <div className={styles.noticeHead}>
             <NotificationOutlined /> {momName}说的话
+            <span className={styles.cardTitleEn}>MESSAGE</span>
             <span className={styles.noticeTime}>{relativeTime(latestNotice.created_at, now)}</span>
           </div>
           <div className={styles.noticeTitle}>{latestNotice.title}</div>

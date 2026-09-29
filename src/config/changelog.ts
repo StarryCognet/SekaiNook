@@ -11,10 +11,22 @@ export interface ChangelogEntry {
 }
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '1.14.1';
+export const APP_VERSION = '1.15.0';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.15.0',
+    date: '2026-09-29 17:40:00',
+    title: '女儿首页换成《女神异闻录 3 Reload》风',
+    changes: [
+      '整页换成午夜蓝墨底 + 青色霓虹：头图、卡片、任务格、宫格入口全部走深蓝硬边风格，右上角加了斜排线纹理',
+      '阳光总积分改成发光大白字（带青色光晕），「TODAY」小标与每张卡片的英文小字（DAILY TASKS / MY POINTS / MESSAGE）对齐游戏界面的排版味道',
+      '按钮改成斜切实心块（不是圆角胶囊），卡片左上角加了青色高光短线，进度条换成青色渐变',
+      '「妈妈说的话」保留暖金色（那是妈妈的声音），21 点提醒条保留警示黄 —— 在一整片冷蓝里这两处最显眼',
+      '首页底部墨蓝一直铺到屏幕底，底部导航的毛玻璃压在上面，深色底更透',
+    ],
+  },
   {
     version: '1.14.1',
     date: '2026-09-29 17:16:00',
