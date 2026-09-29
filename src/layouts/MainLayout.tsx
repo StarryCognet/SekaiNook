@@ -29,14 +29,7 @@ import { useFamilyStore } from "../store/useFamilyStore";
 import { useNotificationStore } from "../store/useNotificationStore";
 import { useSettingsStore } from "../store/useSettingsStore";
 import { useThemePreset, useThemeStore } from "../store/useThemeStore";
-import {
-  SPRING_BOUNCY,
-  SPRING_BOUNCY_MS,
-  SPRING_CALM,
-  SPRING_CALM_MS,
-  SPRING_MID,
-  SPRING_MID_MS,
-} from "../theme/motion";
+import { springForSteps, SPRING_LIFT, SPRING_LIFT_MS } from "../theme/motion";
 import styles from "./MainLayout.module.css";
 
 const { Sider, Header, Content } = Layout;
@@ -223,8 +216,8 @@ export default function MainLayout() {
   const [trailX, setTrailX] = useState<number | null>(null);
   const [trailOn, setTrailOn] = useState(false);
   const trailTimerRef = useRef<number | null>(null);
-  /** 松手/切 Tab 用哪条弹簧：按「跨了几格」挑，近处弹三次，跨得远就收敛 */
-  const [pillSpring, setPillSpring] = useState({ easing: SPRING_BOUNCY, ms: SPRING_BOUNCY_MS });
+  /** 松手/切 Tab 用哪条弹簧：按「跨了几格」挑 —— 过冲比例恒定，所以跨得越短、甩出去越少 */
+  const [pillSpring, setPillSpring] = useState(() => springForSteps(1));
   /** 系统开了「减少动态效果」：弹簧、水痕、拉伸全部不要 */
   const [reduceMotion, setReduceMotion] = useState(false);
 
@@ -237,13 +230,11 @@ export default function MainLayout() {
     return () => query.removeEventListener("change", onChange);
   }, []);
 
-  /** 跨几格决定回弹力度：过冲是按比例的，跨得越远越得收着，不然高光会甩出栏外 */
+  /** 跨几格决定回弹力度：过冲比例基本恒定（18% → 15%），所以位移越短、甩出去越少 */
   const springBetween = (fromKey: string, toKey: string) => {
     const slotIndexOf = (key: string) => NAV_ITEMS.findIndex((item) => item.key === key);
     const distance = Math.abs(slotIndexOf(toKey) - slotIndexOf(fromKey));
-    if (distance <= 1) return { easing: SPRING_BOUNCY, ms: SPRING_BOUNCY_MS };
-    if (distance === 2) return { easing: SPRING_MID, ms: SPRING_MID_MS };
-    return { easing: SPRING_CALM, ms: SPRING_CALM_MS };
+    return springForSteps(distance);
   };
 
   /** 量一次「栏」和「每一项」的位置：拖动期间它们不会变，量一次就够 */
@@ -666,8 +657,8 @@ export default function MainLayout() {
           /* 把「会弹三次」的弹簧曲线交给 CSS 变量，玻璃片、标签项的缩放也走同一条 */
           style={
             {
-              "--spring-bouncy": SPRING_BOUNCY,
-              "--spring-bouncy-ms": `${SPRING_BOUNCY_MS}ms`,
+              "--spring-lift": SPRING_LIFT,
+              "--spring-lift-ms": `${SPRING_LIFT_MS}ms`,
             } as CSSProperties
           }
           onPointerMove={handleNavPointerMove}
@@ -726,7 +717,7 @@ export default function MainLayout() {
             // 「拿起来」与松手弹回都走那条会弹三次的弹簧（跟高光同一条）
             const itemTransition = reduceMotion
               ? "none"
-              : `color 0.16s ease, transform ${SPRING_BOUNCY_MS}ms ${SPRING_BOUNCY}`;
+              : `color 0.16s ease, transform ${SPRING_LIFT_MS}ms ${SPRING_LIFT}`;
             return (
               <button
                 key={item.key}
