@@ -6,22 +6,26 @@ export async function fetchLedgerRecords(): Promise<LedgerRecord[]> {
   return http.get<LedgerRecord[]>('/api/ledger');
 }
 
-/** 插入一条积分流水，amount 取 task.value，可附带备注与图片与审批状态 */
+/**
+ * 插入一条积分流水，amount 取 task.value，可附带备注、图片、成员与审批状态。
+ * @returns 新记录 id（用于「撤销」等回滚操作）
+ */
 export async function addLedgerRecord(
   task: TaskConfig,
-  extra?: { note?: string; imageUrl?: string },
+  extra?: { note?: string; imageUrl?: string; member?: string | null },
   opts?: { status?: LedgerStatus }
-): Promise<boolean> {
-  await http.post<{ id: string }>('/api/ledger', {
+): Promise<string> {
+  const result = await http.post<{ id: string }>('/api/ledger', {
     task_id: task.id,
     task_name: task.name,
     type: task.type,
     amount: task.value,
     note: extra?.note ?? null,
     image_url: extra?.imageUrl ?? null,
+    member: extra?.member ?? null,
     status: opts?.status ?? 'approved',
   });
-  return true;
+  return result.id;
 }
 
 /** 查询待审批的打卡申请，按 created_at 倒序 */

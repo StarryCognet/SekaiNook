@@ -1,42 +1,36 @@
-import { Card, Progress, Button, message } from 'antd';
-import { ReadOutlined, CheckOutlined } from '@ant-design/icons';
-import { useState } from 'react';
+import { Button, Card, Progress, message } from 'antd';
+import { CheckOutlined, ReadOutlined } from '@ant-design/icons';
+import { GARDEN_CHINESE_PRACTICES } from '../../config/garden';
+import { todayKey, useGardenStore } from '../../store/useGardenStore';
 import { gardenTokens } from '../../theme/gardenTokens';
 import styles from './ChinesePage.module.css';
 
-/** 预习内容 */
-const PREVIEW_ITEMS = [
-  { id: 'lesson1', title: '第一课 课文预习', desc: '朗读课文 3 遍，圈出生字', target: 3 },
-  { id: 'lesson2', title: '第二课 课文预习', desc: '朗读课文 3 遍，圈出生字', target: 3 },
-  { id: 'words', title: '生字词练习', desc: '书写本课生字词', target: 2 },
-];
+/** 触控目标最小高度（安卓手机上的小朋友友好）：由令牌间距组合得到 */
+const TOUCH_HEIGHT = gardenTokens.spacing.xl + gardenTokens.spacing.md;
 
-/** 语文预习页面 */
+/** 语文练习页面：每次打卡计一次花园任务完成并持久化 */
 export default function ChinesePage() {
-  const [progress, setProgress] = useState<Record<string, number>>({
-    lesson1: 0,
-    lesson2: 0,
-    words: 0,
-  });
+  const { chineseSteps, chineseDate, completeChineseStep } = useGardenStore();
+  const today = todayKey();
+  // 跨天后今日打卡次数自动归零
+  const steps = chineseDate === today ? chineseSteps : {};
 
-  const handleAdd = (id: string, target: number) => {
-    setProgress((prev) => {
-      const next = Math.min((prev[id] ?? 0) + 1, target);
-      if (next === target) {
-        message.success('预习完成！+15 阳光');
-      }
-      return { ...prev, [id]: next };
-    });
+  const handlePractice = (id: string, title: string, reward: number, isLast: boolean) => {
+    if (!completeChineseStep(id)) {
+      message.info(`${title}今天已经练完啦，明天继续加油`);
+      return;
+    }
+    message.success(isLast ? `${title}完成啦！+${reward} 阳光` : `打卡成功！+${reward} 阳光`);
   };
 
   return (
     <div className={styles.chinese}>
-      <div className={styles.sectionTitle}>语文预习</div>
+      <div className={styles.sectionTitle}>语文练习</div>
       <div className={styles.previewList}>
-        {PREVIEW_ITEMS.map((item) => {
-          const current = progress[item.id] ?? 0;
-          const done = current >= item.target;
-          const percent = Math.min(100, Math.round((current / item.target) * 100));
+        {GARDEN_CHINESE_PRACTICES.map((item) => {
+          const current = steps[item.id] ?? 0;
+          const done = current >= item.timesPerDay;
+          const percent = Math.min(100, Math.round((current / item.timesPerDay) * 100));
           return (
             <Card
               key={item.id}
@@ -60,16 +54,21 @@ export default function ChinesePage() {
               </div>
               <Button
                 type="primary"
-                size="small"
                 className={styles.previewBtn}
                 style={{
                   background: done ? gardenTokens.colors.success : gardenTokens.colors.primary,
                   borderColor: done ? gardenTokens.colors.success : gardenTokens.colors.primary,
+                  minHeight: TOUCH_HEIGHT,
                 }}
-                onClick={() => handleAdd(item.id, item.target)}
+                icon={done ? <CheckOutlined /> : undefined}
+                onClick={() =>
+                  handlePractice(item.id, item.title, item.reward, current + 1 >= item.timesPerDay)
+                }
                 disabled={done}
               >
-                {done ? '已完成' : `打卡 (${current}/${item.target})`}
+                {done
+                  ? '今天已完成'
+                  : `${item.actionLabel} (${current}/${item.timesPerDay}) +${item.reward}`}
               </Button>
             </Card>
           );

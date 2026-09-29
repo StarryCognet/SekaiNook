@@ -148,3 +148,48 @@
 .logChanges li {
   margin-bottom: 2px;
 }
+
+/* ===== 家庭成员管理（仅家长可见；不添加成员时整块功能不出现在其他页面） ===== */
+.memberAdd {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.memberList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memberItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+
+.memberName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+/* ===== 打卡图片清理（仅家长可见） ===== */
+.scanResult {
+  font-size: 13px;
+  color: #6b7280;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f9fafb;
+  margin-bottom: 12px;
+}
+
+.cleanupActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

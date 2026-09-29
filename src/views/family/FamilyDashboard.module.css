@@ -64,7 +64,7 @@
 }
 
 .balanceSub {
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
   margin-top: 4px;
 }
@@ -75,7 +75,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: #fff;
   background: #1677ff;
   border-radius: 999px;
@@ -106,7 +106,7 @@
 }
 
 .actionGroupLabel {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #6b7280;
   display: flex;
@@ -225,7 +225,7 @@
 }
 
 .recordNote {
-  font-size: 12px;
+  font-size: 13px;
   color: #6b7280;
   max-width: 160px;
   text-align: right;
@@ -247,6 +247,13 @@
 
 .resubmitBtn {
   border-radius: 6px;
+}
+
+/* 打卡成功提示：文案 + 撤销按钮 */
+.undoToast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* ===== 今日任务与作息 ===== */
@@ -273,7 +280,7 @@
 }
 
 .dateText {
-  font-size: 13px;
+  font-size: 14px;
   color: #6b7280;
   margin-top: 4px;
 }
@@ -376,6 +383,31 @@
     gap: 16px;
   }
 
+  /* 手机端重排：余额 → 今日任务与作息（含快捷按钮）→ 三个 Tab。
+     用 display:contents 把两列摊平成父网格的直接子项，才能跨列排序，
+     否则"按时睡觉"这类快捷按钮会被长列表推到页面最底部 */
+  .leftCol,
+  .rightCol {
+    display: contents;
+  }
+
+  .balanceCard {
+    order: 1;
+  }
+
+  .todayCard {
+    order: 2;
+  }
+
+  .tabs {
+    order: 3;
+  }
+
+  /* 趋势图排在三个 Tab 之后（两列已摊平，这里直接参与父网格排序） */
+  .trendWrap {
+    order: 4;
+  }
+
   .actionGrid {
     grid-template-columns: 1fr;
   }
@@ -389,13 +421,76 @@
     font-size: 40px;
   }
 
-  /* 任务按钮高度略增，方便触控 */
+  /* 任务按钮高度略增、字号加大，方便小孩触控 */
   .actionBtn {
     height: 48px;
+    font-size: 16px;
   }
 
   /* 时钟缩小 */
   .clock {
     font-size: 36px;
   }
+}
+
+/* ===== 打卡弹窗：拍照 / 相册 双入口 ===== */
+.uploadChoices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+/* 历史记录里的成员标签（多孩子家庭才出现） */
+.recordMember {
+  margin-left: 6px;
+  font-size: 12px;
+}
+
+/* ===== 历史记录：状态筛选 + 导出 + 加载更多 ===== */
+.recordToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.loadMore {
+  margin-top: 12px;
+}
+
+/* ===== 结算兑现（仅家长，余额为正时出现） ===== */
+.settleBtn {
+  width: 100%;
+  height: 40px;
+  margin-top: 12px;
+  border-radius: 10px;
+}
+
+/* ===== 成员选择（添加家庭成员后才出现，单孩子家庭看不到） ===== */
+.memberRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.memberLabel {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.memberSelect {
+  min-width: 120px;
+}
+
+/* ===== 趋势图容器（手机端靠 order 排到 Tab 之后） ===== */
+.trendWrap {
+  min-width: 0;
 }

@@ -1,0 +1,56 @@
+/* ===== 身份选择门：手机优先的居中卡片 ===== */
+.gate {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+  background: var(--color-bg);
+}
+
+.card {
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.emoji {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.title {
+  margin-top: 8px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.subtitle {
+  margin: 6px 0 20px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+/* 两个大按钮：小孩/家长，触控目标足够高 */
+.choiceBtn {
+  height: 52px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+}
+
+.choiceHint {
+  margin: 6px 0 18px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.footer {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}

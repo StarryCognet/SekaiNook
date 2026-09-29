@@ -1,60 +1,91 @@
-import { useState } from 'react';
-import { Card, Button, message } from 'antd';
+import { Button, Card, Progress, message } from 'antd';
 import { BookOutlined, CheckOutlined } from '@ant-design/icons';
+import { GARDEN_BADGE_TARGETS, GARDEN_POEMS } from '../../config/garden';
+import { todayKey, useGardenStore } from '../../store/useGardenStore';
 import { gardenTokens } from '../../theme/gardenTokens';
 import styles from './PoemPage.module.css';
 
-/** 古诗数据 */
-const POEMS = [
-  { id: 'jingyesi', title: '静夜思', author: '李白', text: '床前明月光，疑是地上霜。举头望明月，低头思故乡。' },
-  { id: 'chunxiao', title: '春晓', author: '孟浩然', text: '春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。' },
-  { id: 'chizhou', title: '池上', author: '白居易', text: '小娃撑小艇，偷采白莲回。不解藏踪迹，浮萍一道开。' },
-  { id: 'xiaochi', title: '小池', author: '杨万里', text: '泉眼无声惜细流，树阴照水爱晴柔。小荷才露尖尖角，早有蜻蜓立上头。' },
-];
+/** 触控目标最小高度（安卓手机上的小朋友友好）：由令牌间距组合得到 */
+const TOUCH_HEIGHT = gardenTokens.spacing.xl + gardenTokens.spacing.md;
 
 /** 古诗背诵页面 */
 export default function PoemPage() {
-  const [done, setDone] = useState<Record<string, boolean>>({});
+  const { poemCount, todayPoemIds, poemDate, recitePoem } = useGardenStore();
+  const today = todayKey();
+  // 跨天后今日打卡记录自动失效
+  const doneToday = poemDate === today ? todayPoemIds : [];
+  const poetTarget = GARDEN_BADGE_TARGETS.poet;
+  const poetPercent = poetTarget > 0 ? Math.min(100, Math.round((poemCount / poetTarget) * 100)) : 0;
+  const poetRemain = Math.max(0, poetTarget - poemCount);
 
-  const handleRecite = (id: string, title: string) => {
-    setDone((prev) => ({ ...prev, [id]: true }));
-    message.success(`《${title}》背诵成功！+10 阳光`);
+  const handleRecite = (id: string, title: string, reward: number) => {
+    if (!recitePoem(id)) {
+      message.info(`《${title}》今天已经背过啦，明天再来复习吧`);
+      return;
+    }
+    message.success(`《${title}》背诵成功！+${reward} 阳光`);
   };
 
   return (
     <div className={styles.poem}>
+      {/* 小诗人进度 */}
+      <Card
+        className={styles.poemProgressCard}
+        variant="borderless"
+        style={{
+          borderRadius: gardenTokens.radius.lg,
+          background: gardenTokens.colors.primaryBg,
+        }}
+      >
+        <div
+          className={styles.poemProgressText}
+          style={{ color: gardenTokens.colors.text, marginBottom: gardenTokens.spacing.sm }}
+        >
+          累计背会{' '}
+          <span className="num" style={{ color: gardenTokens.colors.primary }}>
+            {poemCount}
+          </span>{' '}
+          首
+          {poetRemain > 0 ? `，还差 ${poetRemain} 首解锁「小诗人」` : '，已经解锁「小诗人」啦'}
+        </div>
+        <Progress percent={poetPercent} size="small" strokeColor={gardenTokens.colors.primary} />
+      </Card>
+
       <div className={styles.sectionTitle}>今日古诗</div>
       <div className={styles.poemList}>
-        {POEMS.map((poem) => (
-          <Card
-            key={poem.id}
-            className={`${styles.poemCard} ${done[poem.id] ? styles.poemDone : ''}`}
-            variant="borderless"
-          >
-            <div className={styles.poemHeader}>
-              <div className={styles.poemTitle}>
-                <BookOutlined style={{ color: gardenTokens.colors.primary }} />
-                《{poem.title}》
-              </div>
-              <div className={styles.poemAuthor}>{poem.author}</div>
-            </div>
-            <div className={styles.poemText}>{poem.text}</div>
-            <Button
-              type="primary"
-              size="small"
-              className={styles.reciteBtn}
-              style={{
-                background: done[poem.id] ? gardenTokens.colors.success : gardenTokens.colors.primary,
-                borderColor: done[poem.id] ? gardenTokens.colors.success : gardenTokens.colors.primary,
-              }}
-              icon={done[poem.id] ? <CheckOutlined /> : <BookOutlined />}
-              onClick={() => handleRecite(poem.id, poem.title)}
-              disabled={done[poem.id]}
+        {GARDEN_POEMS.map((poem) => {
+          const done = doneToday.includes(poem.id);
+          return (
+            <Card
+              key={poem.id}
+              className={`${styles.poemCard} ${done ? styles.poemDone : ''}`}
+              variant="borderless"
             >
-              {done[poem.id] ? '已背诵' : '背诵打卡'}
-            </Button>
-          </Card>
-        ))}
+              <div className={styles.poemHeader}>
+                <div className={styles.poemTitle}>
+                  <BookOutlined style={{ color: gardenTokens.colors.primary }} />
+                  《{poem.title}》
+                </div>
+                <div className={styles.poemAuthor}>{poem.author}</div>
+              </div>
+              <div className={styles.poemText}>{poem.text}</div>
+              <Button
+                type="primary"
+                className={styles.reciteBtn}
+                style={{
+                  background: done ? gardenTokens.colors.success : gardenTokens.colors.primary,
+                  borderColor: done ? gardenTokens.colors.success : gardenTokens.colors.primary,
+                  minHeight: TOUCH_HEIGHT,
+                }}
+                icon={done ? <CheckOutlined /> : <BookOutlined />}
+                onClick={() => handleRecite(poem.id, poem.title, poem.reward)}
+                disabled={done}
+              >
+                {done ? '今天已背会' : `我背会了 +${poem.reward}`}
+              </Button>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

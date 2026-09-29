@@ -10,6 +10,17 @@
   color: #3a3a5c;
 }
 
+/* 小诗人进度卡（颜色/间距取自 gardenTokens，见 PoemPage.tsx） */
+.poemProgressCard {
+  display: flex;
+  flex-direction: column;
+}
+
+.poemProgressText {
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .poemList {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

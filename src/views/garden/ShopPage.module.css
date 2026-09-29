@@ -35,6 +35,25 @@
   color: #8a8aa8;
 }
 
+/* 分类区块（颜色/间距取自 gardenTokens，见 ShopPage.tsx） */
+.categoryBlock {
+  display: flex;
+  flex-direction: column;
+}
+
+.categoryTitle {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.itemOwned {
+  box-shadow: none;
+}
+
+.itemStatus {
+  font-size: 12px;
+}
+
 .itemGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

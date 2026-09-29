@@ -1,19 +1,22 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Progress, Button } from 'antd';
 import { SunOutlined, FireOutlined, ReloadOutlined } from '@ant-design/icons';
 import { GARDEN_MENUS } from '../config/garden';
 import { useGardenStore } from '../store/useGardenStore';
 import { getGardenIcon } from '../components/garden/GardenIcon';
 import { gardenTokens } from '../theme/gardenTokens';
-import OverviewPage from '../views/garden/OverviewPage';
-import TasksPage from '../views/garden/TasksPage';
-import PoemPage from '../views/garden/PoemPage';
-import ChinesePage from '../views/garden/ChinesePage';
-import GardenPage from '../views/garden/GardenPage';
-import ShopPage from '../views/garden/ShopPage';
-import RewardsPage from '../views/garden/RewardsPage';
-import RecordsPage from '../views/garden/RecordsPage';
+import { PageLoading } from '../components/StateViews';
 import styles from './GardenLayout.module.css';
+
+/** 8 个子页面按需加载：切到哪个菜单才拉哪个页面的 chunk */
+const OverviewPage = lazy(() => import('../views/garden/OverviewPage'));
+const TasksPage = lazy(() => import('../views/garden/TasksPage'));
+const PoemPage = lazy(() => import('../views/garden/PoemPage'));
+const ChinesePage = lazy(() => import('../views/garden/ChinesePage'));
+const GardenPage = lazy(() => import('../views/garden/GardenPage'));
+const ShopPage = lazy(() => import('../views/garden/ShopPage'));
+const RewardsPage = lazy(() => import('../views/garden/RewardsPage'));
+const RecordsPage = lazy(() => import('../views/garden/RecordsPage'));
 
 /** 子页面映射 */
 const PAGE_MAP: Record<string, React.ComponentType> = {
@@ -128,9 +131,11 @@ export default function GardenLayout() {
         </div>
       </div>
 
-      {/* ===== 内容区 ===== */}
+      {/* ===== 内容区（每个花园页面各自按需加载，加载中显示统一 Loading） ===== */}
       <div className="page-transition">
-        <ActivePage />
+        <Suspense fallback={<PageLoading />}>
+          <ActivePage />
+        </Suspense>
       </div>
     </div>
   );

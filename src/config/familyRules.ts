@@ -6,17 +6,26 @@ import type { TaskConfig } from '../types/family';
  */
 export const TASK_RULES: TaskConfig[] = [
   // ===== 赚钱区（earning，正数）=====
-  { id: 'clean_room', name: '整理房间', type: 'earning', value: 10, unit: '元' },
-  { id: 'wash_dishes', name: '洗碗', type: 'earning', value: 5, unit: '元' },
-  { id: 'do_laundry', name: '洗衣服', type: 'earning', value: 15, unit: '元' },
-  { id: 'take_out_trash', name: '倒垃圾', type: 'earning', value: 5, unit: '元' },
-  { id: 'finish_homework', name: '按时完成作业', type: 'earning', value: 20, unit: '元' },
-  { id: 'read_book', name: '课外阅读30分钟', type: 'earning', value: 10, unit: '元' },
-  { id: 'sleep_on_time', name: '按时睡觉', type: 'earning', value: 10, unit: '元' },
+  { id: 'clean_room', name: '整理房间', type: 'earning', value: 10, unit: '元', dailyLimit: 2 },
+  { id: 'wash_dishes', name: '洗碗', type: 'earning', value: 5, unit: '元', dailyLimit: 2 },
+  { id: 'do_laundry', name: '洗衣服', type: 'earning', value: 15, unit: '元', dailyLimit: 1 },
+  { id: 'take_out_trash', name: '倒垃圾', type: 'earning', value: 5, unit: '元', dailyLimit: 1 },
+  { id: 'finish_homework', name: '按时完成作业', type: 'earning', value: 20, unit: '元', dailyLimit: 1 },
+  { id: 'read_book', name: '课外阅读30分钟', type: 'earning', value: 10, unit: '元', dailyLimit: 2 },
+  {
+    id: 'sleep_on_time',
+    name: '按时睡觉',
+    type: 'earning',
+    value: 10,
+    unit: '元',
+    dailyLimit: 1,
+    // 只有 19:00-21:30 之间能打卡；晚于 21:30 说明没按时睡，应由家长记罚款
+    window: { start: '19:00', end: '21:30' },
+  },
 
   // ===== 花钱区（spending，负数）=====
-  { id: 'ipad_time', name: '看iPad 30分钟', type: 'spending', value: -10, unit: '积分' },
-  { id: 'phone_time', name: '玩手机 30分钟', type: 'spending', value: -10, unit: '积分' },
+  { id: 'ipad_time', name: '看iPad 30分钟', type: 'spending', value: -10, unit: '积分', dailyLimit: 4 },
+  { id: 'phone_time', name: '玩手机 30分钟', type: 'spending', value: -10, unit: '积分', dailyLimit: 4 },
 
   // ===== 罚款区（spending，负数）=====
   {
@@ -33,8 +42,16 @@ export const TASK_RULES: TaskConfig[] = [
     type: 'spending',
     value: -20,
     unit: '积分',
+    dailyLimit: 1,
   },
-  { id: 'homework_incomplete', name: '作业未完成', type: 'spending', value: -50, unit: '积分' },
+  {
+    id: 'homework_incomplete',
+    name: '作业未完成',
+    type: 'spending',
+    value: -50,
+    unit: '积分',
+    dailyLimit: 1,
+  },
 ];
 
 /** 按类型筛选任务 */

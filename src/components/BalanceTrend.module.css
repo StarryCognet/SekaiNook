@@ -1,0 +1,19 @@
+.trendCard {
+  min-width: 0;
+}
+
+.trendTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.trendEmpty {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 13px;
+  opacity: 0.65;
+}

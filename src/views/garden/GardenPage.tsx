@@ -1,8 +1,12 @@
-import { Card, Progress } from 'antd';
-import { SmileOutlined, SunOutlined, EnvironmentOutlined } from '@ant-design/icons';
-import { useGardenStore } from '../../store/useGardenStore';
+import { Button, Card, Progress, message } from 'antd';
+import { EnvironmentOutlined, SmileOutlined, SunOutlined } from '@ant-design/icons';
+import { GARDEN_BADGE_TARGETS } from '../../config/garden';
+import { todayKey, useGardenStore } from '../../store/useGardenStore';
 import { gardenTokens } from '../../theme/gardenTokens';
 import styles from './GardenPage.module.css';
+
+/** 触控目标最小高度（安卓手机上的小朋友友好）：由令牌间距组合得到 */
+const TOUCH_HEIGHT = gardenTokens.spacing.xl + gardenTokens.spacing.md;
 
 /** 花园植物 */
 const PLANTS = [
@@ -13,9 +17,22 @@ const PLANTS = [
 
 /** 阳光花园页面 */
 export default function GardenPage() {
-  const { completedCount } = useGardenStore();
-  // 花园成长度基于完成任务数
+  const { completedCount, gardenCareDays, lastCareDate, careForGarden } = useGardenStore();
+  // 花园成长度基于今日完成任务数
   const growth = Math.min(100, completedCount * 10);
+
+  const today = todayKey();
+  const caredToday = lastCareDate === today;
+  const careTarget = GARDEN_BADGE_TARGETS.plant_warrior;
+  const carePercent = careTarget > 0 ? Math.min(100, Math.round((gardenCareDays / careTarget) * 100)) : 0;
+
+  const handleCare = () => {
+    if (careForGarden()) {
+      message.success('照顾成功！植物们精神多啦');
+      return;
+    }
+    message.info('今天的花园已经照顾过啦，明天再来吧');
+  };
 
   return (
     <div className={styles.garden}>
@@ -37,6 +54,40 @@ export default function GardenPage() {
         </div>
       </Card>
 
+      {/* 照顾花园：累计自然日，满 7 天解锁「植物战士」 */}
+      <Card className={styles.gardenStatus} variant="borderless">
+        <div className={styles.gardenSun} style={{ background: gardenTokens.colors.primary }}>
+          <EnvironmentOutlined />
+        </div>
+        <div className={styles.gardenInfo}>
+          <div className={styles.gardenTitle}>照顾花园 · 植物战士</div>
+          <Progress
+            percent={carePercent}
+            strokeColor={gardenTokens.colors.primary}
+            format={() => `${gardenCareDays}/${careTarget} 天`}
+          />
+          <div className={styles.gardenDesc}>
+            {caredToday
+              ? '今天已经照顾过植物啦，明天记得再来～'
+              : `给植物浇浇水，坚持 ${careTarget} 天就能解锁「植物战士」勋章`}
+          </div>
+          <Button
+            type="primary"
+            style={{
+              marginTop: gardenTokens.spacing.sm,
+              minHeight: TOUCH_HEIGHT,
+              background: caredToday ? gardenTokens.colors.gray : gardenTokens.colors.primary,
+              borderColor: caredToday ? gardenTokens.colors.gray : gardenTokens.colors.primary,
+            }}
+            icon={<EnvironmentOutlined />}
+            disabled={caredToday}
+            onClick={handleCare}
+          >
+            {caredToday ? '今天已照顾' : '浇浇水'}
+          </Button>
+        </div>
+      </Card>
+
       {/* 植物列表 */}
       <div className={styles.plantGrid}>
         {PLANTS.map((plant) => (
@@ -46,6 +97,18 @@ export default function GardenPage() {
             </div>
             <div className={styles.plantName}>{plant.name}</div>
             <div className={styles.plantDesc}>{plant.desc}</div>
+            <Button
+              style={{
+                marginTop: gardenTokens.spacing.sm,
+                minHeight: TOUCH_HEIGHT,
+                color: caredToday ? gardenTokens.colors.textSecondary : gardenTokens.colors.primary,
+                borderColor: caredToday ? gardenTokens.colors.gray : gardenTokens.colors.primary,
+              }}
+              disabled={caredToday}
+              onClick={handleCare}
+            >
+              {caredToday ? '今天已照顾' : '浇浇水'}
+            </Button>
           </Card>
         ))}
       </div>

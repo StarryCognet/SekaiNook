@@ -1,6 +1,14 @@
 import type { ThemeConfig } from 'antd';
 
 /**
+ * 系统字体栈。
+ * 数字展示原先用 Google Fonts 的 Oswald，但 @import 会阻塞首屏且国内不可达，已移除；
+ * 现在统一走系统字体 + tabular-nums（见 theme/global.css 的 .num）。
+ */
+const SYSTEM_FONT_FAMILY =
+  "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif";
+
+/**
  * 设计令牌 —— 唯一数据源。
  * 所有颜色/间距/圆角/阴影/字体必须从此处读取，禁止在组件中硬编码 hex/px。
  */
@@ -36,9 +44,8 @@ export const designTokens = {
     hover: '0 6px 20px rgba(26, 26, 46, 0.14)',
   },
   font: {
-    family:
-      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif",
-    num: "'Oswald', 'Segoe UI', sans-serif",
+    family: SYSTEM_FONT_FAMILY,
+    num: SYSTEM_FONT_FAMILY,
     sizeXs: 12,
     sizeSm: 14,
     sizeMd: 16,
