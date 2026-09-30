@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 import {
   fetchLedgerRecords,
+  fetchLedgerSummary,
   fetchPendingRequests,
   approveRequest,
   rejectRequest,
   deleteLedgerRecord,
   calcApprovedBalance,
+  calcGardenBalance,
+  isGardenTaskId,
 } from '../api/familyLedger';
 import type { LedgerRecord } from '../types/family';
 
@@ -200,8 +203,14 @@ function loadRole(): FamilyRole | null {
 interface FamilyState {
   /** 当前身份（null = 尚未选择，由 RoleGate 引导） */
   role: FamilyRole | null;
+  /** 家庭已入账积分（全量余额接口，拿不到时退回已审批记录求和；不含花园阳光） */
   balance: number;
+  /** 家庭流水（**不含花园阳光**）：家长账本页看到的就是这些 */
   records: LedgerRecord[];
+  /** 花园阳光流水（同一个账本、另一个视图，供花园记录页用） */
+  gardenRecords: LedgerRecord[];
+  /** 花园阳光余额（全量余额接口，拿不到时退回 gardenRecords 求和） */
+  sunBalance: number;
   /** 待审批申请列表 */
   pendingRecords: LedgerRecord[];
   /** 待审批申请数量 */
@@ -238,6 +247,8 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
   role: loadRole(),
   balance: 0,
   records: [],
+  gardenRecords: [],
+  sunBalance: 0,
   pendingRecords: [],
   pendingCount: 0,
   loading: false,
@@ -264,15 +275,23 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
   loadLedger: async () => {
     set({ loading: true });
     try {
-      const [records, pending] = await Promise.all([
+      // 全量余额单独兜底：老部署还没有 /api/ledger/summary 时退回用流水算，
+      // 但流水只有最近 200 条，所以能拿到 summary 就一定要用 summary（否则余额会越用越少）
+      const [allRecords, pending, summary] = await Promise.all([
         fetchLedgerRecords(),
         fetchPendingRequests(),
+        fetchLedgerSummary().catch(() => null),
       ]);
+      // 同一个账本拆成两本：家长 / 家庭界面只看非花园流水，花园流水走 gardenRecords
+      const records = allRecords.filter((record) => !isGardenTaskId(record.task_id));
+      const gardenRecords = allRecords.filter((record) => isGardenTaskId(record.task_id));
       set({
         records,
+        gardenRecords,
         pendingRecords: pending,
         pendingCount: pending.length,
-        balance: calcApprovedBalance(records),
+        balance: summary ? summary.family : calcApprovedBalance(records),
+        sunBalance: summary ? summary.sun : calcGardenBalance(gardenRecords),
         loading: false,
       });
     } catch (e) {

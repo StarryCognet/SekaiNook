@@ -22,6 +22,8 @@ export interface ServerTaskRule {
   window?: { start: string; end: string };
   /** 服务端直接入账、不需要家长审批（目前只有花园里即时到账的奖励与消费） */
   autoApprove?: boolean;
+  /** 允许客户端传金额的例外：服务端只做范围校验（目前只有老余额迁移用） */
+  clientAmount?: { min: number; max: number };
 }
 
 /** 家庭账本任务（对应 src/config/familyRules.ts） */
@@ -50,24 +52,38 @@ const FAMILY_TASK_RULES: Record<string, ServerTaskRule> = {
   homework_incomplete: { name: '作业未完成', type: 'spending', value: -50, dailyLimit: 1 },
 };
 
+/** `garden_legacy` 迁移金额上限（历史本机余额最多就到这个数） */
+export const GARDEN_LEGACY_MAX = 2000;
+
 /**
  * 花园的即时奖励与消费（对应 src/config/garden.ts 的 GARDEN_TASKS / GARDEN_CHINESE_PRACTICES / GARDEN_SHOP_ITEMS）。
- * 这些是孩子自己点出来的小奖励，打卡即到账，不走家长审批；金额一律由服务端定，客户端改不动。
+ * 这些是孩子自己点出来的小奖励，打卡即到账，不走家长审批；金额一律由服务端定，客户端改不动
+ * （唯一例外是标了 clientAmount 的历史余额迁移）。
  */
 const GARDEN_TASK_RULES: Record<string, ServerTaskRule> = {
+  // 一天可以背好几首，每首 10：没有日限
   'garden:poem': { name: '背一首古诗', type: 'earning', value: 10, autoApprove: true },
-  'garden:chinese': { name: '语文预习 15 分钟', type: 'earning', value: 15, autoApprove: true },
-  'garden:math': { name: '数学预习 15 分钟', type: 'earning', value: 15, autoApprove: true },
-  'garden:reading': { name: '课外阅读 20 分钟', type: 'earning', value: 20, autoApprove: true },
-  'garden:writing': { name: '练字 10 分钟', type: 'earning', value: 10, autoApprove: true },
-  'garden:eyes': { name: '休息眼睛 5 分钟', type: 'earning', value: 5, autoApprove: true },
-  'garden:sport': { name: '运动 20 分钟', type: 'earning', value: 20, autoApprove: true },
-  'garden:chore': { name: '做一件家务', type: 'earning', value: 15, autoApprove: true },
+  // 下面这些是「每天做一次」的日常打卡：客户端只放一次，服务端必须同样卡住（否则能连点刷分）
+  'garden:chinese': { name: '语文预习 15 分钟', type: 'earning', value: 15, dailyLimit: 1, autoApprove: true },
+  'garden:math': { name: '数学预习 15 分钟', type: 'earning', value: 15, dailyLimit: 1, autoApprove: true },
+  'garden:reading': { name: '课外阅读 20 分钟', type: 'earning', value: 20, dailyLimit: 1, autoApprove: true },
+  'garden:writing': { name: '练字 10 分钟', type: 'earning', value: 10, dailyLimit: 1, autoApprove: true },
+  'garden:eyes': { name: '休息眼睛 5 分钟', type: 'earning', value: 5, dailyLimit: 1, autoApprove: true },
+  'garden:sport': { name: '运动 20 分钟', type: 'earning', value: 20, dailyLimit: 1, autoApprove: true },
+  'garden:chore': { name: '做一件家务', type: 'earning', value: 15, dailyLimit: 1, autoApprove: true },
   'garden:read_aloud': { name: '课文朗读', type: 'earning', value: 5, dailyLimit: 3, autoApprove: true },
   'garden:new_words': { name: '生字认读', type: 'earning', value: 5, dailyLimit: 2, autoApprove: true },
   'garden:write_words': { name: '生字书写', type: 'earning', value: 10, dailyLimit: 1, autoApprove: true },
-  // 历史余额迁移（老版本把阳光记在本机 localStorage 里）：一次性搬进账本，设了上限防止被塞大数
-  'garden_legacy': { name: '花园阳光迁移', type: 'earning', value: 0, dailyLimit: 1, autoApprove: true },
+  // 历史余额迁移（老版本把阳光记在本机 localStorage 里）：一次性搬进账本。
+  // 金额由客户端传（server 端 value 只是兜底 0），但服务端卡 [0, GARDEN_LEGACY_MAX]，防止被塞大数。
+  'garden_legacy': {
+    name: '花园阳光迁移',
+    type: 'earning',
+    value: 0,
+    dailyLimit: 1,
+    autoApprove: true,
+    clientAmount: { min: 0, max: GARDEN_LEGACY_MAX },
+  },
 
   'garden_shop:avatar_sun': { name: '阳光头像框', type: 'spending', value: -60, autoApprove: true },
   'garden_shop:avatar_star': { name: '星星头像框', type: 'spending', value: -80, autoApprove: true },
@@ -83,11 +99,17 @@ export const LEDGER_TASK_RULES: Record<string, ServerTaskRule> = {
   ...GARDEN_TASK_RULES,
 };
 
-/** `garden_legacy` 迁移金额上限（历史本机余额最多就到这个数） */
-export const GARDEN_LEGACY_MAX = 2000;
-
 /** 花园相关记录的任务 id 前缀：这些是「阳光」，不计入家庭积分 */
-const GARDEN_ID_PREFIXES: readonly string[] = ['garden:', 'garden_shop:', 'garden_legacy'];
+export const GARDEN_ID_PREFIXES: readonly string[] = ['garden:', 'garden_shop:', 'garden_legacy'];
+
+/**
+ * 花园记录的 SQL 匹配条件（`task_id LIKE ...` 的 OR 串联）。
+ * 由 GARDEN_ID_PREFIXES 派生 —— **改前缀只需改上面那一处**，SQL 侧跟着变，不会漂。
+ * 前缀都是代码里的字面量常量（没有用户输入），拼进 SQL 不存在注入问题。
+ */
+export const GARDEN_LIKE_CLAUSE = GARDEN_ID_PREFIXES.map(
+  (prefix) => `task_id LIKE '${prefix}%'`
+).join(' OR ');
 
 /** 这条流水属于花园阳光（而不是家庭积分） */
 export function isGardenTaskId(taskId: string): boolean {

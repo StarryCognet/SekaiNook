@@ -94,9 +94,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return Response.json({ error: 'amount 非法' }, { status: 400 });
     }
   }
+  // 客户端金额只有在规则显式开了 clientAmount 时才被采纳（目前只有老余额迁移）：
+  // 先按未知任务那套校验客户端 amount，再四舍五入并夹到规则给的上下限内。
+  // 超范围是**夹住而不是报错**：老数据万一记超了，也要按上限搬进来，不能让迁移整个失败。
+  let clientAmount: number | null = null;
+  if (rule?.clientAmount) {
+    if (typeof amount !== 'number' || !Number.isFinite(amount)) {
+      return Response.json({ error: 'amount 非法' }, { status: 400 });
+    }
+    const { min, max } = rule.clientAmount;
+    clientAmount = Math.min(Math.max(Math.round(amount), min), max);
+  }
+
   const finalName = rule ? rule.name : (task_name as string);
   const finalType = rule ? rule.type : (type as string);
-  const finalAmount = rule ? rule.value : (amount as number);
+  // 没有 clientAmount 的规则一如既往：金额只认服务端 rule.value，客户端改不动
+  const finalAmount = clientAmount ?? (rule ? rule.value : (amount as number));
 
   // 客户端传来的 status 一律忽略：只有服务端标了 autoApprove 的才直接入账
   const finalStatus = rule?.autoApprove ? 'approved' : 'pending';
@@ -109,6 +122,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
   }
 
+  // 客户端可以自带记录 id（网络重试 / 离线补发复用同一个 id）。这里先算出来，
+  // 因为下面的每日上限判定要用它做一次幂等确认 —— 见那个分支里的说明。
+  const providedId =
+    typeof body.id === 'string' && ID_PATTERN.test(body.id) ? body.id.slice(0, ID_MAX_LENGTH) : null;
+  const id = providedId ?? crypto.randomUUID();
+
   const { startIso, endIso } = beijingDayBounds(now);
   if (rule?.dailyLimit !== undefined) {
     const counted = await env.DB.prepare(
@@ -118,6 +137,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       .bind(task_id, startIso, endIso)
       .first<{ c: number }>();
     if ((counted?.c ?? 0) >= rule.dailyLimit) {
+      // 先认幂等，再拒。重试可能晚于这次上限检查：第一次其实已经写进库了，
+      // 只是响应丢在路上（离线补发、老余额迁移都靠同一个 id 重发）。
+      // 若直接 409，客户端会以为这条被拒而回滚已经到账的阳光，迁移也永远搬不完。
+      if (providedId) {
+        const existing = await env.DB.prepare('SELECT id, status FROM family_ledger WHERE id = ?')
+          .bind(providedId)
+          .first<{ id: string; status: string }>();
+        if (existing) {
+          return Response.json({ id: existing.id, status: existing.status, duplicate: true });
+        }
+      }
       const message =
         rule.dailyLimit === 1
           ? `「${rule.name}」今天已经打过卡啦`
@@ -126,10 +156,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
   }
 
-  const id =
-    typeof body.id === 'string' && ID_PATTERN.test(body.id)
-      ? body.id.slice(0, ID_MAX_LENGTH)
-      : crypto.randomUUID();
   const createdAt = now.toISOString();
 
   const member =

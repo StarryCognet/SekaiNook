@@ -275,7 +275,7 @@ export default function KidHome() {
           <span className={styles.heroSunUnit}>阳光</span>
         </div>
         {/* 两种钱要分清：阳光是花园里的游戏币，下面的积分才是能跟妈妈兑现的 */}
-        <div className={styles.heroSunHint}>花园里的阳光，只能在花园里花</div>
+        <div className={styles.heroSunHint}>花园里的阳光，会存进家里的账本，换手机也在</div>
 
         <div className={styles.heroChips}>
           <span className={styles.heroChip}>
