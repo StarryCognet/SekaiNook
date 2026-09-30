@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Image, message, Badge, Popconfirm, Segmented, Modal } from 'antd';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Image, message, Badge, Popconfirm, Segmented, Modal, Spin } from 'antd';
 import {
   PlusOutlined,
   MinusOutlined,
@@ -18,7 +18,7 @@ import {
   RollbackOutlined,
   DownloadOutlined,
 } from '@ant-design/icons';
-import { addLedgerRecord, resubmitRequest } from '../../api/familyLedger';
+import { addLedgerRecord, LedgerApprovalError, resubmitRequest } from '../../api/familyLedger';
 import { useViewState } from '../../utils/useViewState';
 import { exportLedgerCsv } from '../../utils/exportLedger';
 import { checkTask, isTaskDone } from '../../utils/taskRules';
@@ -61,6 +61,8 @@ export default function FamilyDashboard() {
     removeRecord,
   } = useFamilyStore();
   const [error, setError] = useState<string | null>(null);
+  /** 错误页上有人点了重试：给一个「正在重试」的反馈 */
+  const [retrying, setRetrying] = useState(false);
   const [now, setNow] = useState(new Date());
   // 当前分页（任务区 / 待审批 / 历史记录）—— 切到别的页面再回来要还在原来那页
   const [activeTab, setActiveTab] = useViewState('family.activeTab', 'tasks');
@@ -70,8 +72,18 @@ export default function FamilyDashboard() {
   const [rejectReason, setRejectReason] = useState('');
   const [rejecting, setRejecting] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
+  /** 正在审批的记录 id（按条加 loading，防止连点重复提交） */
+  const [approvingIds, setApprovingIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const isParent = role === 'parent';
+
+  /**
+   * 「待审批」Tab 只对家长存在，而 activeTab 是按 key 记的（跨身份共用同一份存储）。
+   * 家长停在待审批、切回小孩身份再进账本时，activeKey 指向一个不存在的 Tab，内容区就是空白。
+   * 这里让小孩端回落到任务区：不动存储 key —— KidHome.tsx / ParentHome.tsx 也在写 family.activeTab，
+   * 改 key 得同时改清单外的文件，漏一个就写错地方；家长原来的选择也照样留着。
+   */
+  const visibleTab = !isParent && activeTab === 'pending' ? 'tasks' : activeTab;
 
   // 任务打卡弹窗状态（照片与备注草稿由 CheckInModal 自己管）
   const [activeTask, setActiveTask] = useState<TaskConfig | null>(null);
@@ -103,10 +115,26 @@ export default function FamilyDashboard() {
     [filteredRecords, visibleCount]
   );
 
+  /**
+   * 拉账本：**成功才清掉 error** —— 以前全文件没有 setError(null)，
+   * 点「重试」就算成功也会一直停在错误页。重试期间用 retrying 给出反馈。
+   */
+  const reloadLedger = useCallback(async () => {
+    setRetrying(true);
+    try {
+      await loadLedger();
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '加载失败');
+    } finally {
+      setRetrying(false);
+    }
+  }, [loadLedger]);
+
   // 初始化加载
   useEffect(() => {
-    loadLedger().catch((e) => setError(e instanceof Error ? e.message : '加载失败'));
-  }, [loadLedger]);
+    void reloadLedger();
+  }, [reloadLedger]);
 
   // 切换筛选条件后回到第一页，避免出现「筛完还剩 40 条已渲染」
   // 首次挂载跳过：从别的页面切回来时要保住原来的分页进度
@@ -200,6 +228,20 @@ export default function FamilyDashboard() {
     });
   };
 
+  /**
+   * 记账失败的处理：`LedgerApprovalError` 表示账已经记上了、只是自动审批那一步没成功 ——
+   * 这笔钱并没有入账，记录正以 pending 躺在待审批里。这里重新拉一次账本让那条 pending
+   * 真的显示出来，并明确告诉家长去点「通过」；绝不能再报成成功。
+   */
+  const handleWriteError = async (e: unknown, fallback: string) => {
+    if (e instanceof LedgerApprovalError) {
+      await loadLedger().catch(() => undefined);
+      message.warning(e.message);
+      return;
+    }
+    message.error(e instanceof Error ? e.message : fallback);
+  };
+
   /** 打卡：写入流水（小孩端为待审批申请）并刷新余额 */
   const handleTask = async (task: TaskConfig) => {
     const blocked = guardTask(task);
@@ -219,7 +261,7 @@ export default function FamilyDashboard() {
       await loadLedger();
       notifySuccess(task, recordId);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '操作失败，请重试');
+      await handleWriteError(e, '操作失败，请重试');
     } finally {
       setSubmittingId(null);
     }
@@ -244,12 +286,21 @@ export default function FamilyDashboard() {
       form.resetFields();
       notifySuccess(task, recordId);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '添加失败，请重试');
+      await handleWriteError(e, '添加失败，请重试');
     }
   };
 
   if (error) {
-    return <ErrorState description={error} onRetry={() => loadLedger().catch(() => undefined)} />;
+    return (
+      <div className={styles.errorWrap}>
+        <ErrorState description={error} onRetry={() => void reloadLedger()} />
+        {retrying && (
+          <div className={styles.retryingHint}>
+            <Spin size="small" /> 正在重试…
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (loading && records.length === 0) {
@@ -268,13 +319,21 @@ export default function FamilyDashboard() {
     return sameDay ? `今天 ${time}` : `${d.getMonth() + 1}/${d.getDate()} ${time}`;
   };
 
-  /** 审批通过 */
+  /** 审批通过：按条记 pending，连点不会重复提交（审批写操作不可重入） */
   const handleApprove = async (id: string) => {
+    if (approvingIds.has(id)) return;
+    setApprovingIds((prev) => new Set(prev).add(id));
     try {
       await approve(id);
       message.success('已审批通过，积分已入账');
     } catch (e) {
       message.error('操作失败，请重试');
+    } finally {
+      setApprovingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -362,7 +421,13 @@ export default function FamilyDashboard() {
       await loadLedger();
       message.success(`已兑现 ${amount} 积分，余额清零`);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '结算失败，请重试');
+      // 账记上了但自动审批失败：钱没清零，那笔在待审批里 —— 不能说「余额清零」
+      if (e instanceof LedgerApprovalError) {
+        await loadLedger().catch(() => undefined);
+        message.warning(`已记账，但审批没成功 —— ${amount} 积分还没清零，记录在待审批里，去点一下通过`);
+      } else {
+        message.error(e instanceof Error ? e.message : '结算失败，请重试');
+      }
     } finally {
       setSettling(false);
     }
@@ -558,11 +623,15 @@ export default function FamilyDashboard() {
                       </Button>
                     </Popconfirm>
                   )}
-                  {/* 驳回后重新提交 */}
-                  {record.status === 'rejected' && (
+                  {/* 驳回后重新提交：这是孩子对自己申请的补救动作 —— 家长端不给这个按钮，
+                      只留一句只读说明（家长看到「重新提交」也会以为该由自己点） */}
+                  {!isParent && record.status === 'rejected' && (
                     <Button size="small" className={styles.resubmitBtn} onClick={() => handleResubmit(record.id)}>
                       重新提交
                     </Button>
+                  )}
+                  {isParent && record.status === 'rejected' && (
+                    <span className={styles.rejectedNote}>已驳回 · 孩子可重新提交</span>
                   )}
                   {/* 删除（仅家长）：含图片时后端一并删除 R2 图片 */}
                   {isParent && (
@@ -670,6 +739,7 @@ export default function FamilyDashboard() {
                       borderColor: record.amount >= 0 ? designTokens.colors.success : designTokens.colors.danger,
                     }}
                     icon={<CheckCircleOutlined />}
+                    loading={approvingIds.has(record.id)}
                     onClick={() => handleApprove(record.id)}
                   >
                     通过
@@ -739,7 +809,7 @@ export default function FamilyDashboard() {
 
         {/* Tab 切换：任务区 / 历史记录区 */}
         <Tabs
-          activeKey={activeTab}
+          activeKey={visibleTab}
           onChange={setActiveTab}
           className={styles.tabs}
           items={[

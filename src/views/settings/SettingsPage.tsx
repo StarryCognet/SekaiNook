@@ -41,7 +41,7 @@ import {
 } from "../../types/settings";
 import { scanOrphanImages, deleteOrphanImages } from "../../api/maintenance";
 import { uploadImage } from "../../api/upload";
-import { compressImage } from "../../utils/image";
+import { compressImage, isAbortError } from "../../utils/image";
 import { useBackButton } from "../../utils/useBackButton";
 import styles from "./SettingsPage.module.css";
 
@@ -50,6 +50,41 @@ type SectionId = "appearance" | "family" | "admin";
 
 /** 版本日志收起时展示几个版本（都是最新在前） */
 const RECENT_LOG_COUNT = 3;
+
+/** 称呼草稿的存储键前缀：改了一半就走开（切身份 / 关掉标签）也不丢 */
+const NAME_DRAFT_KEY = "sekainook_name_draft";
+
+type NameDraft = { call: string; nickname: string };
+
+function readNameDraft(target: "mom" | "kid"): NameDraft | null {
+  try {
+    const raw = localStorage.getItem(`${NAME_DRAFT_KEY}:${target}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<NameDraft>;
+    if (typeof parsed.call !== "string" || typeof parsed.nickname !== "string") {
+      return null;
+    }
+    return { call: parsed.call, nickname: parsed.nickname };
+  } catch {
+    return null;
+  }
+}
+
+function writeNameDraft(target: "mom" | "kid", draft: NameDraft): void {
+  try {
+    localStorage.setItem(`${NAME_DRAFT_KEY}:${target}`, JSON.stringify(draft));
+  } catch {
+    // 存不下就算了，不拦着保存
+  }
+}
+
+function clearNameDraft(target: "mom" | "kid"): void {
+  try {
+    localStorage.removeItem(`${NAME_DRAFT_KEY}:${target}`);
+  } catch {
+    // 同上
+  }
+}
 
 /**
  * 设置页：两层结构 ——
@@ -92,6 +127,8 @@ export default function SettingsPage() {
   // 口令校验中（异步比对摘要）与剩余锁定秒数（0 = 未锁定）
   const [pinChecking, setPinChecking] = useState(false);
   const [pinLockSeconds, setPinLockSeconds] = useState(0);
+  /** 口令是不是家长自己的那份：存进来后由 state 驱动，改完口令立刻刷新文案 */
+  const [customPin, setCustomPin] = useState(() => hasCustomParentPin());
 
   // 打卡图片清理（家长）
   const [scanning, setScanning] = useState(false);
@@ -108,12 +145,21 @@ export default function SettingsPage() {
   const bgInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingBg, setUploadingBg] = useState(false);
   const [removingBg, setRemovingBg] = useState(false);
+  /** 上传中可取消：用户改主意时立刻停手，别占着主线程解码大图 */
+  const bgAbortRef = useRef<AbortController | null>(null);
 
   const isParent = role === "parent";
   /** 这次编辑的是对方的哪一套称呼（家长→女儿，小孩→妈妈） */
   const nameTarget: "mom" | "kid" = isParent ? "kid" : "mom";
   const currentThemeName =
     THEMES.find((item) => item.id === themeId)?.name ?? themeId;
+
+  /** 已保存的对方称呼（用来判断输入框里是不是还没保存的改动） */
+  const serverCall = nameTarget === "kid" ? names.kidCall : names.momCall;
+  const serverNickname =
+    nameTarget === "kid" ? names.kidNickname : names.momNickname;
+  const namesDirty =
+    namesReady && (callInput !== serverCall || nicknameInput !== serverNickname);
 
   // 外层入口：一句话告诉你这组里有什么、现在是什么状态
   const sections: { id: SectionId; title: string; desc: string; icon: React.ReactNode }[] = [
@@ -157,10 +203,15 @@ export default function SettingsPage() {
   };
   const closeSection = () => setSection(null);
 
-  // 服务端称呼到位（或身份切换）后同步进输入框
+  // 服务端称呼到位（或身份切换）后同步进输入框；本地还留着没保存的草稿时以草稿为准
   useEffect(() => {
-    setCallInput(nameTarget === "kid" ? names.kidCall : names.momCall);
-    setNicknameInput(nameTarget === "kid" ? names.kidNickname : names.momNickname);
+    const draft = readNameDraft(nameTarget);
+    setCallInput(
+      draft ? draft.call : nameTarget === "kid" ? names.kidCall : names.momCall
+    );
+    setNicknameInput(
+      draft ? draft.nickname : nameTarget === "kid" ? names.kidNickname : names.momNickname
+    );
   }, [
     nameTarget,
     names.kidCall,
@@ -168,6 +219,11 @@ export default function SettingsPage() {
     names.momCall,
     names.momNickname,
   ]);
+  // 改了一半就走开（切身份、点进别的层、关掉标签）也不丢：有改动就自动留一份草稿
+  useEffect(() => {
+    if (!namesReady || !namesDirty) return;
+    writeNameDraft(nameTarget, { call: callInput, nickname: nicknameInput });
+  }, [namesReady, namesDirty, nameTarget, callInput, nicknameInput]);
   // 弹窗 / 第二层打开时接管安卓返回键：返回键先退一层，而不是退出设置页
   useBackButton(section !== null, closeSection);
   useBackButton(pinModalOpen, () => setPinModalOpen(false));
@@ -277,6 +333,7 @@ export default function SettingsPage() {
     setNewPin("");
     setConfirmPin("");
     message.success("家长口令已更新");
+    setCustomPin(hasCustomParentPin());
   };
 
   /** 换主题：只改本机显示，另一台手机自己选 */
@@ -284,7 +341,11 @@ export default function SettingsPage() {
     if (id === themeId) return;
     setThemeId(id);
     const preset = THEMES.find((item) => item.id === id);
-    message.success(`已切换到「${preset?.name ?? id}」主题`);
+    // 连点几套主题只留最后一条提示（固定 key 会替换掉上一条，不再堆一屏）
+    message.success({
+      content: `已切换到「${preset?.name ?? id}」主题`,
+      key: "theme-switch",
+    });
   };
 
   /** 选好背景图：压缩后传云端，再把地址存进设置（两台手机同步） */
@@ -297,15 +358,25 @@ export default function SettingsPage() {
       return;
     }
 
+    const controller = new AbortController();
+    bgAbortRef.current = controller;
     setUploadingBg(true);
     try {
-      const compressed = await compressImage(file);
+      // 解码期就把 signal 传下去：几千万像素的大图能中途停手，不占着主线程
+      const compressed = await compressImage(file, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       const { url } = await uploadImage(compressed);
+      if (controller.signal.aborted) return;
       await saveBackground(url);
       message.success("背景图已换好，另一台手机打开也是这张");
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "上传失败，请重试");
+      if (isAbortError(e)) {
+        message.info("已取消，背景图没换");
+      } else {
+        message.error(e instanceof Error ? e.message : "上传失败，请重试");
+      }
     } finally {
+      bgAbortRef.current = null;
       setUploadingBg(false);
     }
   };
@@ -351,6 +422,7 @@ export default function SettingsPage() {
               momNickname: nicknameValue,
             };
       const saved = await saveNames(patch);
+      clearNameDraft(nameTarget); // 已经进服务端了，草稿退休
       message.success(`已保存，界面上会显示「${displayName(saved, nameTarget)}」`);
     } catch (e) {
       message.error(e instanceof Error ? e.message : "保存失败，请重试");
@@ -505,6 +577,9 @@ export default function SettingsPage() {
               >
                 {background ? "换一张照片" : "上传照片当背景"}
               </Button>
+              {uploadingBg && (
+                <Button onClick={() => bgAbortRef.current?.abort()}>取消上传</Button>
+              )}
               {background && (
                 <Popconfirm
                   title="移除背景图？"
@@ -632,6 +707,11 @@ export default function SettingsPage() {
             >
               保存称呼
             </Button>
+            {namesDirty && (
+              <div className={styles.nameDraftHint}>
+                有改动还没保存：先帮你留在这台手机上，切走再回来还能接着改
+              </div>
+            )}
             {!namesReady && (
               <div className={styles.roleHint}>
                 还没连上云端称呼表（本地库需要执行 0004 迁移），当前显示的是本机缓存
@@ -658,7 +738,7 @@ export default function SettingsPage() {
                 <div className={styles.appName}>家长口令</div>
                 <div className={styles.appDesc}>
                   切到家长身份要输它；
-                  {hasCustomParentPin()
+                  {customPin
                     ? "已经改成你自己的口令了（忘了只能清掉这台手机的浏览器数据重来）"
                     : "现在还是出厂口令 1234，建议改成只有你知道的"}
                 </div>

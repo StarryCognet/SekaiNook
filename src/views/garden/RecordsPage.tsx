@@ -7,6 +7,9 @@ import styles from './RecordsPage.module.css';
 export default function RecordsPage() {
   const { tasks, completedCount, todayEarned, todayEarnedDate } = useGardenStore();
   const doneTasks = tasks.filter((t) => t.done);
+  // 「今日完成」是任务数口径：completedCount 由 store 从 tasks 派生，最多等于任务总数，
+  // 所以按「已完成 / 任务总数」展示。背诗、语文练习也会点亮对应的那两个任务，
+  // 但一天背三首诗只算一个任务 —— 多出来的入账只体现在上面的「获得阳光」里。
   // 「获得阳光」按今天实际入账的奖励求和：背诗、语文练习都可能一天入账多次
   // （任务本身只记一次奖励），以前按任务固定奖励求和会和真实到手的对不上。
   // 商城兑换只扣余额、不动 todayEarned，所以「赚到的」与「花掉的」不会互相污染。
@@ -21,7 +24,9 @@ export default function RecordsPage() {
       <Card className={styles.summaryCard} variant="borderless">
         <div className={styles.summaryItem}>
           <div className={styles.summaryLabel}>今日完成</div>
-          <div className={`num ${styles.summaryValue}`}>{completedCount}</div>
+          <div className={`num ${styles.summaryValue}`}>
+            {completedCount}/{tasks.length}
+          </div>
           <div className={styles.summarySub}>个任务</div>
         </div>
         <div className={styles.summaryItem}>

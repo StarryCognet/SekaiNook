@@ -36,6 +36,9 @@ export interface GardenState {
   badges: Badge[];
   /** 连续学习天数 */
   streakDays: number;
-  /** 今日已完成数量 */
+  /**
+   * 今日已完成的花园任务数（从 tasks 里 done 的条目派生，不会超过任务总数）。
+   * 今日实际入账的阳光是另一个口径，见 useGardenStore 的 todayEarned。
+   */
   completedCount: number;
 }

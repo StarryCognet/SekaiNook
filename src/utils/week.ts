@@ -14,7 +14,7 @@ export function getIsoWeekLabel(date: Date = new Date()): string {
   return `${year}-W${String(week).padStart(2, '0')}`;
 }
 
-/** 获取当前周标签 */
-export function getCurrentWeekLabel(): string {
-  return getIsoWeekLabel();
+/** 获取指定时刻（缺省 = 现在）所在的周标签 */
+export function getCurrentWeekLabel(date: Date = new Date()): string {
+  return getIsoWeekLabel(date);
 }

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Input, Modal, message } from 'antd';
 import { CameraOutlined, PictureOutlined } from '@ant-design/icons';
-import { addLedgerRecord } from '../api/familyLedger';
+import { addLedgerRecord, LedgerApprovalError } from '../api/familyLedger';
 import { uploadImage } from '../api/upload';
 import { compressImage } from '../utils/image';
 import { useBackButton } from '../utils/useBackButton';
+import { useFamilyStore } from '../store/useFamilyStore';
 import type { TaskConfig } from '../types/family';
 import styles from './CheckInModal.module.css';
 
@@ -120,7 +121,17 @@ export default function CheckInModal({
         message.warning({ content: `照片没传上去：${uploadError}（打卡本身已成功）`, duration: 6 });
       }
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '操作失败，请重试');
+      // 审批没成功时账其实已经记上了：这条路径不会走 onSuccess，所以得在这儿
+      // 顺手刷新账本，否则那条 pending 要等下次加载才出现在待审批里。
+      if (e instanceof LedgerApprovalError) {
+        await useFamilyStore
+          .getState()
+          .loadLedger()
+          .catch(() => undefined);
+        message.warning({ content: e.message, duration: 6 });
+      } else {
+        message.error(e instanceof Error ? e.message : '操作失败，请重试');
+      }
     } finally {
       setUploading(false);
     }

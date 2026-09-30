@@ -42,7 +42,7 @@
   /* 自定义背景图（JS 写入 url(...)；none = 没设） */
   --app-bg-image: none;
   /* 压在照片上的一层薄纱，保证文字够清楚 */
-  --app-bg-veil: rgba(255, 255, 255, 0);
+  --app-bg-veil: rgba(255, 255, 255, 0.34);
   /* 设了背景图时的半透明卡片底（各主题自己覆盖） */
   --surface-glass: rgba(255, 255, 255, 0.82);
   --surface-soft-glass: rgba(255, 255, 255, 0.7);
@@ -105,7 +105,7 @@
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-ring: rgba(255, 255, 255, 0.75);
   --glass-shadow: 0 8px 28px rgba(232, 98, 143, 0.18);
-  --app-bg-veil: rgba(255, 245, 248, 0);
+  --app-bg-veil: rgba(255, 245, 248, 0.36);
   --surface-glass: rgba(255, 255, 255, 0.82);
   --surface-soft-glass: rgba(255, 255, 255, 0.7);
   --tint-warning-bg: #fff3d6;
@@ -135,7 +135,7 @@
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-ring: rgba(255, 255, 255, 0.75);
   --glass-shadow: 0 8px 28px rgba(31, 111, 77, 0.18);
-  --app-bg-veil: rgba(242, 249, 245, 0);
+  --app-bg-veil: rgba(242, 249, 245, 0.36);
   --surface-glass: rgba(255, 255, 255, 0.82);
   --surface-soft-glass: rgba(255, 255, 255, 0.7);
   --tint-warning-bg: #fff4d9;
@@ -165,7 +165,7 @@
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-ring: rgba(255, 255, 255, 0.75);
   --glass-shadow: 0 8px 28px rgba(194, 95, 34, 0.18);
-  --app-bg-veil: rgba(255, 248, 241, 0);
+  --app-bg-veil: rgba(255, 248, 241, 0.36);
   --surface-glass: rgba(255, 255, 255, 0.82);
   --surface-soft-glass: rgba(255, 255, 255, 0.7);
   --tint-warning-bg: #fdeccd;

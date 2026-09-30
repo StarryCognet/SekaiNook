@@ -129,6 +129,25 @@ export function isRejectedWriteError(error: unknown): boolean {
 }
 
 /**
+ * 「记账成功、但立即审批那一步失败」时抛出的错误。
+ *
+ * 兑现 / 家长自己记账走的是两步：先 POST 记账，再 PATCH 审批。第二步失败如果静默吞掉，
+ * 调用方就会报「已兑现 X 积分，余额清零」—— 而服务端余额只统计无状态或 approved 的流水
+ * （functions/api/ledger/summary.ts），这笔钱其实没清零，记录以 pending 躺在待审批里。
+ * 所以这里必须让调用方看得见：带上 id，调用方据此提示「去待审批里点通过」并重新拉账本。
+ */
+export class LedgerApprovalError extends Error {
+  /** 已经记上的那条流水 id */
+  readonly id: string;
+
+  constructor(id: string) {
+    super('已记账，但审批没成功 —— 记录在待审批里，去点一下通过');
+    this.name = 'LedgerApprovalError';
+    this.id = id;
+  }
+}
+
+/**
  * 插入一条积分流水，金额与任务名以服务端规则为准。
  *
  * 审批状态不再由客户端决定：服务端一律写成 pending（花园奖励等标了 autoApprove 的除外），
@@ -136,6 +155,7 @@ export function isRejectedWriteError(error: unknown): boolean {
  * 走「提交 + 立即审批」两步，效果和以前一样，但服务端不再相信客户端的声称。
  *
  * @returns 新记录 id（用于「撤销」等回滚操作）
+ * @throws {LedgerApprovalError} 记账成功但审批失败：钱还挂在余额上，记录在待审批里
  */
 export async function addLedgerRecord(
   task: TaskConfig,
@@ -152,7 +172,12 @@ export async function addLedgerRecord(
     imageUrl: extra?.imageUrl,
   });
   if (opts?.autoApprove && result.id) {
-    await updateStatus(result.id, 'approved').catch(() => undefined);
+    try {
+      await updateStatus(result.id, 'approved');
+    } catch {
+      // 不能吞：账已经记上了，调用方若照常报「余额清零」就是在骗人
+      throw new LedgerApprovalError(result.id);
+    }
   }
   return result.id;
 }

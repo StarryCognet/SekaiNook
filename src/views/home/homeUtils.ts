@@ -49,12 +49,20 @@ export function todayRecords(records: readonly LedgerRecord[], now: Date): Ledge
   return records.filter((r) => dayKey(new Date(r.created_at)) === today);
 }
 
-/** 近 N 天（含今天）的收支合计，只算已入账的 */
+/**
+ * 滚动最近 N 天（含今天）的收支合计，只算已入账的。
+ *
+ * - `count`：区间内所有已入账流水条数（含消费、兑现）；
+ * - `checkins`：其中真正「打卡 / 获得」的条数 —— 只数正数流水，
+ *   消费罚款与现金兑现（payout 是 spending，金额为负）都不算打卡。
+ *
+ * 注意这里是**滚动 N 天**、不是自然周：文案必须照这个口径写（见 ParentHome 的概览卡）。
+ */
 export function recentSummary(
   records: readonly LedgerRecord[],
   days: number,
   now: Date
-): { income: number; expense: number; net: number; count: number } {
+): { income: number; expense: number; net: number; count: number; checkins: number } {
   const from = new Date(now);
   from.setDate(from.getDate() - (days - 1));
   from.setHours(0, 0, 0, 0);
@@ -62,15 +70,20 @@ export function recentSummary(
   let income = 0;
   let expense = 0;
   let count = 0;
+  let checkins = 0;
   for (const r of records) {
     if (r.status && r.status !== 'approved') continue;
     const at = new Date(r.created_at);
     if (Number.isNaN(at.getTime()) || at < from) continue;
-    if (r.amount > 0) income += r.amount;
-    else expense += r.amount;
+    if (r.amount > 0) {
+      income += r.amount;
+      checkins += 1;
+    } else {
+      expense += r.amount;
+    }
     count += 1;
   }
-  return { income, expense, net: income + expense, count };
+  return { income, expense, net: income + expense, count, checkins };
 }
 
 /** 今天 14:32 / 昨天 09:05 / 9月20日 21:10 */

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Segmented, message } from 'antd';
 import {
   BellOutlined,
@@ -12,7 +12,8 @@ import {
   RedoOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
-import { EmptyState, PageLoading } from '../../components/StateViews';
+import RefreshFailedBar from '../../components/RefreshFailedBar';
+import { EmptyState, ErrorState, PageLoading } from '../../components/StateViews';
 import { useFamilyStore } from '../../store/useFamilyStore';
 import { useNotificationStore } from '../../store/useNotificationStore';
 import { useKidName, useMomName } from '../../store/useSettingsStore';
@@ -41,9 +42,10 @@ type NoticeFilter = 'all' | 'unread';
  */
 export default function NotificationsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const now = useNow();
   const role = useFamilyStore((s) => s.role);
-  const { audience, items, unreadCount, loading, ready, load, markRead, markAllRead } =
+  const { audience, items, unreadCount, loading, ready, error, load, markRead, markAllRead } =
     useNotificationStore();
   // 收件箱标题也按视角走：妈妈看的是女儿的动态，女儿看的是妈妈说的话
   const momName = useMomName();
@@ -52,11 +54,30 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useViewState<NoticeFilter>('home.noticeFilter', 'all');
   const [markingAll, setMarkingAll] = useState(false);
 
+  /** 当前身份该看哪格信箱 */
+  const targetAudience = role === 'parent' ? 'parent' : 'child';
+
   useEffect(() => {
-    load(role === 'parent' ? 'parent' : 'child').catch(() => undefined);
-  }, [role, load]);
+    load(targetAudience).catch(() => undefined);
+  }, [targetAudience, load]);
 
   const visible = filter === 'unread' ? items.filter((n) => n.status === 'unread') : items;
+
+  // 失败态的重试：走 store 的加载动作（会进 loading），并带上当前信箱。
+  // store 里的 audience 是上次实际尝试的信箱，优先用它，避免角色切换途中重试错格。
+  const handleRetryLoad = () => {
+    load(audience ?? targetAudience).catch(() => undefined);
+  };
+
+  // 冷启动/外部通知链接直达时，通知页就是 history 的入口（key 为 default），
+  // 此时 navigate(-1) 会退出应用甚至回到站外页；退回首页并用 replace 换掉入口，避免死循环。
+  const handleBack = () => {
+    if (location.key === 'default') {
+      navigate('/home', { replace: true });
+      return;
+    }
+    navigate(-1);
+  };
 
   const handleOpen = async (id: string, status: string, link?: string | null) => {
     if (status === 'unread') {
@@ -71,7 +92,8 @@ export default function NotificationsPage() {
       await markAllRead();
       message.success('已全部标记为已读');
     } catch {
-      message.error('操作失败，请重试');
+      // store 已把本地未读数拉回真实值，这里如实说明「没成功」，别让用户对不上账
+      message.error('没能全部已读，请稍后重试');
     } finally {
       setMarkingAll(false);
     }
@@ -80,7 +102,7 @@ export default function NotificationsPage() {
   return (
     <div className={styles.page}>
       <div className={styles.head}>
-        <button className={styles.back} onClick={() => navigate(-1)} aria-label="返回">
+        <button className={styles.back} onClick={handleBack} aria-label="返回">
           <LeftOutlined />
         </button>
         <div className={styles.headText}>
@@ -118,8 +140,16 @@ export default function NotificationsPage() {
         </div>
       )}
 
+      {/* 已经有旧数据时拉取失败：保留列表，只在顶部说明「看的是旧的」，不要把看过的通知藏起来 */}
+      {error && items.length > 0 && (
+        <RefreshFailedBar onRetry={handleRetryLoad} text="通知没刷新成功，下面是上次看到的内容" />
+      )}
+
       {loading && items.length === 0 ? (
         <PageLoading />
+      ) : error && items.length === 0 ? (
+        // 加载失败必须看得见：以前这里会落进「暂时没有通知」空态，把断网说成没事
+        <ErrorState description={error} onRetry={handleRetryLoad} />
       ) : visible.length === 0 ? (
         <EmptyState description={filter === 'unread' ? '没有未读通知' : '暂时没有通知'} />
       ) : (

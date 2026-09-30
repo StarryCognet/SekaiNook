@@ -16,7 +16,9 @@ export default function OverviewPage() {
   // 进度条等 antd 属性拿不到 CSS 变量，颜色从当前主题调色板取
   const palette = useThemePalette();
   const total = tasks.length;
-  const percent = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+  // completedCount 与分母同为「今日任务」口径（store 从 tasks 派生，背诗 / 语文练习
+  // 额外入账的阳光走 todayEarned，不进这个比例）；再夹一次 0~100 并挡住除零
+  const percent = total > 0 ? Math.min(100, Math.max(0, Math.round((completedCount / total) * 100))) : 0;
   const earnedBadges = badges.filter((b) => b.earned).length;
   // 孩子挂在花园里的装饰：一件都没有时整块不渲染
   const decorItems = GARDEN_SHOP_ITEMS.filter(

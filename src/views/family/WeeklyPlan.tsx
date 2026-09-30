@@ -11,6 +11,7 @@ import {
 import { ensureWeeklyPlans, updateWeeklyPlan } from '../../api/familyTasks';
 import { WEEKLY_PLAN_TEMPLATE } from '../../config/familyRules';
 import { getCurrentWeekLabel } from '../../utils/week';
+import { useNow } from '../home/homeUtils';
 import { PageLoading, EmptyState, ErrorState } from '../../components/StateViews';
 import { designTokens } from '../../theme/tokens';
 import type { WeeklyPlan } from '../../types/family';
@@ -26,7 +27,9 @@ const SUBJECT_ICONS: Record<string, React.ReactNode> = {
 
 /** 每周学习计划表 */
 export default function WeeklyPlan() {
-  const weekLabel = getCurrentWeekLabel();
+  // 「本周」跨周会变：挂载时算一次的话，周日晚上把页面挂着不动就会一直显示上一周
+  const now = useNow(60000);
+  const weekLabel = useMemo(() => getCurrentWeekLabel(now), [now]);
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,10 +84,11 @@ export default function WeeklyPlan() {
       return;
     }
     try {
-      await updateWeeklyPlan(plan.id, next);
-      setInputs((prev) => ({ ...prev, [plan.id]: next }));
-      setPlans((prev) => prev.map((p) => (p.id === plan.id ? { ...p, current: next } : p)));
-      message.success('进度已更新');
+      // 用服务端回传的 current 回写输入框与列表：超目标会被夹到 target，界面库内必须一致
+      const applied = await updateWeeklyPlan(plan.id, next);
+      setInputs((prev) => ({ ...prev, [plan.id]: applied }));
+      setPlans((prev) => prev.map((p) => (p.id === plan.id ? { ...p, current: applied } : p)));
+      message.success(applied === next ? '进度已更新' : `已记到上限 ${applied}`);
     } catch (e) {
       message.error('更新失败');
       setInputs((prev) => ({ ...prev, [plan.id]: plan.current }));

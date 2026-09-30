@@ -249,6 +249,12 @@
   border-radius: 6px;
 }
 
+/* 家长端的「已驳回」只读说明（重新提交只属于孩子那一侧） */
+.rejectedNote {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
 /* 打卡成功提示：文案 + 撤销按钮 */
 .undoToast {
   display: inline-flex;
@@ -404,6 +410,22 @@
 
 .rejectHint {
   margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* ===== 加载失败页的重试反馈 ===== */
+.errorWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.retryingHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   color: var(--color-text-secondary);
 }

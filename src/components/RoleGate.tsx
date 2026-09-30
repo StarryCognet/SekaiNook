@@ -98,7 +98,9 @@ export default function RoleGate() {
         </Button>
         <div className={styles.choiceHint}>需要口令，可审批打卡、增删记录</div>
 
-        <div className={styles.footer}>出厂口令 1234，进去后请在设置页修改</div>
+        <div className={styles.footer}>
+          口令由家长自己设。忘了的话，在已经登录家长模式的手机上到「设置 → 家长管理」里改一个
+        </div>
       </Card>
 
       <Modal

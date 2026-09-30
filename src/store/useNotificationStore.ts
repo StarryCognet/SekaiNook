@@ -129,8 +129,12 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
 
       try {
         await markAllNotificationsRead(audience);
-      } catch {
+      } catch (e) {
+        // 失败必须让调用方知道：先拉回真实数据（未读数会老老实实涨回去），
+        // 再把错误抛出去。以前这里吞掉异常，页面照样弹「已全部标记为已读」，
+        // 用户接着看到角标又回来了 —— 提示成功但实际没成功。
         await get().refresh();
+        throw e;
       }
     },
   };

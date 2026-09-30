@@ -12,7 +12,7 @@ import {
   SunOutlined,
   WalletOutlined,
 } from '@ant-design/icons';
-import { addLedgerRecord } from '../../api/familyLedger';
+import { addLedgerRecord, LedgerApprovalError } from '../../api/familyLedger';
 import { fetchWeeklyPlans } from '../../api/familyTasks';
 import BalanceTrend from '../../components/BalanceTrend';
 import RefreshFailedBar from '../../components/RefreshFailedBar';
@@ -148,7 +148,13 @@ export default function ParentHome() {
       await loadLedger();
       message.success(`已兑现 ${amount} 积分，余额清零`);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '结算失败，请重试');
+      // 记账成功、自动审批失败：钱其实没清零，那笔以 pending 躺在待审批里 —— 绝不能说「余额清零」
+      if (e instanceof LedgerApprovalError) {
+        await loadLedger().catch(() => undefined);
+        message.warning(`已记账，但审批没成功 —— ${amount} 积分还没清零，记录在待审批里，去点一下通过`);
+      } else {
+        message.error(e instanceof Error ? e.message : '结算失败，请重试');
+      }
     } finally {
       setSettling(false);
     }
@@ -304,11 +310,13 @@ export default function ParentHome() {
         )}
       </section>
 
-      {/* 本周概览：收入 / 支出 / 净额 / 打卡次数 + 近 14 天趋势 */}
+      {/* 最近 7 天概览：收入 / 支出 / 净额 / 打卡次数 + 近 14 天趋势。
+          口径就是「滚动最近 7 天」（跟 recentSummary(records, 7, now) 一致），标题如实写，
+          不再叫「本周」——标题写本周、数字算的是最近 7 天，对不上。 */}
       <section className={styles.card}>
         <div className={styles.cardHead}>
-          <span className={styles.cardTitle}>本周概览</span>
-          <span className={styles.cardExtra}>近 7 天</span>
+          <span className={styles.cardTitle}>最近 7 天概览</span>
+          <span className={styles.cardExtra}>截至现在</span>
         </div>
         <div className={styles.statRow}>
           <div className={styles.statCell}>
@@ -324,7 +332,8 @@ export default function ParentHome() {
             <div className={styles.statLabel}>净额</div>
           </div>
           <div className={styles.statCell}>
-            <div className={`num ${styles.statValue}`}>{week.count}</div>
+            {/* 只数获得类记录（amount > 0）：消费 / 兑现不该算进「打卡次数」 */}
+            <div className={`num ${styles.statValue}`}>{week.checkins}</div>
             <div className={styles.statLabel}>打卡次数</div>
           </div>
         </div>
@@ -335,7 +344,14 @@ export default function ParentHome() {
       <section className={styles.card}>
         <div className={styles.cardHead}>
           <span className={styles.cardTitle}>{kidName}今天</span>
-          <span className={styles.cardExtra}>{today.length} 条</span>
+          {/* 列表只渲染前 5 条，右上角就不能再写总数骗人：>5 时如实说明并给去账本的入口 */}
+          {today.length > 5 ? (
+            <button className={styles.cardExtraAction} onClick={() => goLedger('records')}>
+              先看这 5 条，还有 {today.length - 5} 条 <RightOutlined />
+            </button>
+          ) : (
+            <span className={styles.cardExtra}>{today.length} 条</span>
+          )}
         </div>
 
         {today.length === 0 ? (

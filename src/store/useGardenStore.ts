@@ -73,6 +73,11 @@ interface GardenStore {
   tasks: GardenTask[];
   badges: Badge[];
   streakDays: number;
+  /**
+   * 今日完成的花园任务数：一律由 commit 从 tasks 里 done 的条目派生，
+   * 所以永远不会超过 tasks.length（背诗 / 语文练习会点亮对应的那两个任务，
+   * 但一天背 3 首诗也只算 1 个任务）。今日总共入账了多少阳光是另一个口径，看 todayEarned。
+   */
   completedCount: number;
   /** 累计完成任务数（跨天累计，不随每日重置清零） */
   totalCompleted: number;
@@ -283,7 +288,6 @@ function resolveBadges(
 interface CompletionStats {
   balance: number;
   streakDays: number;
-  completedCount: number;
   totalCompleted: number;
   lastActiveDate: string;
   todayEarned: number;
@@ -296,7 +300,6 @@ type CounterSource = Pick<
   GardenStore,
   | 'balance'
   | 'streakDays'
-  | 'completedCount'
   | 'totalCompleted'
   | 'lastActiveDate'
   | 'todayEarned'
@@ -307,20 +310,20 @@ type CounterSource = Pick<
 
 /**
  * 计算完成一次花园活动后的累计数据。
- * countToday=false 表示今日任务数已经计过（不重复 +1，避免今日进度超过任务总数）。
+ * 这里不产 completedCount：今日完成数一律由 commit 从 tasks 派生 —— 背诗 / 语文练习
+ * 会顺手点亮对应的今日任务（同一件事不重复领奖），于是它们自然计入，但分子绝不会超过
+ * 任务总数（以前每完成一次活动就自增，做完 8 个任务再背 3 首诗会出现 11/8、成长度 138%）。
  * 任意一天在花园里活动即算作一次「照顾花园」，同一天只记一次（按 lastGardenedDate 去重）。
  * todayEarned 只累加入账的奖励，商城兑换（buyItem）不走这里，所以「花掉的」不会冲掉「赚到的」。
  */
 function nextCompletionStats(
   source: CounterSource,
   reward: number,
-  today: string,
-  countToday: boolean
+  today: string
 ): CompletionStats {
   return {
     balance: source.balance + reward,
     streakDays: nextStreak(source.lastActiveDate, source.streakDays, today),
-    completedCount: countToday ? source.completedCount + 1 : source.completedCount,
     totalCompleted: source.totalCompleted + 1,
     lastActiveDate: today,
     todayEarned: (source.todayEarnedDate === today ? source.todayEarned : 0) + reward,
@@ -502,6 +505,7 @@ function mergeOwnedItems(local: string[], records: LedgerRecord[]): string[] {
 /**
  * 提交一次状态变更。余额相关的派生字段统一在这里重算，调用方不用自己算 balance：
  *   displaySun = 权威余额（summarySun / 本地流水 / 缓存）+ 未同步增量（pendingDelta）
+ * 今日完成数（completedCount）也在这里从任务列表派生，理由见下面的注释。
  */
 function commit(patch: Partial<GardenStore>): void {
   useGardenStore.setState((state) => {
@@ -514,7 +518,22 @@ function commit(patch: Partial<GardenStore>): void {
       cachedRecords,
       cachedSun: patch.cachedSun ?? state.cachedSun,
     });
-    return { ...patch, pending, pendingDelta, cachedSun, balance: cachedSun + pendingDelta };
+    // 「今日完成数」一律从任务列表本身派生，而不是每次活动自增：
+    // ① 分子分母天然同一口径（都是今日任务），做完 8 个任务再背 3 首诗也不会出现 11/8；
+    // ② 背诗 / 语文练习会顺手点亮对应任务，于是它们照样计入，语义不变；
+    // ③ 老存档里被撑大的数字下次启动就被纠正，是自愈的。
+    const tasks = patch.tasks ?? state.tasks;
+    const completedCount = Array.isArray(tasks)
+      ? tasks.filter((task) => task?.done).length
+      : 0;
+    return {
+      ...patch,
+      pending,
+      pendingDelta,
+      cachedSun,
+      balance: cachedSun + pendingDelta,
+      completedCount,
+    };
   });
   const state = useGardenStore.getState();
   saveState(toPersisted(state));
@@ -711,7 +730,8 @@ export const useGardenStore = create<GardenStore>((_set, get) => ({
         gardenCareDays,
       }),
       streakDays,
-      completedCount: sameTaskDay ? toSafeCount(saved.completedCount) : 0,
+      // completedCount 不从存档恢复、也不在这里自增：commit 一律从下面这份 tasks 派生，
+      // 老存档里被撑大的分子（比如背了几首诗后的 11）下次启动就被纠正成真实任务数。
       totalCompleted,
       lastActiveDate: saved.lastActiveDate ?? null,
       poemCount,
@@ -749,7 +769,7 @@ export const useGardenStore = create<GardenStore>((_set, get) => ({
     if (!task || task.done) return;
 
     const today = toDateKey(new Date());
-    const stats = nextCompletionStats(state, task.reward, today, true);
+    const stats = nextCompletionStats(state, task.reward, today);
     commit({
       tasks: state.tasks.map((t) =>
         t.id === taskId ? { ...t, done: true, completedAt: new Date().toISOString() } : t
@@ -762,7 +782,6 @@ export const useGardenStore = create<GardenStore>((_set, get) => ({
         gardenCareDays: stats.gardenCareDays,
       }),
       streakDays: stats.streakDays,
-      completedCount: stats.completedCount,
       totalCompleted: stats.totalCompleted,
       lastActiveDate: stats.lastActiveDate,
       gardenCareDays: stats.gardenCareDays,
@@ -793,7 +812,8 @@ export const useGardenStore = create<GardenStore>((_set, get) => ({
     if (todayPoemIds.includes(poemId)) return false;
 
     const poemTaskDone = state.tasks.find((t) => t.id === POEM_TASK_ID)?.done ?? false;
-    const stats = nextCompletionStats(state, poem.reward, today, !poemTaskDone);
+    // completedCount 由 commit 从 tasks 派生：上面条件点亮了「背一首古诗」任务时它自然 +1
+    const stats = nextCompletionStats(state, poem.reward, today);
     const poemCount = state.poemCount + 1;
     commit({
       // 与「今日任务・背一首古诗」同步，避免同一天重复领奖
@@ -810,7 +830,6 @@ export const useGardenStore = create<GardenStore>((_set, get) => ({
         gardenCareDays: stats.gardenCareDays,
       }),
       streakDays: stats.streakDays,
-      completedCount: stats.completedCount,
       totalCompleted: stats.totalCompleted,
       lastActiveDate: stats.lastActiveDate,
       poemCount,
@@ -841,7 +860,8 @@ export const useGardenStore = create<GardenStore>((_set, get) => ({
     if (done >= practice.timesPerDay) return false;
 
     const chineseTaskDone = state.tasks.find((t) => t.id === CHINESE_TASK_ID)?.done ?? false;
-    const stats = nextCompletionStats(state, practice.reward, today, !chineseTaskDone);
+    // 同上：语文练习打卡多次只点亮「语文预习」这一个任务，完成数不会跟着次数虚增
+    const stats = nextCompletionStats(state, practice.reward, today);
     commit({
       tasks: chineseTaskDone
         ? state.tasks
@@ -856,7 +876,6 @@ export const useGardenStore = create<GardenStore>((_set, get) => ({
         gardenCareDays: stats.gardenCareDays,
       }),
       streakDays: stats.streakDays,
-      completedCount: stats.completedCount,
       totalCompleted: stats.totalCompleted,
       lastActiveDate: stats.lastActiveDate,
       gardenCareDays: stats.gardenCareDays,

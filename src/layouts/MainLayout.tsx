@@ -18,6 +18,7 @@ import {
   WalletOutlined,
 } from "@ant-design/icons";
 import { isMobile } from "../utils/device";
+import ErrorBoundary from "../components/ErrorBoundary";
 import {
   getScroll,
   getTabPath,
@@ -457,11 +458,16 @@ export default function MainLayout() {
 
   // 恢复滚动位置：页面是懒加载的，首帧还没有高度，所以重试几帧；
   // 期间用户只要一动（触摸/滚轮）就立刻放弃，绝不跟人抢滚动条。
+  // 没有记忆（比如第一次进的 Tab）必须显式置顶：内容区是同一个滚动容器，
+  // 不置顶就会沿用上一个页面残留的 scrollTop（账本滚到中间 → 切花园也从中间开始）。
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
     const target = getScroll(location.pathname);
-    if (target <= 0) return;
+    if (target <= 0) {
+      el.scrollTop = 0;
+      return;
+    }
     let frames = 0;
     let cancelled = false;
     const cancel = () => {
@@ -647,9 +653,13 @@ export default function MainLayout() {
           </div>
         </Header>
         <Content className={styles.content} ref={contentRef}>
-          <div className="page-transition">
-            <Outlet />
-          </div>
+          {/* 二级错误边界：只包住子路由。页面组件抛错时顶栏与底部 Tab 都还在，
+              用户可以直接切到别的 Tab 自救；切了路由（resetKey 变化）边界自动清错。 */}
+          <ErrorBoundary variant="section" resetKey={location.pathname}>
+            <div className="page-transition">
+              <Outlet />
+            </div>
+          </ErrorBoundary>
         </Content>
       </Layout>
       {mobile && (

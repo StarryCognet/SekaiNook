@@ -27,6 +27,25 @@
   color: var(--color-text-secondary);
 }
 
+/* 设了背景图时（浅色主题尤其明显），卡片外的小标题/说明也得有底才看得清 */
+:global(:root[data-bg='on']) .groupTitle,
+:global(:root[data-bg='on']) .groupDesc {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-soft-glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* 称呼有没保存的改动时的提示（草稿已经自动留在本机） */
+.nameDraftHint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
 /* ===== 通用卡片 ===== */
 .infoCard {
   border-radius: 16px;

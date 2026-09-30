@@ -117,6 +117,20 @@
   cursor: pointer;
 }
 
+/* 「女儿今天」右上角的可点入口（去账本）——用主色跟下方 cardLink 区分开 */
+.cardExtraAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .cardLink {
   display: flex;
   align-items: center;
@@ -195,7 +209,7 @@
   color: var(--color-text-secondary);
 }
 
-/* 本周概览 */
+/* 最近 7 天概览（滚动窗口，含今天） */
 .statRow {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

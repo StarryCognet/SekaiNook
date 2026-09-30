@@ -17,10 +17,12 @@ export default function GardenPage() {
   // 进度条这类 antd 属性色到不了 CSS 变量，从当前主题调色板取
   const palette = useThemePalette();
   const { tasks, completedCount, gardenCareDays, lastWaterDate, careForGarden } = useGardenStore();
-  // 花园成长度基于今日完成任务数
   // 成长度 = 今天任务的完成比例。以前写死 `completedCount * 10`，而任务只有 8 个，
-  // 于是全做完也只有 80%，孩子会觉得「明明做完了却没满」
-  const growth = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
+  // 于是全做完也只有 80%，孩子会觉得「明明做完了却没满」。
+  // 现在与顶部「今日进度」同一个口径（都是 store 从 tasks 派生的任务完成数），
+  // 再做 0~100 夹取：分子被老存档撑大时不会算出 138%，分母为 0 时也不除零
+  const growth =
+    tasks.length > 0 ? Math.min(100, Math.max(0, Math.round((completedCount / tasks.length) * 100))) : 0;
 
   const today = todayKey();
   // 「今天浇过水没有」只看浇水自己的记录：做完任务不该把浇水按钮顶掉（以前会白点）

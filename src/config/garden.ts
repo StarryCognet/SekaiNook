@@ -138,3 +138,18 @@ export const GARDEN_MENUS = [
   { key: 'rewards', label: '我的奖励', icon: 'trophy' },
   { key: 'records', label: '学习记录', icon: 'history' },
 ];
+
+/**
+ * 花园菜单在 URL 里的查询参数名：菜单的唯一真相是地址栏（`/garden?tab=poem`）。
+ * 好处是点菜单能 push 出一条历史，系统返回键沿菜单回退，而不是直接退出花园；
+ * 用 URL 也天然带身份隔离 —— 换个人进花园不会继承上一个人的菜单。
+ */
+export const GARDEN_MENU_PARAM = 'tab';
+
+/** 进花园没带参数（或参数不认识）时落的那个菜单 */
+export const GARDEN_DEFAULT_MENU = 'tasks';
+
+/** 校验 URL 里的 ?tab= 值是不是合法菜单（未知 / 空值一律回退到默认菜单，不渲染空白） */
+export function isGardenMenuKey(value: string | null | undefined): value is string {
+  return value != null && GARDEN_MENUS.some((menu) => menu.key === value);
+}

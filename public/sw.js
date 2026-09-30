@@ -14,7 +14,7 @@
 /**
  * 构建标识：注册时由 /sw.js?v=<构建标识> 传入（见 src/utils/swUpdate.ts 与
  * vite.config.ts 注入的 __BUILD_ID__）。每次发布它都会变，于是缓存名随之变化，
- * activate 阶段按 CACHE_PREFIX 把上一代缓存整批清掉。
+ * activate 阶段按 CACHE_PREFIX 只清掉「比上一代更老」的缓存（上一代留着兜底）。
  * 直接访问 /sw.js（没有 ?v=，例如浏览器主动发起的更新检查）时回退为 v1。
  */
 const BUILD_ID = new URL(self.location.href).searchParams.get('v') || 'v1';
@@ -154,20 +154,46 @@ self.addEventListener('install', (event) => {
       // 再把 index.html 引用的构建产物一并缓存，做到"装完即可离线"
       await warmBuildAssets(cache);
 
-      // 新版本立即进入 waiting → activating，不等待旧页面关闭
-      await self.skipWaiting();
+      // 刻意不在这里 skipWaiting：装完先停在 waiting。
+      // 一发布就自动接管的话，旧页面（还跑着旧构建的 JS）会立刻被新 SW 接管，
+      // 它点一个尚未加载过的懒加载 chunk 就 404 → 被 ErrorBoundary 判定为 chunk 错误
+      // → 整页刷新回首页，页面内状态全丢。
+      // 现在是「等用户确认再接管」：由下面对 message 的监听触发 skipWaiting。
     })()
   );
+});
+
+/**
+ * 页面（src/utils/swUpdate.ts）在用户点了「立即刷新」之后才会发这条消息。
+ * 收到才 skipWaiting → 进入 activating → 接管本页 → 页面 reload 拿新资源。
+ */
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (data && data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
-      // 清理所有旧版本缓存（同前缀但不是当前版本）
+      // 清理旧版本缓存：保留「上一代」一代兜底，只删更老的。
+      // 缓存名后缀是构建标识（vite 注入的 Date.now().toString(36)，等长时字典序 = 时间序），
+      // 所以把非当前代的缓存名降序排，留下第一个（最近的上一代）即可。
+      // 为什么要留一代：刚接管的那几秒里，可能还有旧页面在取旧构建带 hash 的 chunk，
+      // 立刻删干净会让它们 404。
       const keys = await caches.keys();
+      const previous = keys
+        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+        .sort()
+        .reverse()[0];
+
       await Promise.all(
         keys
-          .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+          .filter(
+            (key) =>
+              key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME && key !== previous
+          )
           .map((key) => caches.delete(key))
       );
 

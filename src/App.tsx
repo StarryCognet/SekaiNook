@@ -53,6 +53,13 @@ function AppRoutes() {
 }
 
 /**
+ * 首屏防闪的「背景图影子缓存」键：背景图存在服务端，刷新时首帧拿不到，
+ * 所以每台设备拿到后往本机存一份地址，交给 index.html 里那段内联脚本先铺上。
+ * 只存服务端返回的稳定地址（/api/images/xxx），键名与 index.html 里保持一致。
+ */
+const BG_CACHE_KEY = "sekainook_bg_cache_v1";
+
+/**
  * 应用根组件。
  * 全局外观（主题 + 背景图）在这里落地：
  *   - 主题：<html data-theme="..."> 换一组 CSS 变量（见 theme/global.css），
@@ -60,10 +67,14 @@ function AppRoutes() {
  *   - 背景图：把地址写进 --app-bg-image，并打上 data-bg="on"，
  *     底色与卡片据此变半透明，让照片透出来。
  * 主题存本机（每台设备各选各的），背景图存服务端（两台设备一致）。
+ *
+ * 这里写的属性名 / 底色必须和 index.html 里的内联防闪脚本一致，
+ * 否则水合后会跳一下色（那边先画，这边随后纠正）。
  */
 export default function App() {
   const themeId = useThemeStore((s) => s.themeId);
   const background = useThemeStore((s) => s.background);
+  const backgroundReady = useThemeStore((s) => s.backgroundReady);
   const loadBackground = useThemeStore((s) => s.loadBackground);
   const hasBackground = background !== "";
 
@@ -74,14 +85,30 @@ export default function App() {
 
   useEffect(() => {
     const root = document.documentElement;
+    const preset = themePreset(themeId);
     root.dataset.theme = themeId;
     root.dataset.bg = hasBackground ? "on" : "off";
     root.style.setProperty("--app-bg-image", hasBackground ? `url("${background}")` : "none");
+    // 内联底色：index.html 的防闪脚本在第一帧就把它写进 style，
+    // 换主题时必须一起更新，否则内联样式会一直压着新主题的 --app-bg-base。
+    root.style.backgroundColor = preset.palette.bg;
 
     // 手机浏览器地址栏 / 状态栏跟着主题变色（取该主题的页面底色）
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", themePreset(themeId).palette.bg);
-  }, [themeId, background, hasBackground]);
+    if (meta) meta.setAttribute("content", preset.palette.bg);
+
+    // 首屏防闪用：影子存一份背景图地址（见 index.html 内联脚本）。
+    // 等服务端的值真的到位（backgroundReady）再动缓存 —— 否则首帧那个空字符串
+    // 会把上一份缓存抹掉，下次刷新就又只剩纯色。
+    if (backgroundReady) {
+      try {
+        if (hasBackground) localStorage.setItem(BG_CACHE_KEY, background);
+        else localStorage.removeItem(BG_CACHE_KEY);
+      } catch {
+        // 隐私模式：存不住只影响下次首屏，不影响功能
+      }
+    }
+  }, [themeId, background, hasBackground, backgroundReady]);
 
   const themeConfig = useMemo(() => buildAntdTheme(themeId, hasBackground), [themeId, hasBackground]);
 

@@ -6,7 +6,67 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#1A1A2E" />
+    <!-- 出厂默认主题（original）的页面底色：JS 没跑起来时也别停在旧色上，脚本会立刻纠正 -->
+    <meta name="theme-color" content="#f5f6fa" />
+    <script>
+      /* 首屏防闪（FOUC）：主题原本要等 React 挂载后的 effect 才写 data-theme，
+         在深色主题下会先按 :root 的浅色画一帧再跳深色。
+         这里在任何样式表之前先把主题、底色与背景图定下来。
+         约束：无 eval、无外部依赖、无 DOM 结构改动；整段包 try/catch，
+         localStorage 抛错（隐私模式）时静默退回默认主题，绝不因为这段脚本白屏。
+         下面三个表必须与 src/theme/themes.ts、src/store/useThemeStore.ts、
+         src/App.tsx 保持一致，改主题时三处一起改（水合后 App 会再写一遍同样的属性）。 */
+      (function () {
+        try {
+          // 主题 id → palette.bg（= global.css 里各主题的 --app-bg-base）
+          var THEME_BG = {
+            original: '#f5f6fa',
+            midnight: '#060c1c',
+            sakura: '#fff5f8',
+            forest: '#f2f9f5',
+            sunset: '#fff8f1',
+            crimson: '#140609',
+            graphite: '#141414',
+          };
+          // 与 useThemeStore.loadThemeId（读 THEME_STORAGE_KEY）同判据：不认识的 id 一律回出厂值
+          var THEME_KEY = 'sekainook_theme';
+          // 背景图影子缓存键：App.tsx 拿到服务端地址后写一份，键名与 App.tsx 里一致
+          var BG_KEY = 'sekainook_bg_cache_v1';
+
+          var themeId = null;
+          try {
+            themeId = localStorage.getItem(THEME_KEY);
+          } catch (err) {
+            /* 隐私模式读不到：用出厂主题 */
+          }
+          if (!THEME_BG.hasOwnProperty(themeId)) themeId = 'original';
+          var bg = THEME_BG[themeId];
+
+          var root = document.documentElement;
+          root.setAttribute('data-theme', themeId);
+          // 内联底色：CSS 还没到时 html 也不会是白底（App.tsx 的 effect 会同步更新它）
+          root.style.backgroundColor = bg;
+
+          var image = null;
+          try {
+            image = localStorage.getItem(BG_KEY);
+          } catch (err) {
+            /* 读不到就当没设背景图 */
+          }
+          if (image) {
+            root.setAttribute('data-bg', 'on');
+            root.style.setProperty('--app-bg-image', 'url("' + image + '")');
+          } else {
+            root.setAttribute('data-bg', 'off');
+          }
+
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', bg);
+        } catch (err) {
+          /* 出任何错都退回默认主题，不阻断后面的页面加载 */
+        }
+      })();
+    </script>
     <title>SekaiNook - 家庭财务与行为管理</title>
     <!-- PWA：可添加到主屏幕 / 独立窗口运行 -->
     <link rel="manifest" href="/manifest.webmanifest" />

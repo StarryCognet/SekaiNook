@@ -27,6 +27,11 @@ const HASH_PREFIX = 'sha256:';
 const PLAIN_PREFIX = 'plain:';
 /** 出厂家长口令（家长可在设置页修改） */
 const DEFAULT_PARENT_PIN = '1234';
+/**
+ * 出厂口令的摘要常量（SHA-256(`sekainook-pin:1234`)，与 hashPin 同一套 salt 前缀）。
+ * 用来回答「现在用的还是不是出厂口令」—— 只看「存过没有」会把「改回 1234」误判成自定义口令。
+ */
+const DEFAULT_PIN_HASH = 'adb4335c1a09e3dda9a90ff1605cbcbdb75681d549eb2e832673d96c04e61cf5';
 
 /** 允许连续失败的次数，超过就锁定 */
 const MAX_FREE_ATTEMPTS = 5;
@@ -92,6 +97,18 @@ function readStoredPin(): StoredPin | null {
   }
   const legacy = localStorage.getItem(LEGACY_PIN_KEY);
   return legacy ? { mode: 'plain', value: legacy } : null;
+}
+
+/**
+ * 存的这条是不是「出厂口令」。
+ * - 什么都没存：是（校验时走出厂口令）
+ * - 存了摘要：比摘要常量（家长把口令改回 1234 也算没自定义）
+ * - 存了明文（非安全上下文降级）：直接比字面
+ */
+function isDefaultStoredPin(stored: StoredPin | null): boolean {
+  if (!stored) return true;
+  if (stored.mode === 'hash') return stored.value === DEFAULT_PIN_HASH;
+  return stored.value === DEFAULT_PARENT_PIN;
 }
 
 /**
@@ -226,7 +243,7 @@ interface FamilyState {
   pinLockRemainingMs: () => number;
   /** 还能试几次（锁定中为 0），供 UI 显示「还可以试 N 次」 */
   pinAttemptsLeft: () => number;
-  /** 是否设置过自己的家长口令（只表明"设过"，不比对也不暴露口令本身） */
+  /** 是否用的是自己的家长口令（改回出厂口令 1234 也算没自定义） */
   hasCustomParentPin: () => boolean;
   /** 拉取流水与余额（单一数据源：余额由已审批记录计算）与待审批数量 */
   loadLedger: () => Promise<void>;
@@ -242,6 +259,16 @@ interface FamilyState {
   removeRecord: (id: string) => Promise<void>;
 }
 
+/**
+ * 请求序号 —— 同一个接口会被多路轮询同时打：
+ * 底部导航 15 秒刷待审批、账本页家长态 10 秒、账本页小孩态 15 秒、两端首页 20 秒，
+ * 切回前台时 visibilitychange / focus 还会再各来一次。
+ * 慢的旧响应如果后到，会把新数据覆盖回去（余额、待审批角标莫名回跳）。
+ * 这里只让「最新一次请求」的结果落库，旧响应直接丢弃。
+ */
+let ledgerSeq = 0;
+let pendingSeq = 0;
+
 /** 家庭积分银行全局状态 */
 export const useFamilyStore = create<FamilyState>((set, get) => ({
   role: loadRole(),
@@ -254,6 +281,8 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
   loading: false,
 
   setRole: (role) => {
+    // 防御性校验：脏值（改过的 localStorage、控制台直接调）不当身份写进去
+    if (role !== 'child' && role !== 'parent') return;
     localStorage.setItem(ROLE_KEY, role);
     set({ role });
   },
@@ -270,9 +299,10 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
 
   pinAttemptsLeft: () => attemptsLeft(),
 
-  hasCustomParentPin: () => readStoredPin() !== null,
+  hasCustomParentPin: () => !isDefaultStoredPin(readStoredPin()),
 
   loadLedger: async () => {
+    const seq = ++ledgerSeq;
     set({ loading: true });
     try {
       // 全量余额单独兜底：老部署还没有 /api/ledger/summary 时退回用流水算，
@@ -282,6 +312,8 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
         fetchPendingRequests(),
         fetchLedgerSummary().catch(() => null),
       ]);
+      // 期间又有更新的一次请求发出去了 ⇒ 这份结果已经过期，丢掉（别覆盖新数据）
+      if (seq !== ledgerSeq) return;
       // 同一个账本拆成两本：家长 / 家庭界面只看非花园流水，花园流水走 gardenRecords
       const records = allRecords.filter((record) => !isGardenTaskId(record.task_id));
       const gardenRecords = allRecords.filter((record) => isGardenTaskId(record.task_id));
@@ -295,13 +327,15 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
         loading: false,
       });
     } catch (e) {
-      set({ loading: false });
+      if (seq === ledgerSeq) set({ loading: false });
       throw e;
     }
   },
 
   refreshPending: async () => {
+    const seq = ++pendingSeq;
     const pending = await fetchPendingRequests();
+    if (seq !== pendingSeq) return; // 同理：过期响应不落库
     set({ pendingRecords: pending, pendingCount: pending.length });
   },
 
