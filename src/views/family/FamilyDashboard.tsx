@@ -97,6 +97,12 @@ export default function FamilyDashboard() {
 
   // 任务打卡弹窗状态（照片与备注草稿由 CheckInModal 自己管）
   const [activeTask, setActiveTask] = useState<TaskConfig | null>(null);
+  /**
+   * 弹窗是从哪条自定义任务打开的：提交成功后要把它标成「今天做过」。
+   * 打开内置任务时置空；关闭弹窗**不清**（CheckInModal 是「先 close 再 onSuccess」，
+   * 这里清了 onSuccess 就找不到它了）。
+   */
+  const modalCustomTaskRef = useRef<CustomTask | null>(null);
   /** 正在提交的任务 id（防止手机连点重复入账） */
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   /** 正在兑换现金（家长） */
@@ -315,32 +321,18 @@ export default function FamilyDashboard() {
   };
 
   /**
-   * 自定义任务打卡（快捷任务区）——和小孩首页同一套口径：
-   * 预置两条走服务端各自登记的 id（各自日限 1、即时到账）；
+   * 自定义任务在服务端要有对应的「执行 id」：预置两条各走自己的 id（日限 1、即时到账），
    * 其余全部写 `user_task_exec`，服务端按**任务名**判重 + 三层闸门。
-   * 家长点 = 代孩子记账，提交即入账；小孩身份点则进待审批，等家长批。
+   * 快捷任务区把自定义任务也摆成按钮，点开后走**同一个打卡弹窗**（可传照片 / 写备注），
+   * 不再点一下就立刻加积分 —— 与内置任务的操作完全一致。
    */
-  const handleCustomCheckIn = async (task: CustomTask) => {
-    if (submittingId) return; // 提交中忽略重复点击
-    setSubmittingId(task.id);
-    try {
-      const execTask: TaskConfig = {
-        id: task.kind === 'preset' ? task.id : USER_TASK_EXEC_ID,
-        name: task.name,
-        type: task.type,
-        value: task.value,
-        unit: '积分',
-      };
-      const recordId = await addLedgerRecord(execTask, undefined, { autoApprove: isParent });
-      markTaskDone(task.id);
-      await loadLedger();
-      notifySuccess(execTask, recordId);
-    } catch (e) {
-      await handleWriteError(e, '打卡失败，请重试');
-    } finally {
-      setSubmittingId(null);
-    }
-  };
+  const toExecTask = (task: CustomTask): TaskConfig => ({
+    id: task.kind === 'preset' ? task.id : USER_TASK_EXEC_ID,
+    name: task.name,
+    type: task.type,
+    value: task.value,
+    unit: '积分',
+  });
 
   if (error) {
     return (
@@ -532,13 +524,16 @@ export default function FamilyDashboard() {
                 }}
                 icon={<PlusOutlined />}
                 disabled={isDone(task)}
-                onClick={() => setActiveTask(task)}
+                onClick={() => {
+                  modalCustomTaskRef.current = null;
+                  setActiveTask(task);
+                }}
               >
                 <span className={styles.actionBtnText}>{task.name}</span>
                 <span className={`num ${styles.actionBtnValue}`}>+{task.value}</span>
               </Button>
             ))}
-            {/* 自定义任务：加进来的任务直接摆在这里，点一下就算打卡（完成才写流水） */}
+            {/* 自定义任务：同样摆在快捷任务区，点开走打卡弹窗（可传照片 / 写备注），提交后才写流水 */}
             {customEarningTasks.map((task) => {
               const done = isRecordedToday(task, records, now) || isTaskDoneToday(task.id);
               return (
@@ -551,9 +546,11 @@ export default function FamilyDashboard() {
                     borderColor: designTokens.colors.success,
                   }}
                   icon={<PlusOutlined />}
-                  disabled={done || submittingId === task.id}
-                  loading={submittingId === task.id}
-                  onClick={() => void handleCustomCheckIn(task)}
+                  disabled={done}
+                  onClick={() => {
+                    modalCustomTaskRef.current = task;
+                    setActiveTask(toExecTask(task));
+                  }}
                 >
                   <span className={styles.actionBtnText}>{task.name}</span>
                   <span className={`num ${styles.actionBtnValue}`}>
@@ -575,13 +572,16 @@ export default function FamilyDashboard() {
                 className={`${styles.actionBtn} btn-press`}
                 icon={<MinusOutlined />}
                 disabled={isDone(task)}
-                onClick={() => setActiveTask(task)}
+                onClick={() => {
+                  modalCustomTaskRef.current = null;
+                  setActiveTask(task);
+                }}
               >
                 <span className={styles.actionBtnText}>{task.name}</span>
                 <span className={`num ${styles.actionBtnValue}`}>{task.value}</span>
               </Button>
             ))}
-            {/* 自定义的消费 / 罚款任务：同样一键打卡 */}
+            {/* 自定义的消费 / 罚款任务：同样走打卡弹窗 */}
             {customSpendingTasks.map((task) => {
               const done = isRecordedToday(task, records, now) || isTaskDoneToday(task.id);
               return (
@@ -590,9 +590,11 @@ export default function FamilyDashboard() {
                   danger
                   className={`${styles.actionBtn} btn-press`}
                   icon={<MinusOutlined />}
-                  disabled={done || submittingId === task.id}
-                  loading={submittingId === task.id}
-                  onClick={() => void handleCustomCheckIn(task)}
+                  disabled={done}
+                  onClick={() => {
+                    modalCustomTaskRef.current = task;
+                    setActiveTask(toExecTask(task));
+                  }}
                 >
                   <span className={styles.actionBtnText}>{task.name}</span>
                   <span className={`num ${styles.actionBtnValue}`}>{task.value}</span>
@@ -1114,6 +1116,10 @@ export default function FamilyDashboard() {
         guard={guardTask}
         onClose={() => setActiveTask(null)}
         onSuccess={async (task, recordId) => {
+          // 从自定义任务按钮进来的：把那条标成「今天做过」，按钮立刻置灰（服务端还会再判一次重）
+          const custom = modalCustomTaskRef.current;
+          if (custom) markTaskDone(custom.id);
+          modalCustomTaskRef.current = null;
           await loadLedger();
           notifySuccess(task, recordId);
         }}
