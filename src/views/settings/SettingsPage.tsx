@@ -6,6 +6,7 @@ import {
   Segmented,
   Modal,
   Input,
+  InputNumber,
   Form,
   Button,
   message,
@@ -26,6 +27,7 @@ import {
   RightOutlined,
   DownOutlined,
   UpOutlined,
+  ToolOutlined,
 } from "@ant-design/icons";
 import { APP_VERSION, CHANGELOG } from "../../config/changelog";
 import { useFamilyStore } from "../../store/useFamilyStore";
@@ -40,13 +42,21 @@ import {
   validateName,
 } from "../../types/settings";
 import { scanOrphanImages, deleteOrphanImages } from "../../api/maintenance";
+import {
+  adjustLedgerPoints,
+  changeAdminPassword,
+  openAdminPanel,
+} from "../../api/admin";
 import { uploadImage } from "../../api/upload";
 import { compressImage, isAbortError } from "../../utils/image";
 import { useBackButton } from "../../utils/useBackButton";
 import styles from "./SettingsPage.module.css";
 
 /** 设置页第二层的大类 */
-type SectionId = "appearance" | "family" | "admin";
+type SectionId = "appearance" | "family" | "admin" | "superadmin";
+
+/** 管理员密码最长几位（与 functions/_lib/settings.ts 的 MAX_ADMIN_PASSWORD_LENGTH 一致） */
+const ADMIN_PASSWORD_MAX_LENGTH = 32;
 
 /** 版本日志收起时展示几个版本（都是最新在前） */
 const RECENT_LOG_COUNT = 3;
@@ -101,6 +111,11 @@ export default function SettingsPage() {
     pinLockRemainingMs,
     pinAttemptsLeft,
     hasCustomParentPin,
+    /** 账本余额（管理员面板里显示当前值） */
+    balance,
+    sunBalance,
+    /** 改完积分数后刷新账本，账本页跟着变 */
+    loadLedger,
   } = useFamilyStore();
   const { names, ready: namesReady, save: saveNames } = useSettingsStore();
   // 主题（本机）与背景图（跨设备同步）
@@ -123,6 +138,20 @@ export default function SettingsPage() {
   const [oldPin, setOldPin] = useState("");
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
+
+  // 管理员（家庭后台）：进门先验密码，进去后能直接改积分数
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
+  /** 进管理员后台用的密码；解锁后仍留在内存里，后续改积分要带着它 */
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [adminChecking, setAdminChecking] = useState(false);
+  /** 想改成的目标值（不是增量）；null = 这次不动这一项 */
+  const [adminFamily, setAdminFamily] = useState<number | null>(null);
+  const [adminSun, setAdminSun] = useState<number | null>(null);
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState("");
+  const [adminPasswordSaving, setAdminPasswordSaving] = useState(false);
 
   // 口令校验中（异步比对摘要）与剩余锁定秒数（0 = 未锁定）
   const [pinChecking, setPinChecking] = useState(false);
@@ -185,6 +214,12 @@ export default function SettingsPage() {
             desc: "家长口令、打卡照片清理",
             icon: <LockOutlined />,
           },
+          {
+            id: "superadmin" as SectionId,
+            title: "管理员",
+            desc: "修改积分数 · 需要管理员密码",
+            icon: <ToolOutlined />,
+          },
         ]
       : []),
   ];
@@ -201,7 +236,21 @@ export default function SettingsPage() {
       settingsRef.current?.scrollIntoView({ block: "start" })
     );
   };
-  const closeSection = () => setSection(null);
+  /** 返回第一层；离开二级页顺手把管理员锁上，下次进来还要输密码 */
+  const closeSection = () => {
+    setSection(null);
+    setAdminUnlocked(false);
+  };
+
+  /** 进第二层：管理员那一项先要密码，其余直接进 */
+  const handleEntryClick = (id: SectionId) => {
+    if (id === "superadmin" && !adminUnlocked) {
+      setAdminPassword("");
+      setAdminModalOpen(true);
+      return;
+    }
+    openSection(id);
+  };
 
   // 服务端称呼到位（或身份切换）后同步进输入框；本地还留着没保存的草稿时以草稿为准
   useEffect(() => {
@@ -228,6 +277,7 @@ export default function SettingsPage() {
   useBackButton(section !== null, closeSection);
   useBackButton(pinModalOpen, () => setPinModalOpen(false));
   useBackButton(changePinOpen, () => setChangePinOpen(false));
+  useBackButton(adminModalOpen, () => setAdminModalOpen(false));
 
   // 锁定中每秒刷新剩余秒数；剩余时间读的是 localStorage，刷新页面也绕不过去
   useEffect(() => {
@@ -334,6 +384,83 @@ export default function SettingsPage() {
     setConfirmPin("");
     message.success("家长口令已更新");
     setCustomPin(hasCustomParentPin());
+  };
+
+  /** 管理员：验密码 → 进后台面板 */
+  const handleAdminUnlock = async () => {
+    if (adminChecking) return;
+    setAdminChecking(true);
+    try {
+      await openAdminPanel(adminPassword);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "管理员密码不对");
+      return;
+    } finally {
+      // 校验抛错也要把 loading 收掉，不能卡住按钮
+      setAdminChecking(false);
+    }
+    setAdminUnlocked(true);
+    setAdminModalOpen(false);
+    setAdminFamily(null);
+    setAdminSun(null);
+    openSection("superadmin");
+    message.success("已进入管理员");
+  };
+
+  /** 管理员：把积分直接改成填的目标值（只改填了的那个） */
+  const handleAdminSavePoints = async () => {
+    if (adminSaving) return;
+    const wantsFamily = adminFamily !== null;
+    const wantsSun = adminSun !== null;
+    if (!wantsFamily && !wantsSun) {
+      message.info("先填一个想改的积分数");
+      return;
+    }
+    setAdminSaving(true);
+    try {
+      const result = await adjustLedgerPoints({
+        password: adminPassword,
+        ...(wantsFamily ? { family: adminFamily } : {}),
+        ...(wantsSun ? { sun: adminSun } : {}),
+      });
+      // 账本页的余额来自 store，这里刷一次，切回账本立刻看到新数字
+      await loadLedger();
+      setAdminFamily(null);
+      setAdminSun(null);
+      message.success(
+        result.changed && result.changed.length > 0
+          ? `已修改：${result.changed.join("，")}`
+          : "已保存"
+      );
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "保存失败，请重试");
+    } finally {
+      setAdminSaving(false);
+    }
+  };
+
+  /** 管理员：改掉出厂密码（改完全局生效，面板里后续动作换用新密码） */
+  const handleAdminChangePassword = async () => {
+    if (adminPasswordSaving) return;
+    if (newAdminPassword !== confirmAdminPassword) {
+      message.error("两次输入的新密码不一致");
+      return;
+    }
+    setAdminPasswordSaving(true);
+    try {
+      await changeAdminPassword({
+        password: adminPassword,
+        newPassword: newAdminPassword,
+      });
+      setAdminPassword(newAdminPassword);
+      setNewAdminPassword("");
+      setConfirmAdminPassword("");
+      message.success("管理员密码已更新");
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "改密码失败，请重试");
+    } finally {
+      setAdminPasswordSaving(false);
+    }
   };
 
   /** 换主题：只改本机显示，另一台手机自己选 */
@@ -486,7 +613,7 @@ export default function SettingsPage() {
                 key={entry.id}
                 type="button"
                 className={styles.entry}
-                onClick={() => openSection(entry.id)}
+                onClick={() => handleEntryClick(entry.id)}
               >
                 <span className={styles.entryIcon}>{entry.icon}</span>
                 <span className={styles.entryBody}>
@@ -799,6 +926,111 @@ export default function SettingsPage() {
         </section>
       )}
 
+      {/* ================= 第二层：管理员（家庭后台，仅家长可见） ================= */}
+      {section === "superadmin" && isParent && (
+        <section className={styles.group}>
+          {renderBackBar()}
+          <h2 className={styles.groupTitle}>管理员</h2>
+          <p className={styles.groupDesc}>直接校准积分数，改完立刻生效</p>
+
+          {/* 直接改积分数 */}
+          <Card className={styles.infoCard} variant="borderless">
+            <div className={styles.infoHeader}>
+              <div className={styles.infoIcon}>
+                <ToolOutlined />
+              </div>
+              <div className={styles.infoText}>
+                <div className={styles.appName}>修改积分数</div>
+                <div className={styles.appDesc}>
+                  填的是「改成多少」而不是「加多少」；只填想改的那一项，留空的不会动。改完账本里会多一条「管理员调整」，想退回就去账本里删掉它
+                </div>
+              </div>
+            </div>
+            <div className={styles.nameFields}>
+              <label className={styles.nameField}>
+                <span className={styles.nameLabel}>
+                  家庭积分（现在是 {balance}）
+                </span>
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder="留空 = 不改"
+                  value={adminFamily}
+                  onChange={(value) =>
+                    setAdminFamily(typeof value === "number" ? value : null)
+                  }
+                />
+              </label>
+              <label className={styles.nameField}>
+                <span className={styles.nameLabel}>
+                  花园阳光（现在是 {sunBalance}）
+                </span>
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder="留空 = 不改"
+                  value={adminSun}
+                  onChange={(value) =>
+                    setAdminSun(typeof value === "number" ? value : null)
+                  }
+                />
+              </label>
+            </div>
+            <Button
+              block
+              type="primary"
+              className={styles.nameSaveBtn}
+              loading={adminSaving}
+              onClick={handleAdminSavePoints}
+            >
+              保存修改
+            </Button>
+          </Card>
+
+          {/* 换掉出厂密码 */}
+          <Card className={styles.infoCard} variant="borderless">
+            <div className={styles.infoHeader}>
+              <div className={styles.infoIcon}>
+                <LockOutlined />
+              </div>
+              <div className={styles.infoText}>
+                <div className={styles.appName}>管理员密码</div>
+                <div className={styles.appDesc}>
+                  现在是出厂密码 3398377037，换成只有你知道的（家里每台手机都用新密码）
+                </div>
+              </div>
+            </div>
+            <div className={styles.nameFields}>
+              <label className={styles.nameField}>
+                <span className={styles.nameLabel}>新密码</span>
+                <Input.Password
+                  placeholder="4-32 位"
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
+                  maxLength={ADMIN_PASSWORD_MAX_LENGTH}
+                />
+              </label>
+              <label className={styles.nameField}>
+                <span className={styles.nameLabel}>再输一遍</span>
+                <Input.Password
+                  placeholder="确认新密码"
+                  value={confirmAdminPassword}
+                  onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                  maxLength={ADMIN_PASSWORD_MAX_LENGTH}
+                  onPressEnter={handleAdminChangePassword}
+                />
+              </label>
+            </div>
+            <Button
+              block
+              className={styles.nameSaveBtn}
+              loading={adminPasswordSaving}
+              onClick={handleAdminChangePassword}
+            >
+              改密码
+            </Button>
+          </Card>
+        </section>
+      )}
+
       {/* ================= 第一层：关于（只在入口列表这一层显示） ================= */}
       {section === null && (
       <section className={styles.group}>
@@ -976,6 +1208,33 @@ export default function SettingsPage() {
           {pinLockSeconds > 0
             ? `口令锁定中，请等 ${pinLockSeconds} 秒再试`
             : "出厂口令为 1234，请尽快修改"}
+        </div>
+      </Modal>
+
+      {/* 管理员密码弹窗：进家庭后台的门槛 */}
+      <Modal
+        title="管理员密码"
+        open={adminModalOpen}
+        onOk={handleAdminUnlock}
+        onCancel={() => setAdminModalOpen(false)}
+        okText="进入"
+        cancelText="取消"
+        confirmLoading={adminChecking}
+        destroyOnHidden
+      >
+        <Form layout="vertical">
+          <Form.Item label="管理员密码">
+            <Input.Password
+              placeholder="出厂密码 3398377037"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              maxLength={ADMIN_PASSWORD_MAX_LENGTH}
+              onPressEnter={handleAdminUnlock}
+            />
+          </Form.Item>
+        </Form>
+        <div className={styles.pinHint}>
+          进去之后可以直接改积分数，也能在面板里换掉这个密码
         </div>
       </Modal>
     </div>

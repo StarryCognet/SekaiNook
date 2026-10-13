@@ -161,3 +161,57 @@ export async function writeBackground(db: D1Database, url: string): Promise<stri
 
   return readBackground(db);
 }
+
+/* ===== 管理员密码 =====
+   「管理员」二级页的进门密码。存 D1 而不是本机 localStorage：家长换台手机、
+   清一次浏览器缓存也进得去，两台设备看到的是同一个密码。
+   默认值是出厂密码，家长进后台可以自己改。 */
+
+/** 管理员密码在 settings 表里的键名 */
+export const ADMIN_PASSWORD_KEY = 'admin_password';
+
+/** 出厂管理员密码（第一次进后台用它，进去后建议改掉） */
+export const DEFAULT_ADMIN_PASSWORD = '3398377037';
+
+/** 密码长度范围：短到 4 位（自己改时好记），长到 32 位（出厂那串 10 位塞得下） */
+export const MIN_ADMIN_PASSWORD_LENGTH = 4;
+export const MAX_ADMIN_PASSWORD_LENGTH = 32;
+
+/** 清洗管理员密码：非字符串、太短、太长都算非法（返回 null）；首尾空白去掉 */
+export function sanitizeAdminPassword(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (
+    trimmed.length < MIN_ADMIN_PASSWORD_LENGTH ||
+    trimmed.length > MAX_ADMIN_PASSWORD_LENGTH
+  ) {
+    return null;
+  }
+  return trimmed;
+}
+
+/** 当前生效的管理员密码；没设过或表不可用都回退出厂密码 */
+export async function readAdminPassword(db: D1Database): Promise<string> {
+  try {
+    const row = await db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .bind(ADMIN_PASSWORD_KEY)
+      .first<{ value: string }>();
+    return sanitizeAdminPassword(row?.value) ?? DEFAULT_ADMIN_PASSWORD;
+  } catch (error) {
+    // 常见原因：库里还没跑 0004 迁移（老库）。回退出厂密码，别把人锁在门外。
+    console.error('readAdminPassword failed', error);
+    return DEFAULT_ADMIN_PASSWORD;
+  }
+}
+
+/** 写入新密码；表没迁移时会抛错，由接口转成 503 */
+export async function writeAdminPassword(db: D1Database, password: string): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+    )
+    .bind(ADMIN_PASSWORD_KEY, password, new Date().toISOString())
+    .run();
+}
