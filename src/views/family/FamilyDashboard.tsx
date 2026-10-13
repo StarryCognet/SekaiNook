@@ -24,7 +24,8 @@ import { exportLedgerCsv } from '../../utils/exportLedger';
 import { checkTask, isTaskDone } from '../../utils/taskRules';
 import { getTasksByType } from '../../config/familyRules';
 import { useFamilyStore } from '../../store/useFamilyStore';
-import { useCustomTasksStore } from '../../store/useCustomTasksStore';
+import { useCustomTasksStore, USER_TASK_EXEC_ID, isRecordedToday } from '../../store/useCustomTasksStore';
+import type { CustomTask } from '../../store/useCustomTasksStore';
 import { PageLoading, EmptyState, ErrorState } from '../../components/StateViews';
 import BalanceTrend from '../../components/BalanceTrend';
 import CheckInModal from '../../components/CheckInModal';
@@ -83,6 +84,8 @@ export default function FamilyDashboard() {
   const addCustomTask = useCustomTasksStore((s) => s.addTask);
   const removeCustomTask = useCustomTasksStore((s) => s.removeTask);
   const ensurePresets = useCustomTasksStore((s) => s.ensurePresets);
+  const markTaskDone = useCustomTasksStore((s) => s.markDone);
+  const isTaskDoneToday = useCustomTasksStore((s) => s.isDoneToday);
 
   /**
    * 「待审批」Tab 只对家长存在，而 activeTab 是按 key 记的（跨身份共用同一份存储）。
@@ -106,6 +109,9 @@ export default function FamilyDashboard() {
 
   const earningTasks = getTasksByType('earning');
   const spendingTasks = getTasksByType('spending');
+  /** 自定义任务（家长加的 / 孩子提的）：也摆进「快捷任务」区，点一下就是打卡 */
+  const customEarningTasks = customTasks.filter((t) => t.type === 'earning');
+  const customSpendingTasks = customTasks.filter((t) => t.type === 'spending');
   /** 右侧快捷按钮对应的任务（可能不存在，避免用非空断言） */
   const homeworkTask = earningTasks.find((t) => t.id === 'finish_homework');
   const sleepTask = earningTasks.find((t) => t.id === 'sleep_on_time');
@@ -303,7 +309,35 @@ export default function FamilyDashboard() {
       createdBy: 'parent',
     });
     form.resetFields();
-    message.success(`「${created.name}」已加入任务列表，打卡完成才给积分`);
+    message.success(`「${created.name}」已加进快捷任务，点一下就能打卡`);
+  };
+
+  /**
+   * 自定义任务打卡（快捷任务区）——和小孩首页同一套口径：
+   * 预置两条走服务端各自登记的 id（各自日限 1、即时到账）；
+   * 其余全部写 `user_task_exec`，服务端按**任务名**判重 + 三层闸门。
+   * 家长点 = 代孩子记账，提交即入账；小孩身份点则进待审批，等家长批。
+   */
+  const handleCustomCheckIn = async (task: CustomTask) => {
+    if (submittingId) return; // 提交中忽略重复点击
+    setSubmittingId(task.id);
+    try {
+      const execTask: TaskConfig = {
+        id: task.kind === 'preset' ? task.id : USER_TASK_EXEC_ID,
+        name: task.name,
+        type: task.type,
+        value: task.value,
+        unit: '积分',
+      };
+      const recordId = await addLedgerRecord(execTask, undefined, { autoApprove: isParent });
+      markTaskDone(task.id);
+      await loadLedger();
+      notifySuccess(execTask, recordId);
+    } catch (e) {
+      await handleWriteError(e, '打卡失败，请重试');
+    } finally {
+      setSubmittingId(null);
+    }
   };
 
   if (error) {
@@ -495,6 +529,30 @@ export default function FamilyDashboard() {
                 <span className={`num ${styles.actionBtnValue}`}>+{task.value}</span>
               </Button>
             ))}
+            {/* 自定义任务：加进来的任务直接摆在这里，点一下就算打卡（完成才写流水） */}
+            {customEarningTasks.map((task) => {
+              const done = isRecordedToday(task, records, now) || isTaskDoneToday(task.id);
+              return (
+                <Button
+                  key={task.id}
+                  type="primary"
+                  className={`${styles.actionBtn} btn-press`}
+                  style={{
+                    background: designTokens.colors.success,
+                    borderColor: designTokens.colors.success,
+                  }}
+                  icon={<PlusOutlined />}
+                  disabled={done || submittingId === task.id}
+                  loading={submittingId === task.id}
+                  onClick={() => void handleCustomCheckIn(task)}
+                >
+                  <span className={styles.actionBtnText}>{task.name}</span>
+                  <span className={`num ${styles.actionBtnValue}`}>
+                    {task.value > 0 ? `+${task.value}` : task.value}
+                  </span>
+                </Button>
+              );
+            })}
           </div>
           {/* 消费/罚款 */}
           <div className={styles.actionGroup}>
@@ -514,6 +572,24 @@ export default function FamilyDashboard() {
                 <span className={`num ${styles.actionBtnValue}`}>{task.value}</span>
               </Button>
             ))}
+            {/* 自定义的消费 / 罚款任务：同样一键打卡 */}
+            {customSpendingTasks.map((task) => {
+              const done = isRecordedToday(task, records, now) || isTaskDoneToday(task.id);
+              return (
+                <Button
+                  key={task.id}
+                  danger
+                  className={`${styles.actionBtn} btn-press`}
+                  icon={<MinusOutlined />}
+                  disabled={done || submittingId === task.id}
+                  loading={submittingId === task.id}
+                  onClick={() => void handleCustomCheckIn(task)}
+                >
+                  <span className={styles.actionBtnText}>{task.name}</span>
+                  <span className={`num ${styles.actionBtnValue}`}>{task.value}</span>
+                </Button>
+              );
+            })}
           </div>
         </div>
       </div>

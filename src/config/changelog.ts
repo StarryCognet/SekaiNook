@@ -11,10 +11,19 @@ export interface ChangelogEntry {
 }
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '1.30.0';
+export const APP_VERSION = '1.30.1';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.30.1',
+    date: '2026-10-13 18:00:00',
+    title: '自定义任务也能在快捷任务里一键打卡',
+    changes: [
+      '自定义任务也能一键打卡了：加进来的任务以前只躺在页面下面的列表里，现在和内置任务一样直接摆进「快捷任务」区，点一下就记一笔 —— 正分进「赚钱」、负分进「消费 / 罚款」，不用再翻到下面去点',
+      '记没记过一眼看得出来：正在记的那一笔按钮转圈，当天已经记过的不让重复点',
+    ],
+  },
   {
     version: '1.30.0',
     date: '2026-10-13 17:22:00',
