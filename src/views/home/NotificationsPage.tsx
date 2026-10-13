@@ -38,7 +38,7 @@ type NoticeFilter = 'all' | 'unread';
  * 通知收件箱。
  *
  * 这里只放「事件」（谁对谁做了什么）：妹妹提交了打卡、妈妈记了一笔、某条被驳回了……
- * 「今天任务没做完」「21 点了」这类待办提醒在首页即时算，不进这里 —— 否则每天都会刷屏。
+ * 「今天任务没做完」「22 点了」这类待办提醒在首页即时算，不进这里 —— 否则每天都会刷屏。
  */
 export default function NotificationsPage() {
   const navigate = useNavigate();

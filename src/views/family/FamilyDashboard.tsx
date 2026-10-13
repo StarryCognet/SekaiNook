@@ -18,12 +18,13 @@ import {
   RollbackOutlined,
   DownloadOutlined,
 } from '@ant-design/icons';
-import { addLedgerRecord, LedgerApprovalError, resubmitRequest } from '../../api/familyLedger';
+import { addLedgerRecord, LedgerApprovalError, describeSettleApplied, resubmitRequest, settleLedgerOncePerDay } from '../../api/familyLedger';
 import { useViewState } from '../../utils/useViewState';
 import { exportLedgerCsv } from '../../utils/exportLedger';
 import { checkTask, isTaskDone } from '../../utils/taskRules';
 import { getTasksByType } from '../../config/familyRules';
 import { useFamilyStore } from '../../store/useFamilyStore';
+import { useCustomTasksStore } from '../../store/useCustomTasksStore';
 import { PageLoading, EmptyState, ErrorState } from '../../components/StateViews';
 import BalanceTrend from '../../components/BalanceTrend';
 import CheckInModal from '../../components/CheckInModal';
@@ -77,6 +78,12 @@ export default function FamilyDashboard() {
 
   const isParent = role === 'parent';
 
+  // 自定义任务列表（本地存档，不加表）：家长加的任务都在这里，打卡完成才给积分
+  const customTasks = useCustomTasksStore((s) => s.tasks);
+  const addCustomTask = useCustomTasksStore((s) => s.addTask);
+  const removeCustomTask = useCustomTasksStore((s) => s.removeTask);
+  const ensurePresets = useCustomTasksStore((s) => s.ensurePresets);
+
   /**
    * 「待审批」Tab 只对家长存在，而 activeTab 是按 key 记的（跨身份共用同一份存储）。
    * 家长停在待审批、切回小孩身份再进账本时，activeKey 指向一个不存在的 Tab，内容区就是空白。
@@ -124,6 +131,16 @@ export default function FamilyDashboard() {
     try {
       await loadLedger();
       setError(null);
+      // 日结算（开户礼金 / 那天完成的任务不够 5 个 / 到 22:00 没打卡睡觉）：
+      // 正确性由服务端幂等 id 保证，本地按「被结算的那一天」节流，纯粹为了省流量。
+      const settled = await settleLedgerOncePerDay();
+      if (settled && settled.applied.length > 0) {
+        await loadLedger().catch(() => undefined);
+        message.warning({
+          content: `账本更新：${describeSettleApplied(settled.applied)}`,
+          duration: 6,
+        });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载失败');
     } finally {
@@ -151,6 +168,12 @@ export default function FamilyDashboard() {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // 预置的两条学习任务（十个英语单词 / 两首古诗）默认出现在任务列表里。
+  // ensurePresets 幂等：重复调用不产生重复项，也不会覆盖家长改过 / 删过的任务。
+  useEffect(() => {
+    ensurePresets();
+  }, [ensurePresets]);
 
   // 家长端：轮询待审批数量（角标实时性），10s 间隔 + 页面重新可见时立即刷新。
   // 页面在后台（息屏/切走）时跳过轮询，省电也省流量 —— 安卓手机上这点很重要
@@ -192,7 +215,8 @@ export default function FamilyDashboard() {
   }, [isParent, loadLedger]);
 
   const hour = now.getHours();
-  const isLate = hour >= 21;
+  // 22:00 后仍未打卡睡觉：服务端会按 settleDay 自动记一笔 -20「未按时作息(晚于22:00)」
+  const isLate = hour >= 22;
 
   /** 打卡规则的判断在 utils/taskRules 里 —— 首页（妹妹版）用的是同一套规则 */
   const guardTask = (task: TaskConfig) => checkTask(task, records, now);
@@ -267,27 +291,19 @@ export default function FamilyDashboard() {
     }
   };
 
-  /** 提交自定义任务 */
-  const handleCustomTask = async (values: CustomTaskForm) => {
-    const task: TaskConfig = {
-      id: `custom_${Date.now()}`,
-      name: values.name.trim(),
+  /**
+   * 提交自定义任务 —— 需求 5：**「添加任务」这个动作本身不入账**，只写进任务列表。
+   * 打卡完成时才写流水（孩子端首页的「我的任务」里点完成），所以这里绝不调 addLedgerRecord。
+   */
+  const handleCustomTask = (values: CustomTaskForm) => {
+    const created = addCustomTask({
+      name: values.name,
+      value: values.value,
       type: values.type,
-      value: values.type === 'earning' ? Math.abs(values.value) : -Math.abs(values.value),
-      unit: '积分',
-    };
-    try {
-      const recordId = await addLedgerRecord(
-        task,
-        undefined,
-        { autoApprove: isParent }
-      );
-      await loadLedger();
-      form.resetFields();
-      notifySuccess(task, recordId);
-    } catch (e) {
-      await handleWriteError(e, '添加失败，请重试');
-    }
+      createdBy: 'parent',
+    });
+    form.resetFields();
+    message.success(`「${created.name}」已加入任务列表，打卡完成才给积分`);
   };
 
   if (error) {
@@ -530,6 +546,50 @@ export default function FamilyDashboard() {
               添加任务
             </Button>
           </Form>
+          {/* 任务列表（本地存档）：添加进来的任务都在这里，打卡完成才给积分（需求 5） */}
+          <List
+            size="small"
+            style={{ marginTop: 12 }}
+            dataSource={customTasks}
+            locale={{ emptyText: '还没有任务，添加一个吧' }}
+            renderItem={(task) => (
+              <List.Item
+                actions={[
+                  <Popconfirm
+                    key="delete"
+                    title="删掉这个任务？"
+                    okText="删掉"
+                    cancelText="取消"
+                    onConfirm={() => removeCustomTask(task.id)}
+                  >
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      aria-label="删除任务"
+                    />
+                  </Popconfirm>,
+                ]}
+              >
+                <span style={{ marginRight: 8 }}>{task.name}</span>
+                <Tag color={task.kind === 'preset' ? 'blue' : task.createdBy === 'child' ? 'orange' : 'default'}>
+                  {task.kind === 'preset' ? '预置' : task.createdBy === 'child' ? '孩子提的' : '自定义'}
+                </Tag>
+                <span
+                  className="num"
+                  style={{
+                    marginLeft: 8,
+                    fontWeight: 600,
+                    color:
+                      task.value > 0 ? designTokens.colors.success : designTokens.colors.danger,
+                  }}
+                >
+                  {task.value > 0 ? `+${task.value}` : task.value}
+                </span>
+              </List.Item>
+            )}
+          />
         </Card>
       )}
     </div>
@@ -866,7 +926,7 @@ export default function FamilyDashboard() {
           {isLate ? (
             <div className={styles.lateWarning}>
               <Tag color="error" icon={<MoonOutlined />}>
-                注意作息，否则触发罚款
+                已过 22:00，未打卡睡觉会记一次罚款
               </Tag>
             </div>
           ) : (

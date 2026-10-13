@@ -4,7 +4,7 @@ import type { LedgerRecord } from '../../types/family';
 /**
  * 首页专用的小工具：都是「把数据翻译成人话」的函数。
  *
- * 首页有实时时钟、问候语、21 点提醒，都需要一个会走的「现在」，
+ * 首页有实时时钟、问候语、22 点提醒，都需要一个会走的「现在」，
  * 所以这里提供一个 useNow：每分钟重算一次，避免为了一个钟点把整页重渲染得太勤。
  */
 export function useNow(intervalMs = 60000): Date {

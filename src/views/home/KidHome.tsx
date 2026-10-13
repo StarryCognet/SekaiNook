@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Progress, message } from 'antd';
+import { Button, Input, InputNumber, Progress, message } from 'antd';
+import { addLedgerRecord, LedgerApprovalError, describeSettleApplied, settleLedgerOncePerDay } from '../../api/familyLedger';
 import {
   AccountBookOutlined,
   BookOutlined,
@@ -19,6 +20,12 @@ import { getGardenIcon } from '../../components/garden/GardenIcon';
 import { getTasksByType } from '../../config/familyRules';
 import { GARDEN_SHOP_ITEMS, toShopItemShortName } from '../../config/garden';
 import { useFamilyStore } from '../../store/useFamilyStore';
+import {
+  USER_TASK_EXEC_ID,
+  isRecordedToday,
+  useCustomTasksStore,
+} from '../../store/useCustomTasksStore';
+import type { CustomTask } from '../../store/useCustomTasksStore';
 import { useGardenStore } from '../../store/useGardenStore';
 import { useNotificationStore } from '../../store/useNotificationStore';
 import { useKidName, useMomName } from '../../store/useSettingsStore';
@@ -96,6 +103,12 @@ export default function KidHome() {
     completeTask,
   } = useGardenStore();
   const { balance, records, pendingRecords, pendingCount, loadLedger } = useFamilyStore();
+  // 我的任务（本地任务列表，不加表）：预置两条 + 妈妈加的 + 我自己加的
+  const customTasks = useCustomTasksStore((s) => s.tasks);
+  const addCustomTask = useCustomTasksStore((s) => s.addTask);
+  const ensurePresets = useCustomTasksStore((s) => s.ensurePresets);
+  const markTaskDone = useCustomTasksStore((s) => s.markDone);
+  const isTaskDoneToday = useCustomTasksStore((s) => s.isDoneToday);
   const { items: notifications, unreadCount } = useNotificationStore();
   // 妹妹的视角：她自己一律是「我」，另一个人是妈妈（妈妈怎么被称呼由她在设置里定）
   const kidName = useKidName();
@@ -118,11 +131,22 @@ export default function KidHome() {
   });
   // 刚解锁的勋章：有一个就弹一次（仪式感），点掉就没了
   const [newBadge, setNewBadge] = useState<Badge | null>(null);
+  // 自己加任务的小表单：只写进任务列表，不入账
+  const [wishName, setWishName] = useState('');
+  const [wishValue, setWishValue] = useState<number | null>(5);
+  /** 正在打卡的任务 id：防连点 */
+  const [checkingId, setCheckingId] = useState<string | null>(null);
 
   // 花园存档放在 localStorage 里，原来只有花园页会 init —— 首页要用它，就得自己装一次
   useEffect(() => {
     initGarden();
   }, [initGarden]);
+
+  // 预置的两条学习任务要出现在「我的任务」里，即使妈妈没打开过家长页。
+  // ensurePresets 幂等：重复调用不会产生重复项，也不会覆盖改过 / 删过的任务。
+  useEffect(() => {
+    ensurePresets();
+  }, [ensurePresets]);
 
   const refresh = useCallback(async () => {
     try {
@@ -130,7 +154,14 @@ export default function KidHome() {
       setLoadFailed(false);
     } catch {
       setLoadFailed(true);
+      return;
     }
+    // 日结算（开户礼金 / 那天完成的任务不够 5 个 / 到 22:00 没打卡睡觉）：
+    // 正确性由服务端幂等 id 保证，本地只按「被结算的那一天」节流，纯粹为了省流量。
+    const settled = await settleLedgerOncePerDay();
+    if (!settled || settled.applied.length === 0) return;
+    await loadLedger().catch(() => undefined);
+    message.warning({ content: `账本更新：${describeSettleApplied(settled.applied)}`, duration: 6 });
   }, [loadLedger]);
 
   useEffect(() => {
@@ -180,7 +211,7 @@ export default function KidHome() {
 
   const week = recentSummary(records, 7, now);
   const todayCount = todayRecords(records, now).length;
-  const showLateAlert = now.getHours() >= 21 && learningLeft > 0;
+  const showLateAlert = now.getHours() >= 22 && learningLeft > 0;
 
   // 还没做完的学习任务排前面，最多显示 4 个
   const todoTasks = gardenTasks.filter((t) => !t.done).slice(0, 4);
@@ -212,6 +243,63 @@ export default function KidHome() {
       }
       return next;
     });
+  };
+
+  /**
+   * 我的任务打卡：写一条 `user_task_exec` 流水（预置任务用服务端登记的 id，各自独立、即时到账）。
+   *
+   * ⚠️ 绝不自造 `custom_<ts>` 之类的 id 去写账本 —— 服务端对未知 task_id 一律 403。
+   * 妈妈加的任务打完卡直接入账；我自己加的要走 pending 等妈妈批，
+   * 否则就成了「自己加任务自己发钱」，是刷分口子。
+   */
+  const handleMyTaskCheckIn = async (task: CustomTask) => {
+    if (checkingId) return;
+    setCheckingId(task.id);
+    try {
+      const execTask: TaskConfig = {
+        // 预置两条在服务端有各自登记的 id（各自日限 1、autoApprove 即时到账）
+        id: task.kind === 'preset' ? task.id : USER_TASK_EXEC_ID,
+        name: task.name,
+        type: task.type,
+        value: task.value,
+        unit: '积分',
+      };
+      await addLedgerRecord(execTask, undefined, { autoApprove: task.createdBy === 'parent' });
+      markTaskDone(task.id);
+      await loadLedger();
+      message.success(
+        task.createdBy === 'parent'
+          ? `「${task.name}」打卡成功`
+          : `「${task.name}」已提交，等${momName}审批`
+      );
+    } catch (e) {
+      if (e instanceof LedgerApprovalError) {
+        // 账其实已经记上了，只是「立即入账」那一步没成功：这条以 pending 躺在待审批里，
+        // 所以本地也要算今天已完成 —— 不然孩子再点一次，只会撞上服务端的同名日限。
+        markTaskDone(task.id);
+        await loadLedger().catch(() => undefined);
+        message.warning({ content: e.message, duration: 6 });
+        return;
+      }
+      // 服务端的三层日限闸门（同名当日重复 / 当日条数 ≥20 / 当日正分累计 ≥50）都返回 409，
+      // 文案照实提示 —— 本地置灰只是省一次白跑的请求，权威永远在服务端。
+      message.error(e instanceof Error ? e.message : '打卡失败，请重试');
+    } finally {
+      setCheckingId(null);
+    }
+  };
+
+  /** 自己加一个任务：只写进任务列表，**不入账**；完成时提交，等妈妈批了才加分 */
+  const handleAddWish = () => {
+    const name = wishName.trim();
+    if (!name) {
+      message.info('先写一个任务名吧');
+      return;
+    }
+    addCustomTask({ name, value: wishValue ?? 5, type: 'earning', createdBy: 'child' });
+    setWishName('');
+    setWishValue(5);
+    message.success(`「${name}」加好啦，完成时点一下，等${momName}批了就有分`);
   };
 
   /** 去花园的某个子页（顺手把菜单选好，落地就是那一页） */
@@ -272,7 +360,7 @@ export default function KidHome() {
         <div className={styles.heroSun}>
           <SunOutlined className={styles.heroSunIcon} />
           <span className={`num ${styles.heroSunValue}`}>{sunBalance}</span>
-          <span className={styles.heroSunUnit}>阳光</span>
+          <span className={styles.heroSunUnit}>积分</span>
         </div>
         {/* 两种钱要分清：阳光是花园里的游戏币，下面的积分才是能跟妈妈兑现的 */}
         <div className={styles.heroSunHint}>花园里的阳光，会存进家里的账本，换手机也在</div>
@@ -347,10 +435,10 @@ export default function KidHome() {
       {/* 没拉到最新数据就说出来（不然「0 积分」会让孩子白难过一场） */}
       {loadFailed && <RefreshFailedBar onRetry={refresh} />}
 
-      {/* 21 点还没做完学习任务：给一条能直接点走的提醒 */}
+      {/* 22 点还没做完学习任务：给一条能直接点走的提醒 */}
       {showLateAlert && (
         <button className={styles.alertBar} onClick={() => goGarden('tasks')}>
-          <span>已经 21:00 啦，还有 {learningLeft} 个学习任务没完成</span>
+          <span>已经 22:00 啦，还有 {learningLeft} 个学习任务没完成</span>
           <RightOutlined />
         </button>
       )}
@@ -389,14 +477,14 @@ export default function KidHome() {
                     message.info(`「${task.name}」今天已经完成过啦`);
                     return;
                   }
-                  message.success(`+${task.reward} 阳光，${task.name}完成啦`);
+                  message.success(`+${task.reward} 积分，${task.name}完成啦`);
                 }}
               >
                 <span className={styles.taskIcon}>{getGardenIcon(task.icon)}</span>
                 <span className={styles.taskBody}>
                   <span className={styles.taskName}>{task.name}</span>
                   <span className={styles.taskMeta}>
-                    {task.duration} 分钟 · +{task.reward} 阳光
+                    {task.duration} 分钟 · +{task.reward} 积分
                   </span>
                 </span>
                 <span className={styles.taskGo}>完成</span>
@@ -453,6 +541,70 @@ export default function KidHome() {
         <button className={styles.cardLink} onClick={() => goLedger('tasks')}>
           全部打卡任务 <RightOutlined />
         </button>
+      </section>
+
+      {/* 我的任务（本地任务列表：预置两条 + 妈妈加的 + 我自己加的）：点一下才算完成 */}
+      <section className={styles.card}>
+        <div className={styles.cardHead}>
+          <span className={styles.cardTitle}>我的任务</span>
+          <span className={styles.cardExtra}>完成一个打一次卡</span>
+        </div>
+        {customTasks.length === 0 ? (
+          <div className={styles.allDone}>还没有任务，让{momName}加一个，或者自己加一个</div>
+        ) : (
+          <div className={styles.taskList}>
+            {customTasks.map((task) => {
+              // 服务端才是权威：这里置灰只是省一次注定 409 的请求
+              const done = isRecordedToday(task, records, now) || isTaskDoneToday(task.id);
+              return (
+                <button
+                  key={task.id}
+                  className={styles.taskItem}
+                  disabled={done || checkingId === task.id}
+                  onClick={() => void handleMyTaskCheckIn(task)}
+                >
+                  <span className={styles.taskBody}>
+                    <span className={styles.taskName}>{task.name}</span>
+                    <span className={styles.taskMeta}>
+                      {task.kind === 'preset'
+                        ? '每天可以做一次'
+                        : task.createdBy === 'child'
+                          ? `我加的 · 要${momName}批`
+                          : `${momName}加的`}
+                    </span>
+                  </span>
+                  <span className={`num ${styles.checkinValue}`}>
+                    {done ? '✓' : task.value > 0 ? `+${task.value}` : task.value}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 自己加一个：只写进任务列表，不入账（需求 5） */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <Input
+            value={wishName}
+            onChange={(e) => setWishName(e.target.value)}
+            placeholder="我想做的任务"
+            maxLength={20}
+          />
+          <InputNumber
+            value={wishValue}
+            onChange={setWishValue}
+            min={1}
+            max={200}
+            style={{ width: 96 }}
+            placeholder="积分"
+          />
+          <Button type="primary" onClick={handleAddWish}>
+            加一个
+          </Button>
+        </div>
+        <div className={styles.pendingHint}>
+          自己加的任务不会马上加分：完成时提交，{momName}批了才进账本
+        </div>
       </section>
 
       {/* 妈妈说的话：收件箱里最新的一条，点开是完整信箱 */}

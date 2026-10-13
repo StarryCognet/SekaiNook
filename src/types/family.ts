@@ -19,7 +19,7 @@ export interface TaskConfig {
   dailyLimit?: number;
   /**
    * 允许打卡的时间窗（24 小时制 "HH:mm"，闭区间，不支持跨零点；缺省不限）。
-   * 例如「按时睡觉」只在 19:00-21:30 内可打卡。
+   * 例如「按时睡觉」只在 19:00-22:00 内可打卡。
    */
   window?: { start: string; end: string };
 }

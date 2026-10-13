@@ -34,7 +34,7 @@ export default function OverviewPage() {
             <SunOutlined />
           </div>
           <div className={styles.statInfo}>
-            <div className={styles.statLabel}>阳光余额</div>
+            <div className={styles.statLabel}>积分余额</div>
             <div className={`num ${styles.statValue}`}>{balance}</div>
           </div>
         </Card>
@@ -89,7 +89,7 @@ export default function OverviewPage() {
         <div className={styles.tipTitle}>今日小贴士</div>
         <div className={styles.tipText}>
           完成所有任务可以获得{' '}
-          <span className={`num ${styles.tipNum}`}>{GARDEN_DAILY_TASK_REWARD}</span> 阳光积分，
+          <span className={`num ${styles.tipNum}`}>{GARDEN_DAILY_TASK_REWARD}</span> 积分，
           坚持学习还能解锁更多勋章哦！
         </div>
       </Card>

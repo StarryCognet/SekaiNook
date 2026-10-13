@@ -22,8 +22,26 @@ export interface ServerTaskRule {
   window?: { start: string; end: string };
   /** 服务端直接入账、不需要家长审批（目前只有花园里即时到账的奖励与消费） */
   autoApprove?: boolean;
-  /** 允许客户端传金额的例外：服务端只做范围校验（目前只有老余额迁移用） */
+  /** 允许客户端传金额的例外：服务端只做范围校验（老余额迁移、自定义任务打卡） */
   clientAmount?: { min: number; max: number };
+  /**
+   * 只借 clientAmount 做「客户端能不能传」的合法性校验，**金额不采纳**，仍按服务端 value。
+   * 预置学习任务（custom:english_words10 / custom:poem2）用它：契约 §2 规定固定 +10，
+   * 而需求方案要求保留 clientAmount 字段兼容老客户端 —— 只有「只校验不采纳」能同时成立。
+   */
+  clientAmountValidateOnly?: boolean;
+  /**
+   * 允许客户端传**任务名**的例外（只有 v1.30 的自定义任务 user_task_exec）。
+   * 契约 §2 写明自定义任务「名称由客户端带」：账本里要显示孩子真正做的那件事，
+   * 而不是千篇一律的「自定义任务」。服务端只做去空白 + 长度截断；
+   * 金额 / 类型 / 状态仍然完全由服务端说了算，客户端改不动。
+   */
+  clientName?: boolean;
+  /**
+   * 只能由服务端接口写入（目前只有日结算 settle.ts），客户端 POST 一律 403。
+   * 用途：开户礼金 / 日结算罚款这类「服务端自己生成」的记录，绝不能被客户端自己提交。
+   */
+  serverOnly?: boolean;
 }
 
 /** 家庭账本任务（对应 src/config/familyRules.ts） */
@@ -34,22 +52,65 @@ const FAMILY_TASK_RULES: Record<string, ServerTaskRule> = {
   take_out_trash: { name: '倒垃圾', type: 'earning', value: 5, dailyLimit: 1 },
   finish_homework: { name: '按时完成作业', type: 'earning', value: 20, dailyLimit: 1 },
   read_book: { name: '课外阅读30分钟', type: 'earning', value: 10, dailyLimit: 2 },
-  // 只有 19:00-21:30 之间能打卡；晚于 21:30 说明没按时睡，由家长记 sleep_penalty
+  // 只有 19:00-22:00 之间能打卡；晚于 22:00 说明没按时睡，由服务端日结算记 sleep_penalty
   sleep_on_time: {
     name: '按时睡觉',
     type: 'earning',
     value: 10,
     dailyLimit: 1,
-    window: { start: '19:00', end: '21:30' },
+    window: { start: '19:00', end: '22:00' },
   },
 
   ipad_time: { name: '看iPad 30分钟', type: 'spending', value: -10, dailyLimit: 4 },
   phone_time: { name: '玩手机 30分钟', type: 'spending', value: -10, dailyLimit: 4 },
 
   eye_penalty: { name: '视力下降1度', type: 'spending', value: -100 },
-  // 与 sleep_on_time 的窗口对齐：晚于 21:30 才算没按时作息
-  sleep_penalty: { name: '未按时作息(晚于21:30)', type: 'spending', value: -20, dailyLimit: 1 },
+  // 与 sleep_on_time 的窗口对齐：晚于 22:00 才算没按时作息。
+  // v1.30 起这条主要由服务端日结算（functions/api/ledger/settle.ts）自动记，
+  // 家长仍可手工记；两者共用同一个 task_id，所以日限对两边一起生效，不会重复扣。
+  sleep_penalty: { name: '未按时作息(晚于22:00)', type: 'spending', value: -20, dailyLimit: 1 },
   homework_incomplete: { name: '作业未完成', type: 'spending', value: -50, dailyLimit: 1 },
+
+  /* ===== v1.30 新增（见 docs/v1.30-实现契约.md §2） ===== */
+
+  // 两条预置学习任务：打卡即到账，日限 1。分值固定 10，clientAmount 只为兼容老客户端 /
+  // 未来调分：客户端传了也只做范围校验、不采纳值，实际金额仍按 value 走
+  // （见 clientAmountValidateOnly 与 functions/api/ledger/index.ts 的取值分支）。
+  'custom:english_words10': {
+    name: '十个英语单词',
+    type: 'earning',
+    value: 10,
+    dailyLimit: 1,
+    autoApprove: true,
+    clientAmount: { min: 1, max: 100 },
+    clientAmountValidateOnly: true,
+  },
+  'custom:poem2': {
+    name: '两首古诗',
+    type: 'earning',
+    value: 10,
+    dailyLimit: 1,
+    autoApprove: true,
+    clientAmount: { min: 1, max: 100 },
+    clientAmountValidateOnly: true,
+  },
+  // 自定义任务打卡的**统一执行 id**：任务名与金额由客户端带，服务端夹到 [-200, 200]。
+  // 刻意**不设 autoApprove**：孩子自己提的任务若直接到账就是刷分口子（需求方案「风险」一节），
+  // 一律走 pending，由家长审批。
+  // ⚠️ 所有自定义任务共用这一个 task_id ⇒「同一个自定义任务每天只能打卡一次」**不能按 task_id 判**
+  //（那会把整张自定义列表当成一个任务，做了英语单词就再也不能倒垃圾）。服务端按**任务名**判重，
+  // 见 functions/api/ledger/index.ts 的 dailyLimit 分支；dailyLimit 在这里只是粗闸门。
+  user_task_exec: {
+    name: '自定义任务',
+    type: 'earning',
+    value: 0,
+    // 粗闸门：同一个自定义任务每天只能打卡一次；真正的「按任务去重」由 index.ts 的
+    // task_id + task_name 计数保证，这个数字只兜住「同一个名字连刷 20 次」。
+    dailyLimit: 20,
+    clientAmount: { min: -200, max: 200 },
+    // 契约 §2：自定义任务的名称由客户端带（账本里显示孩子真正做的那件事）
+    clientName: true,
+  },
 };
 
 /** `garden_legacy` 迁移金额上限（历史本机余额最多就到这个数） */
@@ -93,11 +154,134 @@ const GARDEN_TASK_RULES: Record<string, ServerTaskRule> = {
   'garden_shop:decor_lantern': { name: '装饰・星星灯串', type: 'spending', value: -200, autoApprove: true },
 };
 
+/* ===== v1.30 常量（值必须与前端 src/config/familyRules.ts 一致） =====
+   放在 SYSTEM_TASK_RULES 之前：下面那个 map 在模块加载时就要用到 DAILY_MIN_TASKS_PENALTY。 */
+
+/** 自定义任务打卡的**统一执行 id**（客户端提交自定义任务时用这个 task_id） */
+export const EXEC_TASK_ID = 'user_task_exec';
+
+/** 每日至少完成几个任务；不足则记一笔罚款 */
+export const DAILY_MIN_TASKS = 5;
+
+/** 每日不足任务数的罚款额（正数，实际记账为负） */
+export const DAILY_MIN_TASKS_PENALTY = 10;
+
+/**
+ * 自定义任务每天最多能拿多少分（**按总额封顶，不是按次数封顶**）。
+ * 两个理由，缺一不可：
+ *  1. 防刷分：日限从「按 task_id」放宽成「按任务名判重」之后，换个名字就能再打一次
+ *     （每次最高 +200），必须有总额闸门兜住，否则自定义任务就是无限加分口子。
+ *  2. 保住需求 2 的完成数口径：按**总额**封顶而不是按**次数**封顶，「今日完成数」仍然只
+ *     看去重后的任务数 —— 孩子仍有动力去做家长布置的真实任务，而不是反复造自定义任务凑数。
+ * 只统计 user_task_exec；预置任务 custom:english_words10 / custom:poem2 是各自独立 id，不占这个额度。
+ */
+export const CUSTOM_TASK_DAILY_CAP = 50;
+
+/**
+ * 系统记录 id：既不算「今日完成数」，也不代表「真实用户流水」。
+ * 只在这里登记一次，SQL 由 COMPLETION_EXCLUDED_SQL_LIST 派生，不手写第二份清单。
+ */
+export const COMPLETION_EXCLUDED_IDS: readonly string[] = [
+  'seed_welcome_bonus',
+  'daily_min_tasks_penalty',
+  'sleep_penalty',
+];
+
+/** 上面那三个 id 拼成 SQL 的 IN 列表（都是代码里的字面量常量，无用户输入，不存在注入） */
+export const COMPLETION_EXCLUDED_SQL_LIST = COMPLETION_EXCLUDED_IDS.map((id) => `'${id}'`).join(', ');
+
+/**
+ * 服务端自动记账的系统记录（v1.30）。它们只能由 functions/api/ledger/settle.ts 写入：
+ * 标了 serverOnly，客户端 POST 会被 403 挡掉 —— 否则开户礼金就是「每天白拿 100」的刷分口子。
+ * 这三条（含 sleep_penalty）同时是「今日完成数」与「真实用户流水」判定里要排除的记录，见
+ * COMPLETION_EXCLUDED_IDS。
+ */
+const SYSTEM_TASK_RULES: Record<string, ServerTaskRule> = {
+  // 开户礼金：全新账号一次性 +100（settle.ts 里判「既无 seed 记录、也无任何真实用户流水」）
+  seed_welcome_bonus: {
+    name: '开户礼金',
+    type: 'earning',
+    value: 100,
+    dailyLimit: 1,
+    autoApprove: true,
+    serverOnly: true,
+  },
+  // 日结算罚款：当日去重完成数 < DAILY_MIN_TASKS 时 -10（记录 id 为 daily_penalty_<日期>）
+  daily_min_tasks_penalty: {
+    name: '今日完成不足 5 个任务',
+    type: 'spending',
+    value: -DAILY_MIN_TASKS_PENALTY,
+    dailyLimit: 1,
+    autoApprove: true,
+    serverOnly: true,
+  },
+};
+
 /** 全部已知任务规则 */
 export const LEDGER_TASK_RULES: Record<string, ServerTaskRule> = {
   ...FAMILY_TASK_RULES,
   ...GARDEN_TASK_RULES,
+  ...SYSTEM_TASK_RULES,
 };
+
+/** 睡觉打卡截止时刻（东八区）= sleep_on_time 窗口的结束时间，避免 22:00 在代码里写两份 */
+export const SLEEP_DEADLINE = LEDGER_TASK_RULES.sleep_on_time?.window?.end ?? '22:00';
+
+/**
+ * 「今日完成数」SQL（东八区某一天的 [00:00, 次日 00:00)，两个 ? 依次是 startIso / endIso）。
+ * 口径见 docs/v1.30-实现契约.md §3：东八区当日、status IS NULL 或 'approved'、
+ * type='earning' 且 amount > 0 的流水，按 task_id 去重计数，并排除 COMPLETION_EXCLUDED_IDS。
+ * 一天背三首诗只算 1 个任务；花钱 / 罚款不算完成。
+ */
+export const DAY_COMPLETION_SQL = `SELECT COUNT(DISTINCT task_id) AS c FROM family_ledger
+  WHERE (status IS NULL OR status = 'approved')
+    AND type = 'earning' AND amount > 0
+    AND task_id NOT IN (${COMPLETION_EXCLUDED_SQL_LIST})
+    AND created_at >= ? AND created_at < ?`;
+
+/** 按上面那个口径数出某一天的「已完成任务数」 */
+export async function countDayCompletions(
+  db: D1Database,
+  startIso: string,
+  endIso: string
+): Promise<number> {
+  const row = await db.prepare(DAY_COMPLETION_SQL).bind(startIso, endIso).first<{ c: number }>();
+  return row?.c ?? 0;
+}
+
+/** 日结算罚款的固定记录 id（东八区日期）：一天只有一条，靠 INSERT OR IGNORE 天然幂等 */
+export function dailyPenaltyRecordId(dayKey: string): string {
+  return `daily_penalty_${dayKey}`;
+}
+
+/** 睡觉罚款的固定记录 id（东八区日期）：一天只有一条，靠 INSERT OR IGNORE 天然幂等 */
+export function sleepPenaltyRecordId(dayKey: string): string {
+  return `sleep_penalty_${dayKey}`;
+}
+
+/**
+ * 东八区某一天的起止时刻与**正午**（UTC ISO）。dayKey 形如 'YYYY-MM-DD'（调用方负责校验）。
+ *
+ * noonIso 是给「隔天补记的罚款」回填 created_at 用的：罚款若按真实时间落库，created_at
+ * 会落在第二天，把第二天的「当日完成数」算错（需求方案「风险」一节明确要求回填）。
+ */
+export function beijingDayBoundsOf(dayKey: string): {
+  startIso: string;
+  endIso: string;
+  noonIso: string;
+} {
+  const startMs = Date.parse(`${dayKey}T00:00:00.000+08:00`);
+  return {
+    startIso: new Date(startMs).toISOString(),
+    endIso: new Date(startMs + 24 * 60 * 60 * 1000).toISOString(),
+    noonIso: new Date(startMs + 12 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+/** 东八区现在是否已到 / 过了 `HH:MM`（用于「到点还没打卡」判定） */
+export function isPastBeijingTime(hm: string, now: Date = new Date()): boolean {
+  return beijingClock(now).minutes >= toMinutes(hm);
+}
 
 /** 花园相关记录的任务 id 前缀：这些是「阳光」，不计入家庭积分 */
 export const GARDEN_ID_PREFIXES: readonly string[] = ['garden:', 'garden_shop:', 'garden_legacy'];

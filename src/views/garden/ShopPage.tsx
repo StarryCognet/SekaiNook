@@ -47,14 +47,14 @@ export default function ShopPage() {
       return;
     }
     if (result === 'insufficient') {
-      message.warning('阳光积分不足，快去完成任务攒阳光吧！');
+      message.warning('积分不足，快去完成任务攒积分吧！');
       return;
     }
     if (result === 'unknown') {
       message.error('没有找到这个物品，请刷新后再试');
       return;
     }
-    message.success(`兑换成功！「${name}」已拥有（-${cost} 阳光）`);
+    message.success(`兑换成功！「${name}」已拥有（-${cost} 积分）`);
   };
 
   /** 这件东西现在是不是正用着 */
@@ -96,9 +96,9 @@ export default function ShopPage() {
       {/* 余额提示 */}
       <Card className={styles.balanceCard} variant="borderless">
         <SunOutlined className={styles.balanceIcon} />
-        <span className={styles.balanceText}>我的阳光余额</span>
+        <span className={styles.balanceText}>我的积分余额</span>
         <span className={`num ${styles.balanceNum}`}>{balance}</span>
-        <span className={styles.balanceLabel}>阳光</span>
+        <span className={styles.balanceLabel}>积分</span>
       </Card>
 
       {/* 现在戴着 / 挂着的：买过的东西一眼能看见，不再只有一句「已拥有」 */}
@@ -173,7 +173,7 @@ export default function ShopPage() {
                     <div className={`${styles.itemCost} ${affordable ? '' : styles.itemCostLocked}`}>
                       <SunOutlined />
                       <span className={`num ${styles.itemCostNum}`}>{item.cost}</span>
-                      <span className={styles.itemCostLabel}>阳光</span>
+                      <span className={styles.itemCostLabel}>积分</span>
                     </div>
                     <div
                       className={`${styles.itemStatus} ${
@@ -184,7 +184,7 @@ export default function ShopPage() {
                             : styles.itemStatusLocked
                       }`}
                     >
-                      {inUse ? '正在用' : owned ? '已拥有' : affordable ? '可以兑换' : '阳光不足'}
+                      {inUse ? '正在用' : owned ? '已拥有' : affordable ? '可以兑换' : '积分不足'}
                     </div>
                     {owned ? (
                       <Button

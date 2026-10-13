@@ -156,7 +156,7 @@
   font-size: 12px;
 }
 
-/* 21 点提醒条（走警示色块：浅色主题浅底深字，深色主题深底亮字） */
+/* 22 点提醒条（走警示色块：浅色主题浅底深字，深色主题深底亮字） */
 .alertBar {
   display: flex;
   align-items: center;

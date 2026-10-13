@@ -32,7 +32,7 @@ export default function TasksPage() {
       message.info(`「${name}」今天已经完成过啦`);
       return;
     }
-    message.success(`+${reward} 阳光！${name}完成啦`);
+    message.success(`+${reward} 积分！${name}完成啦`);
   };
 
   return (
@@ -100,7 +100,7 @@ export default function TasksPage() {
               <div className={`${styles.taskReward} ${task.done ? styles.taskRewardDone : ""}`}>
                 <SunOutlined className={styles.taskRewardIcon} />
                 <span className={`num ${styles.taskRewardNum}`}>+{task.reward}</span>
-                <span className={styles.taskRewardLabel}>阳光</span>
+                <span className={styles.taskRewardLabel}>积分</span>
               </div>
             </div>
           );

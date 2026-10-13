@@ -9,6 +9,8 @@ export const GARDEN_SHOP_PREFIX = 'garden_shop:';
 export const GARDEN_LEGACY_TASK_ID = 'garden_legacy';
 /** 迁移金额上限：与 functions/_lib/rules.ts 的 GARDEN_LEGACY_MAX 保持一致 */
 export const GARDEN_LEGACY_MAX = 2000;
+/** 日结算接口（v1.30 需求 2 / 7）：服务端按幂等 id 补记罚款，重复调用安全 */
+export const LEDGER_SETTLE_PATH = '/api/ledger/settle';
 
 /**
  * 花园阳光的任务 id 前缀：这些流水是花园里的「阳光」，不计入家庭积分。
@@ -76,6 +78,110 @@ export async function fetchLedgerSummary(): Promise<LedgerSummary> {
   const summary = toSummary(await http.get<unknown>('/api/ledger/summary'));
   if (!summary) throw new Error('余额接口返回的格式不对');
   return summary;
+}
+
+/** 日结算结果 */
+export interface LedgerSettleResult {
+  /** 结算后的家庭积分余额 */
+  family: number;
+  /** 结算后的花园阳光余额 */
+  sun: number;
+  /** 本次实际入账了哪几条（服务端幂等 id，重复调用会是空数组） */
+  applied: string[];
+  /** **被结算的那一天**（东八区 YYYY-MM-DD）—— 可能不是今天，节流键要存这个值 */
+  day: string;
+}
+
+/** 只认字段齐全的结算响应，别把错误页 / 空对象当成「结算过了」 */
+function toSettleResult(value: unknown): LedgerSettleResult | null {
+  if (!value || typeof value !== 'object') return null;
+  const { family, sun, applied, day } = value as {
+    family?: unknown;
+    sun?: unknown;
+    applied?: unknown;
+    day?: unknown;
+  };
+  if (typeof family !== 'number' || !Number.isFinite(family)) return null;
+  if (typeof sun !== 'number' || !Number.isFinite(sun)) return null;
+  if (typeof day !== 'string' || day === '') return null;
+  if (!Array.isArray(applied) || !applied.every((x): x is string => typeof x === 'string')) {
+    return null;
+  }
+  return { family, sun, applied, day };
+}
+
+/**
+ * 触发一次日结算（`POST /api/ledger/settle`，请求体可空）。
+ *
+ * 正确性完全由服务端幂等 id 保证（开户礼金 / 每日不足 5 个任务 / 睡觉罚款），
+ * 所以这里**失败一律静默返回 null** —— 结算失败绝不能挡住页面。
+ * 调用方的本地节流只为省流量，不得当成防重复扣的手段。
+ */
+export async function settleLedger(): Promise<LedgerSettleResult | null> {
+  try {
+    return toSettleResult(await http.post<unknown>(LEDGER_SETTLE_PATH, {}));
+  } catch {
+    return null;
+  }
+}
+
+/** 本地结算节流键（存的是「被结算的那一天」，不是调用当天） */
+export const LEDGER_SETTLE_DAY_KEY = 'sekainook_settle_day';
+
+const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+/**
+ * 本地推算「本次会被结算的那一天」，与服务端 settleDay 同规则：
+ * 东八区 ≥22:00 记今天，否则记昨天。**只用于节流**，不作为任何正确性依据。
+ */
+function expectedSettleDay(now: Date): string {
+  const shifted = new Date(now.getTime() + BEIJING_OFFSET_MS);
+  if (shifted.getUTCHours() < 22) shifted.setUTCDate(shifted.getUTCDate() - 1);
+  return shifted.toISOString().slice(0, 10);
+}
+
+/**
+ * 按「被结算的那一天」节流地触发一次结算：同一天已经结算过就不再发请求。
+ *
+ * ⚠️ 正确性完全由服务端幂等 id 保证（`daily_penalty_<day>` / `sleep_penalty_<day>`），
+ * 这里的节流纯粹为了省流量，**任何情况下都不能当成防重复扣的手段**
+ * —— 节流记录丢了最多多发一次请求，服务端会认出重复。
+ *
+ * @returns 服务端响应；`null` 表示「这一天已经结算过」或「请求失败」，两种都不该挡住页面
+ */
+export async function settleLedgerOncePerDay(
+  now: Date = new Date()
+): Promise<LedgerSettleResult | null> {
+  const expected = expectedSettleDay(now);
+  try {
+    if (localStorage.getItem(LEDGER_SETTLE_DAY_KEY) === expected) return null;
+  } catch {
+    // 读不到就当没结算过：多发一次请求，服务端幂等，安全
+  }
+  const result = await settleLedger();
+  if (result) {
+    try {
+      localStorage.setItem(LEDGER_SETTLE_DAY_KEY, result.day);
+    } catch {
+      // 存不进去也不影响这一次
+    }
+  }
+  return result;
+}
+
+/** 把结算入账的 id 说成人话（罚款要说清原因，别甩一串英文 id 给孩子看） */
+export function describeSettleApplied(ids: readonly string[]): string {
+  return ids
+    .map((id) => {
+      if (id.startsWith('seed_welcome_bonus')) return '开户礼金 +100';
+      if (id.startsWith('sleep_penalty')) return '到 22:00 还没打卡睡觉 -20';
+      if (id.startsWith('daily_penalty') || id.startsWith('daily_min_tasks_penalty')) {
+        return '那天完成的任务不够 5 个 -10';
+      }
+      if (id.startsWith('sleep_on_time')) return '按时打卡睡觉 +10';
+      return id;
+    })
+    .join('；');
 }
 
 /** 写一条流水的返回（服务端只回 id / status，不回整条记录） */

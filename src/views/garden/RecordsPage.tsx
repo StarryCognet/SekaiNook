@@ -30,7 +30,7 @@ export default function RecordsPage() {
           <div className={styles.summarySub}>个任务</div>
         </div>
         <div className={styles.summaryItem}>
-          <div className={styles.summaryLabel}>获得阳光</div>
+          <div className={styles.summaryLabel}>获得积分</div>
           <div className={`num ${styles.summaryValue} ${styles.summaryValueWarm}`}>
             {earnedToday}
           </div>

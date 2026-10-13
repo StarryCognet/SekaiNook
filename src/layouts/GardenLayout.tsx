@@ -152,7 +152,7 @@ export default function GardenLayout() {
           <div className={styles.balanceChip}>
             <SunOutlined style={{ color: palette.warning }} />
             <span className={styles.balanceNum}>{balance}</span>
-            <span className={styles.balanceLabel}>阳光</span>
+            <span className={styles.balanceLabel}>积分</span>
           </div>
 
           <div className={styles.progressChip}>

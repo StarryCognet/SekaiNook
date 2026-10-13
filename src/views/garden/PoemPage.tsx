@@ -22,7 +22,7 @@ export default function PoemPage() {
       message.info(`《${title}》今天已经背过啦，明天再来复习吧`);
       return;
     }
-    message.success(`《${title}》背诵成功！+${reward} 阳光`);
+    message.success(`《${title}》背诵成功！+${reward} 积分`);
   };
 
   return (

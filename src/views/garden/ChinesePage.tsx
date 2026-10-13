@@ -19,7 +19,7 @@ export default function ChinesePage() {
       message.info(`${title}今天已经练完啦，明天继续加油`);
       return;
     }
-    message.success(isLast ? `${title}完成啦！+${reward} 阳光` : `打卡成功！+${reward} 阳光`);
+    message.success(isLast ? `${title}完成啦！+${reward} 积分` : `打卡成功！+${reward} 积分`);
   };
 
   return (

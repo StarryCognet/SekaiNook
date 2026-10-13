@@ -6,21 +6,21 @@ import type { TaskConfig } from '../types/family';
  */
 export const TASK_RULES: TaskConfig[] = [
   // ===== 赚钱区（earning，正数）=====
-  { id: 'clean_room', name: '整理房间', type: 'earning', value: 10, unit: '元', dailyLimit: 2 },
-  { id: 'wash_dishes', name: '洗碗', type: 'earning', value: 5, unit: '元', dailyLimit: 2 },
-  { id: 'do_laundry', name: '洗衣服', type: 'earning', value: 15, unit: '元', dailyLimit: 1 },
-  { id: 'take_out_trash', name: '倒垃圾', type: 'earning', value: 5, unit: '元', dailyLimit: 1 },
-  { id: 'finish_homework', name: '按时完成作业', type: 'earning', value: 20, unit: '元', dailyLimit: 1 },
-  { id: 'read_book', name: '课外阅读30分钟', type: 'earning', value: 10, unit: '元', dailyLimit: 2 },
+  { id: 'clean_room', name: '整理房间', type: 'earning', value: 10, unit: '积分', dailyLimit: 2 },
+  { id: 'wash_dishes', name: '洗碗', type: 'earning', value: 5, unit: '积分', dailyLimit: 2 },
+  { id: 'do_laundry', name: '洗衣服', type: 'earning', value: 15, unit: '积分', dailyLimit: 1 },
+  { id: 'take_out_trash', name: '倒垃圾', type: 'earning', value: 5, unit: '积分', dailyLimit: 1 },
+  { id: 'finish_homework', name: '按时完成作业', type: 'earning', value: 20, unit: '积分', dailyLimit: 1 },
+  { id: 'read_book', name: '课外阅读30分钟', type: 'earning', value: 10, unit: '积分', dailyLimit: 2 },
   {
     id: 'sleep_on_time',
     name: '按时睡觉',
     type: 'earning',
     value: 10,
-    unit: '元',
+    unit: '积分',
     dailyLimit: 1,
-    // 只有 19:00-21:30 之间能打卡；晚于 21:30 说明没按时睡，应由家长记罚款
-    window: { start: '19:00', end: '21:30' },
+    // 只有 19:00-22:00 之间能打卡；晚于 22:00 说明没按时睡，服务端会自动记罚款
+    window: { start: '19:00', end: '22:00' },
   },
 
   // ===== 花钱区（spending，负数）=====
@@ -38,7 +38,7 @@ export const TASK_RULES: TaskConfig[] = [
   },
   {
     id: 'sleep_penalty',
-    name: '未按时作息(晚于21:30)',
+    name: '未按时作息(晚于22:00)',
     type: 'spending',
     value: -20,
     unit: '积分',
@@ -75,6 +75,6 @@ export const WEEKLY_PLAN_TEMPLATE: Array<{
   { subject: '数学', task_name: '口算练习', target: 5 },
   { subject: '数学', task_name: '错题订正', target: 10 },
   // 日常
-  { subject: '日常', task_name: '9:00前睡觉', target: 7 },
+  { subject: '日常', task_name: '22:00前睡觉', target: 7 },
   { subject: '日常', task_name: '7:00起床', target: 7 },
 ];
