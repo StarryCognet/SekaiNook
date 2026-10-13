@@ -59,6 +59,21 @@ export function getTasksByType(type: 'earning' | 'spending'): TaskConfig[] {
   return TASK_RULES.filter((t) => t.type === type);
 }
 
+/**
+ * 积分兑换现金的汇率：**100 积分 = 10 元**（也就是 10 积分 = 1 元）。
+ * 账本页与家长首页的兑换金额都从这里算，改这一处两边一起变。
+ * 注意与「花园阳光」无关：阳光是花园里的游戏币，不能兑现。
+ */
+export const POINTS_PER_YUAN = 10;
+
+/** 把积分数按汇率换算成现金（元），四舍五入到分 */
+export function pointsToYuan(points: number): number {
+  return Math.round((points / POINTS_PER_YUAN) * 100) / 100;
+}
+
+/** 汇率的一句话说明，界面上直接用 —— 别在组件里硬编码「100 积分 = 10 元」 */
+export const EXCHANGE_RATE_TEXT = `100 积分 = ${pointsToYuan(100)} 元`;
+
 /** 每周学习计划模板（subject -> 任务列表） */
 export const WEEKLY_PLAN_TEMPLATE: Array<{
   subject: string;

@@ -44,6 +44,13 @@ export interface ServerTaskRule {
   serverOnly?: boolean;
 }
 
+/**
+ * 单次现金兑现的积分数上限（取绝对值）。
+ * 家长把积分换成钱时可以只兑换一部分，金额由客户端带；这个数只兜住
+ * 「客户端塞个大数把余额一下冲成大负数」，不是余额校验（余额校验在前端输入框上）。
+ */
+export const PAYOUT_MAX_POINTS = 100000;
+
 /** 家庭账本任务（对应 src/config/familyRules.ts） */
 const FAMILY_TASK_RULES: Record<string, ServerTaskRule> = {
   clean_room: { name: '整理房间', type: 'earning', value: 10, dailyLimit: 2 },
@@ -110,6 +117,17 @@ const FAMILY_TASK_RULES: Record<string, ServerTaskRule> = {
     clientAmount: { min: -200, max: 200 },
     // 契约 §2：自定义任务的名称由客户端带（账本里显示孩子真正做的那件事）
     clientName: true,
+  },
+  // 积分兑换现金（家长把积分换成钱）。金额由客户端带（支持只兑换一部分），服务端只卡上限；
+  // 前端按 100 积分 = 10 元折算，见 src/config/familyRules.ts 的 POINTS_PER_YUAN。
+  // ⚠️ 回归修复：v1.30 的「未知 task_id 一律拒绝」把这条老任务一起挡掉了
+  //    （前端点「结算兑现」必 403「未知任务，不能记账」），这里补登记。
+  payout: {
+    name: '现金兑现',
+    type: 'spending',
+    value: 0,
+    clientAmount: { min: -PAYOUT_MAX_POINTS, max: 0 },
+    autoApprove: true,
   },
 };
 

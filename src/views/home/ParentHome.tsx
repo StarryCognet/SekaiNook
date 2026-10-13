@@ -19,6 +19,7 @@ import RefreshFailedBar from '../../components/RefreshFailedBar';
 import { useFamilyStore } from '../../store/useFamilyStore';
 import { useNotificationStore } from '../../store/useNotificationStore';
 import { useKidName, useMomName } from '../../store/useSettingsStore';
+import { pointsToYuan } from '../../config/familyRules';
 import { exportLedgerCsv } from '../../utils/exportLedger';
 import { setViewState } from '../../utils/useViewState';
 import { getCurrentWeekLabel } from '../../utils/week';
@@ -129,31 +130,32 @@ export default function ParentHome() {
   };
 
   /**
-   * 结算兑现（与账本页同一个口径）：把余额记成一条「现金兑现」支出，余额清零。
-   * 家长在首页看到「可以兑现」就能直接办掉，不用再切到账本页找按钮。
+   * 兑换现金（与账本页同一个口径，100 积分 = 10 元）：把余额换成钱，记一条「现金兑现」支出。
+   * 首页这里一键全兑换；想只兑换一部分，去账本页余额卡里输数字。
    */
   const handleSettle = async () => {
     if (balance <= 0) return;
     setSettling(true);
     const amount = balance;
+    const yuan = pointsToYuan(amount);
     try {
       const task: TaskConfig = {
         id: 'payout',
         name: '现金兑现',
         type: 'spending',
         value: -amount,
-        unit: '元',
+        unit: '积分',
       };
-      await addLedgerRecord(task, { note: '结算兑现，余额清零' }, { autoApprove: true });
+      await addLedgerRecord(task, { note: `积分兑换现金：${amount} 积分 = ${yuan} 元` }, { autoApprove: true });
       await loadLedger();
-      message.success(`已兑现 ${amount} 积分，余额清零`);
+      message.success(`已兑换 ${yuan} 元，扣掉 ${amount} 积分`);
     } catch (e) {
-      // 记账成功、自动审批失败：钱其实没清零，那笔以 pending 躺在待审批里 —— 绝不能说「余额清零」
+      // 记账成功、自动审批失败：积分其实没扣掉，那笔以 pending 躺在待审批里 —— 绝不能说「已兑换」
       if (e instanceof LedgerApprovalError) {
         await loadLedger().catch(() => undefined);
-        message.warning(`已记账，但审批没成功 —— ${amount} 积分还没清零，记录在待审批里，去点一下通过`);
+        message.warning(`已记账，但审批没成功 —— ${amount} 积分还没扣掉，记录在待审批里，去点一下通过`);
       } else {
-        message.error(e instanceof Error ? e.message : '结算失败，请重试');
+        message.error(e instanceof Error ? e.message : '兑换失败，请重试');
       }
     } finally {
       setSettling(false);
@@ -181,8 +183,8 @@ export default function ParentHome() {
   if (balance > 0) {
     todos.push({
       key: 'settle',
-      text: `${kidName}攒了 ${balance} 积分，可以兑现了`,
-      hint: `兑现 ${balance} 元，余额清零`,
+      text: `${kidName}攒了 ${balance} 积分，可以兑换成钱了`,
+      hint: `全部兑换可得 ${pointsToYuan(balance)} 元（100 积分 = 10 元）`,
       kind: 'settle',
     });
   }
@@ -280,9 +282,9 @@ export default function ParentHome() {
               item.kind === 'settle' ? (
                 <Popconfirm
                   key={item.key}
-                  title={`兑现 ${balance} 积分？`}
-                  description="会记一条「现金兑现」支出，余额清零"
-                  okText="兑现"
+                  title={`兑换 ${balance} 积分 = ${pointsToYuan(balance)} 元？`}
+                  description="会记一条「现金兑现」支出，积分全部扣掉；想只兑换一部分请去账本页"
+                  okText="确认兑换"
                   cancelText="取消"
                   onConfirm={handleSettle}
                 >
@@ -396,9 +398,9 @@ export default function ParentHome() {
           </button>
         ))}
         <Popconfirm
-          title={`兑现 ${balance} 积分？`}
-          description="会记一条「现金兑现」支出，余额清零"
-          okText="兑现"
+          title={`兑换 ${balance} 积分 = ${pointsToYuan(balance)} 元？`}
+          description="会记一条「现金兑现」支出，积分全部扣掉；想只兑换一部分请去账本页"
+          okText="确认兑换"
           cancelText="取消"
           onConfirm={handleSettle}
         >
@@ -406,7 +408,7 @@ export default function ParentHome() {
             <span className={styles.gridIcon}>
               <WalletOutlined />
             </span>
-            <span className={styles.gridLabel}>结算兑现</span>
+            <span className={styles.gridLabel}>积分兑换</span>
           </button>
         </Popconfirm>
       </section>

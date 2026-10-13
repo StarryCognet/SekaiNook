@@ -22,7 +22,7 @@ import { addLedgerRecord, LedgerApprovalError, describeSettleApplied, resubmitRe
 import { useViewState } from '../../utils/useViewState';
 import { exportLedgerCsv } from '../../utils/exportLedger';
 import { checkTask, isTaskDone } from '../../utils/taskRules';
-import { getTasksByType } from '../../config/familyRules';
+import { getTasksByType, pointsToYuan, EXCHANGE_RATE_TEXT } from '../../config/familyRules';
 import { useFamilyStore } from '../../store/useFamilyStore';
 import { useCustomTasksStore, USER_TASK_EXEC_ID, isRecordedToday } from '../../store/useCustomTasksStore';
 import type { CustomTask } from '../../store/useCustomTasksStore';
@@ -99,8 +99,10 @@ export default function FamilyDashboard() {
   const [activeTask, setActiveTask] = useState<TaskConfig | null>(null);
   /** 正在提交的任务 id（防止手机连点重复入账） */
   const [submittingId, setSubmittingId] = useState<string | null>(null);
-  /** 正在结算兑现（家长） */
+  /** 正在兑换现金（家长） */
   const [settling, setSettling] = useState(false);
+  /** 兑换区输入框里的积分数（null = 还没填，视为 0） */
+  const [exchangePoints, setExchangePoints] = useState<number | null>(null);
   /** 历史记录状态筛选 + 已渲染条数（分页）—— 跨页面切换保留，切走再回来还是原样 */
   const [recordFilter, setRecordFilter] = useViewState<RecordFilter>('family.recordFilter', 'all');
   const [visibleCount, setVisibleCount] = useViewState<number>('family.visibleCount', RECORDS_PAGE_SIZE);
@@ -360,6 +362,11 @@ export default function FamilyDashboard() {
   const isPositive = balance >= 0;
   const balanceColor = isPositive ? designTokens.colors.success : designTokens.colors.danger;
 
+  /** 兑换区：输入积分数 → 按 100 积分 = 10 元折算成现金（没填视为 0，按钮同时禁用） */
+  const exchangeValue = exchangePoints ?? 0;
+  const exchangeYuan = pointsToYuan(exchangeValue);
+  const canExchange = exchangeValue > 0 && exchangeValue <= balance;
+
   /** 格式化流水时间 */
   const formatTime = (iso: string) => {
     const d = new Date(iso);
@@ -448,35 +455,37 @@ export default function FamilyDashboard() {
   };
 
   /**
-   * 结算兑现（仅家长）：把当前余额记成一条「现金兑现」支出，余额随之清零。
-   * 这样积分→钱的闭环留在同一本流水里，家长和孩子都能看到兑现记录。
+   * 兑换现金（仅家长）：把指定积分数按 100 积分 = 10 元换成钱，记一条「现金兑现」支出。
+   * 可以只兑换一部分（剩下的积分留在账上）；积分→钱的闭环留在同一本流水里，家长和孩子都能看到。
    */
-  const handleSettle = async () => {
-    if (balance <= 0) return;
+  const handleSettle = async (points: number) => {
+    const amount = Math.floor(points);
+    if (amount <= 0 || amount > balance) return;
     setSettling(true);
-    const amount = balance;
+    const yuan = pointsToYuan(amount);
     try {
       const task: TaskConfig = {
         id: 'payout',
         name: '现金兑现',
         type: 'spending',
         value: -amount,
-        unit: '元',
+        unit: '积分',
       };
       await addLedgerRecord(
         task,
-        { note: '结算兑现，余额清零' },
+        { note: `积分兑换现金：${amount} 积分 = ${yuan} 元` },
         { autoApprove: true }
       );
       await loadLedger();
-      message.success(`已兑现 ${amount} 积分，余额清零`);
+      setExchangePoints(null);
+      message.success(`已兑换 ${yuan} 元，扣掉 ${amount} 积分`);
     } catch (e) {
-      // 账记上了但自动审批失败：钱没清零，那笔在待审批里 —— 不能说「余额清零」
+      // 账记上了但自动审批失败：积分没扣掉，那笔在待审批里 —— 不能说「已兑换」
       if (e instanceof LedgerApprovalError) {
         await loadLedger().catch(() => undefined);
-        message.warning(`已记账，但审批没成功 —— ${amount} 积分还没清零，记录在待审批里，去点一下通过`);
+        message.warning(`已记账，但审批没成功 —— ${amount} 积分还没扣掉，记录在待审批里，去点一下通过`);
       } else {
-        message.error(e instanceof Error ? e.message : '结算失败，请重试');
+        message.error(e instanceof Error ? e.message : '兑换失败，请重试');
       }
     } finally {
       setSettling(false);
@@ -921,25 +930,44 @@ export default function FamilyDashboard() {
           <div className={`num ${styles.balanceValue}`} style={{ color: balanceColor }}>
             {balance}
           </div>
-          <div className={styles.balanceSub}>可用余额</div>
+          <div className={styles.balanceSub}>可用积分</div>
           {isParent && pendingCount > 0 && (
             <div className={styles.pendingHint}>
               <AuditOutlined /> 待审批 {pendingCount} 项
             </div>
           )}
-          {/* 结算兑现：把余额换成现金，余额清零（仅家长、余额为正时） */}
+          {/* 积分兑换现金：100 积分 = 10 元，可以只兑换一部分（仅家长、余额为正时） */}
           {isParent && balance > 0 && (
-            <Popconfirm
-              title={`兑现 ${balance} 积分？`}
-              description="会记一条「现金兑现」支出，余额清零；如需回退请删除该记录"
-              okText="确认兑现"
-              cancelText="取消"
-              onConfirm={handleSettle}
-            >
-              <Button className={styles.settleBtn} icon={<WalletOutlined />} loading={settling}>
-                结算兑现（清零余额）
-              </Button>
-            </Popconfirm>
+            <div className={styles.exchangeBox}>
+              <div className={styles.balanceSub}>积分兑换现金 · {EXCHANGE_RATE_TEXT}</div>
+              <InputNumber
+                className={styles.exchangeInput}
+                min={1}
+                max={balance}
+                precision={0}
+                value={exchangePoints}
+                onChange={(v) => setExchangePoints(typeof v === 'number' ? v : null)}
+                placeholder={`想兑换多少积分（最多 ${balance}）`}
+                addonAfter="积分"
+              />
+              <Popconfirm
+                title={`兑换 ${exchangeValue} 积分 = ${exchangeYuan} 元？`}
+                description="会记一条「现金兑现」支出，剩下的积分留在账上；如需回退请删除该记录"
+                okText="确认兑换"
+                cancelText="取消"
+                disabled={!canExchange}
+                onConfirm={() => handleSettle(exchangeValue)}
+              >
+                <Button
+                  className={styles.settleBtn}
+                  icon={<WalletOutlined />}
+                  loading={settling}
+                  disabled={!canExchange}
+                >
+                  兑换 {exchangeYuan} 元现金
+                </Button>
+              </Popconfirm>
+            </div>
           )}
         </Card>
 
