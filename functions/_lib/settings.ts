@@ -215,3 +215,93 @@ export async function writeAdminPassword(db: D1Database, password: string): Prom
     .bind(ADMIN_PASSWORD_KEY, password, new Date().toISOString())
     .run();
 }
+
+/* ===== 管理员密码试错节流 =====
+   「管理员」入口对全家开放（妈妈和女儿都能看见），密码就成了唯一的门。
+   没有节流的话，在那张弹窗里可以无限次试 —— 默认密码是 10 位纯数字，
+   知道手机号、生日这类习惯用法的孩子试几次就可能中。所以连续错
+   ADMIN_MAX_ATTEMPTS 次就锁 ADMIN_LOCK_MS，成功一次立刻清零。
+   状态同样寄存在 settings 表（不加表），键名见下面两个常量。 */
+
+/** 连续失败次数在 settings 表里的键名 */
+export const ADMIN_FAIL_COUNT_KEY = 'admin_fail_count';
+
+/** 解锁时间（毫秒时间戳，空/0 = 没锁）在 settings 表里的键名 */
+export const ADMIN_LOCK_UNTIL_KEY = 'admin_lock_until';
+
+/** 连续错几次就锁 */
+export const ADMIN_MAX_ATTEMPTS = 5;
+
+/** 锁多久（毫秒） */
+export const ADMIN_LOCK_MS = 5 * 60 * 1000;
+
+export interface AdminLockState {
+  /** 还要等多少毫秒才能再试；0 = 现在就能试 */
+  lockRemainingMs: number;
+  /** 本轮已经连续错了几次（锁定中会归 0） */
+  failedAttempts: number;
+}
+
+/** 读取当前锁定状态；表不可用时当作没锁（不能因为库的问题把人锁在门外） */
+export async function readAdminLock(db: D1Database): Promise<AdminLockState> {
+  try {
+    const result = await db
+      .prepare('SELECT key, value FROM settings WHERE key IN (?, ?)')
+      .bind(ADMIN_FAIL_COUNT_KEY, ADMIN_LOCK_UNTIL_KEY)
+      .all<{ key: string; value: string }>();
+
+    let failedAttempts = 0;
+    let lockUntil = 0;
+    for (const row of result.results ?? []) {
+      const value = Number.parseInt(row.value ?? '', 10);
+      if (!Number.isFinite(value)) continue;
+      if (row.key === ADMIN_FAIL_COUNT_KEY) failedAttempts = Math.max(0, value);
+      if (row.key === ADMIN_LOCK_UNTIL_KEY) lockUntil = Math.max(0, value);
+    }
+
+    return {
+      lockRemainingMs: Math.max(0, lockUntil - Date.now()),
+      failedAttempts,
+    };
+  } catch (error) {
+    console.error('readAdminLock failed', error);
+    return { lockRemainingMs: 0, failedAttempts: 0 };
+  }
+}
+
+/** 记一次密码失败；错到次数就上锁，返回记完之后的状态（写失败不影响拒绝本次请求） */
+export async function registerAdminFailure(db: D1Database): Promise<AdminLockState> {
+  const current = await readAdminLock(db);
+  const failedAttempts = current.failedAttempts + 1;
+  const locked = failedAttempts >= ADMIN_MAX_ATTEMPTS;
+  const lockUntil = locked ? Date.now() + ADMIN_LOCK_MS : 0;
+
+  try {
+    const updatedAt = new Date().toISOString();
+    const upsert = `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`;
+    await db.batch([
+      db.prepare(upsert).bind(ADMIN_FAIL_COUNT_KEY, String(locked ? 0 : failedAttempts), updatedAt),
+      db.prepare(upsert).bind(ADMIN_LOCK_UNTIL_KEY, String(lockUntil), updatedAt),
+    ]);
+  } catch (error) {
+    console.error('registerAdminFailure failed', error);
+  }
+
+  return {
+    lockRemainingMs: locked ? ADMIN_LOCK_MS : 0,
+    failedAttempts: locked ? 0 : failedAttempts,
+  };
+}
+
+/** 密码输对了：把失败次数和锁定一起清掉 */
+export async function clearAdminLock(db: D1Database): Promise<void> {
+  try {
+    await db
+      .prepare('DELETE FROM settings WHERE key IN (?, ?)')
+      .bind(ADMIN_FAIL_COUNT_KEY, ADMIN_LOCK_UNTIL_KEY)
+      .run();
+  } catch (error) {
+    console.error('clearAdminLock failed', error);
+  }
+}

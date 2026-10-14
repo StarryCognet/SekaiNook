@@ -43,3 +43,25 @@ export function changeAdminPassword(params: {
 }): Promise<AdminPanelState> {
   return http.post<AdminPanelState>('/api/admin', { action: 'password', ...params });
 }
+
+/** 一条管理员调整流水（面板里列出来、可撤销） */
+export interface AdminAdjustment {
+  id: string;
+  /** 这条调整动的是哪本账 */
+  ledger: 'family' | 'sun';
+  amount: number;
+  note: string;
+  createdAt: string;
+}
+
+/** 「最近调整」连同最新余额 */
+export interface AdminAdjustmentsState {
+  family: number;
+  sun: number;
+  adjustments: AdminAdjustment[];
+}
+
+/** 最近的调整流水（撤销走 deleteLedgerRecord，和账本页删流水是同一条路） */
+export function listAdminAdjustments(password: string): Promise<AdminAdjustmentsState> {
+  return http.post<AdminAdjustmentsState>('/api/admin', { action: 'adjustments', password });
+}

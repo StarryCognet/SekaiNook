@@ -19,9 +19,13 @@
  */
 
 import {
+  ADMIN_MAX_ATTEMPTS,
+  clearAdminLock,
   MAX_ADMIN_PASSWORD_LENGTH,
   MIN_ADMIN_PASSWORD_LENGTH,
+  readAdminLock,
   readAdminPassword,
+  registerAdminFailure,
   sanitizeAdminPassword,
   writeAdminPassword,
 } from '../../_lib/settings';
@@ -42,9 +46,30 @@ const ADMIN_TASK_NAME = '管理员调整';
 /** 一次调整的绝对值上限：防手滑多打几位把余额推到天文数字 */
 const MAX_ADJUST_ABS = 1_000_000;
 
+/** 「最近调整」列表最多回几条 */
+const ADMIN_ADJUSTMENT_LIMIT = 20;
+
 interface Summary {
   family: number;
   sun: number;
+}
+
+/** 一条管理员调整流水（面板里列出来、可撤销） */
+interface AdjustmentRow {
+  id: string;
+  task_id: string;
+  amount: number;
+  note: string | null;
+  created_at: string;
+}
+
+/** 锁定期内的统一回应：429 + 还要等多少秒 */
+function lockedResponse(lockRemainingMs: number): Response {
+  const seconds = Math.max(1, Math.ceil(lockRemainingMs / 1000));
+  return Response.json(
+    { error: `密码错误次数太多，请等 ${seconds} 秒后再试`, lockRemainingMs },
+    { status: 429 }
+  );
 }
 
 /** 当前两个余额（与全量余额接口同一套 SQL，口径不会漂） */
@@ -110,6 +135,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const action = typeof body.action === 'string' ? body.action : 'verify';
   const password = typeof body.password === 'string' ? body.password.trim() : '';
 
+  // 先看是不是还在锁定期：锁着的话连密码都不比，直接让等
+  // （否则节流形同虚设 —— 试错成本还是零）
+  const lock = await readAdminLock(env.DB);
+  if (lock.lockRemainingMs > 0) {
+    return lockedResponse(lock.lockRemainingMs);
+  }
+
   let stored: string;
   try {
     stored = await readAdminPassword(env.DB);
@@ -120,8 +152,21 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   // 不区分「没填」和「填错了」，也不透露任何关于正确密码的信息
   if (!password || password !== stored) {
-    return Response.json({ error: '管理员密码不对' }, { status: 401 });
+    const next = await registerAdminFailure(env.DB);
+    if (next.lockRemainingMs > 0) {
+      return lockedResponse(next.lockRemainingMs);
+    }
+    return Response.json(
+      {
+        error: `管理员密码不对，还可以试 ${ADMIN_MAX_ATTEMPTS - next.failedAttempts} 次`,
+        attemptsLeft: ADMIN_MAX_ATTEMPTS - next.failedAttempts,
+      },
+      { status: 401 }
+    );
   }
+
+  // 密码对了：把之前攒的失败次数清掉
+  await clearAdminLock(env.DB);
 
   try {
     if (action === 'password') {
@@ -179,6 +224,28 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
 
       return respond(await readSummary(env.DB), { changed });
+    }
+
+    if (action === 'adjustments') {
+      const result = await env.DB
+        .prepare(
+          `SELECT id, task_id, amount, note, created_at FROM family_ledger
+            WHERE task_id IN (?, ?)
+            ORDER BY created_at DESC, rowid DESC
+            LIMIT ?`
+        )
+        .bind(ADMIN_FAMILY_TASK_ID, ADMIN_SUN_TASK_ID, ADMIN_ADJUSTMENT_LIMIT)
+        .all<AdjustmentRow>();
+
+      return respond(await readSummary(env.DB), {
+        adjustments: (result.results ?? []).map((row) => ({
+          id: row.id,
+          ledger: row.task_id === ADMIN_SUN_TASK_ID ? 'sun' : 'family',
+          amount: row.amount,
+          note: row.note ?? '',
+          createdAt: row.created_at,
+        })),
+      });
     }
 
     // 默认动作：只校验密码，把当前余额带回去（进管理员面板第一步）

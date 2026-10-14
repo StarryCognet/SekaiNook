@@ -11,6 +11,7 @@ import {
   Button,
   message,
   Popconfirm,
+  List,
 } from "antd";
 import {
   SettingOutlined,
@@ -28,6 +29,7 @@ import {
   DownOutlined,
   UpOutlined,
   ToolOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 import { APP_VERSION, CHANGELOG } from "../../config/changelog";
 import { useFamilyStore } from "../../store/useFamilyStore";
@@ -45,8 +47,11 @@ import { scanOrphanImages, deleteOrphanImages } from "../../api/maintenance";
 import {
   adjustLedgerPoints,
   changeAdminPassword,
+  listAdminAdjustments,
   openAdminPanel,
+  type AdminAdjustment,
 } from "../../api/admin";
+import { deleteLedgerRecord } from "../../api/familyLedger";
 import { uploadImage } from "../../api/upload";
 import { compressImage, isAbortError } from "../../utils/image";
 import { useBackButton } from "../../utils/useBackButton";
@@ -57,6 +62,19 @@ type SectionId = "appearance" | "family" | "admin" | "superadmin";
 
 /** 管理员密码最长几位（与 functions/_lib/settings.ts 的 MAX_ADMIN_PASSWORD_LENGTH 一致） */
 const ADMIN_PASSWORD_MAX_LENGTH = 32;
+
+/** 「最近改过什么」最多列几条（与 functions/api/admin/index.ts 的 ADMIN_ADJUSTMENT_LIMIT 一致） */
+const ADMIN_ADJUSTMENT_LIMIT = 20;
+
+/** 把 ISO 时间显示成「10-14 08:30」这种短格式，列表里够看了 */
+function formatAdjustTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
 
 /** 版本日志收起时展示几个版本（都是最新在前） */
 const RECENT_LOG_COUNT = 3;
@@ -152,6 +170,11 @@ export default function SettingsPage() {
   const [newAdminPassword, setNewAdminPassword] = useState("");
   const [confirmAdminPassword, setConfirmAdminPassword] = useState("");
   const [adminPasswordSaving, setAdminPasswordSaving] = useState(false);
+  /** 最近几条管理员调整（列表里能一键撤销） */
+  const [adminAdjustments, setAdminAdjustments] = useState<AdminAdjustment[]>([]);
+  const [adminAdjustmentsLoading, setAdminAdjustmentsLoading] = useState(false);
+  /** 正在撤销的那条流水 id */
+  const [adminRevokingId, setAdminRevokingId] = useState<string | null>(null);
 
   // 口令校验中（异步比对摘要）与剩余锁定秒数（0 = 未锁定）
   const [pinChecking, setPinChecking] = useState(false);
@@ -386,6 +409,19 @@ export default function SettingsPage() {
     setCustomPin(hasCustomParentPin());
   };
 
+  /** 管理员：拉最近几条调整（纯展示，拉不到不影响改积分） */
+  const refreshAdminAdjustments = async (password: string) => {
+    setAdminAdjustmentsLoading(true);
+    try {
+      const result = await listAdminAdjustments(password);
+      setAdminAdjustments(result.adjustments);
+    } catch {
+      setAdminAdjustments([]);
+    } finally {
+      setAdminAdjustmentsLoading(false);
+    }
+  };
+
   /** 管理员：验密码 → 进后台面板 */
   const handleAdminUnlock = async () => {
     if (adminChecking) return;
@@ -405,6 +441,8 @@ export default function SettingsPage() {
     setAdminSun(null);
     openSection("superadmin");
     message.success("已进入管理员");
+    // 面板里的「最近改过什么」进门就拉一次
+    void refreshAdminAdjustments(adminPassword);
   };
 
   /** 管理员：把积分直接改成填的目标值（只改填了的那个） */
@@ -425,6 +463,7 @@ export default function SettingsPage() {
       });
       // 账本页的余额来自 store，这里刷一次，切回账本立刻看到新数字
       await loadLedger();
+      await refreshAdminAdjustments(adminPassword);
       setAdminFamily(null);
       setAdminSun(null);
       message.success(
@@ -460,6 +499,45 @@ export default function SettingsPage() {
       message.error(e instanceof Error ? e.message : "改密码失败，请重试");
     } finally {
       setAdminPasswordSaving(false);
+    }
+  };
+
+  /** 管理员：一键把某一本账清零（走同一套「改成目标值」接口，留一条流水好撤销） */
+  const handleAdminClear = async (ledger: "family" | "sun") => {
+    if (adminSaving) return;
+    setAdminSaving(true);
+    try {
+      const result = await adjustLedgerPoints({
+        password: adminPassword,
+        ...(ledger === "family" ? { family: 0 } : { sun: 0 }),
+      });
+      await loadLedger();
+      await refreshAdminAdjustments(adminPassword);
+      message.success(
+        result.changed && result.changed.length > 0
+          ? `已清零：${result.changed.join("，")}`
+          : "本来就是 0，没有改动"
+      );
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "清零失败，请重试");
+    } finally {
+      setAdminSaving(false);
+    }
+  };
+
+  /** 管理员：撤销一条调整（删掉那条流水，余额自己就回去了） */
+  const handleAdminRevoke = async (id: string) => {
+    if (adminRevokingId) return;
+    setAdminRevokingId(id);
+    try {
+      await deleteLedgerRecord(id);
+      await loadLedger();
+      await refreshAdminAdjustments(adminPassword);
+      message.success("已撤销，余额回到改之前");
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "撤销失败，请重试");
+    } finally {
+      setAdminRevokingId(null);
     }
   };
 
@@ -983,6 +1061,100 @@ export default function SettingsPage() {
             >
               保存修改
             </Button>
+          </Card>
+
+          {/* 一键清零：两个入口分开，点错了也只清一本账 */}
+          <Card className={styles.infoCard} variant="borderless">
+            <div className={styles.infoHeader}>
+              <div className={styles.infoIcon}>
+                <DeleteOutlined />
+              </div>
+              <div className={styles.infoText}>
+                <div className={styles.appName}>一键清零</div>
+                <div className={styles.appDesc}>
+                  把某一本账直接归零；同样会记一条「管理员调整」，改错了在下面撤销
+                </div>
+              </div>
+            </div>
+            <div className={styles.nameFields}>
+              <Popconfirm
+                title={`把家庭积分从 ${balance} 清零？`}
+                description="会记一条「管理员调整」流水，撤销入口就在下面"
+                okText="清零"
+                cancelText="取消"
+                onConfirm={() => handleAdminClear("family")}
+              >
+                <Button block disabled={balance === 0} loading={adminSaving}>
+                  家庭积分清零
+                </Button>
+              </Popconfirm>
+              <Popconfirm
+                title={`把花园阳光从 ${sunBalance} 清零？`}
+                description="会记一条「管理员调整」流水，撤销入口就在下面"
+                okText="清零"
+                cancelText="取消"
+                onConfirm={() => handleAdminClear("sun")}
+              >
+                <Button block disabled={sunBalance === 0} loading={adminSaving}>
+                  花园阳光清零
+                </Button>
+              </Popconfirm>
+            </div>
+          </Card>
+
+          {/* 最近改过什么：万一改错了，删掉那条流水就回去了 */}
+          <Card className={styles.infoCard} variant="borderless">
+            <div className={styles.infoHeader}>
+              <div className={styles.infoIcon}>
+                <HistoryOutlined />
+              </div>
+              <div className={styles.infoText}>
+                <div className={styles.appName}>最近改过什么</div>
+                <div className={styles.appDesc}>
+                  最近 {ADMIN_ADJUSTMENT_LIMIT} 条调整；点「撤销」会删掉那条流水，余额回到改之前
+                </div>
+              </div>
+            </div>
+            <List
+              size="small"
+              loading={adminAdjustmentsLoading}
+              dataSource={adminAdjustments}
+              locale={{ emptyText: "还没改过积分数" }}
+              renderItem={(item) => (
+                <List.Item
+                  actions={[
+                    <Popconfirm
+                      key="revoke"
+                      title="撤销这条调整？"
+                      description="会删掉这条流水，余额回到改之前"
+                      okText="撤销"
+                      cancelText="取消"
+                      onConfirm={() => handleAdminRevoke(item.id)}
+                    >
+                      <Button
+                        type="link"
+                        danger
+                        size="small"
+                        loading={adminRevokingId === item.id}
+                      >
+                        撤销
+                      </Button>
+                    </Popconfirm>,
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={`${item.ledger === "sun" ? "花园阳光" : "家庭积分"} ${
+                      item.amount > 0 ? `+${item.amount}` : item.amount
+                    }`}
+                    description={
+                      item.createdAt
+                        ? `${item.note} · ${formatAdjustTime(item.createdAt)}`
+                        : item.note
+                    }
+                  />
+                </List.Item>
+              )}
+            />
           </Card>
 
           {/* 换掉出厂密码 */}
