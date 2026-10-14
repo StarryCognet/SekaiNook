@@ -214,14 +214,14 @@ export default function SettingsPage() {
             desc: "家长口令、打卡照片清理",
             icon: <LockOutlined />,
           },
-          {
-            id: "superadmin" as SectionId,
-            title: "管理员",
-            desc: "修改积分数 · 需要管理员密码",
-            icon: <ToolOutlined />,
-          },
         ]
       : []),
+    {
+      id: "superadmin",
+      title: "管理员",
+      desc: "修改积分数 · 需要管理员密码",
+      icon: <ToolOutlined />,
+    },
   ];
 
   const visibleLog = logExpanded
@@ -926,8 +926,8 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {/* ================= 第二层：管理员（家庭后台，仅家长可见） ================= */}
-      {section === "superadmin" && isParent && (
+      {/* ================= 第二层：管理员（家庭后台，谁都能看见入口，进去要密码） ================= */}
+      {section === "superadmin" && (
         <section className={styles.group}>
           {renderBackBar()}
           <h2 className={styles.groupTitle}>管理员</h2>
@@ -994,7 +994,7 @@ export default function SettingsPage() {
               <div className={styles.infoText}>
                 <div className={styles.appName}>管理员密码</div>
                 <div className={styles.appDesc}>
-                  现在是出厂密码 3398377037，换成只有你知道的（家里每台手机都用新密码）
+                  换成只有你知道的密码，家里每台手机都用新密码
                 </div>
               </div>
             </div>
@@ -1225,7 +1225,7 @@ export default function SettingsPage() {
         <Form layout="vertical">
           <Form.Item label="管理员密码">
             <Input.Password
-              placeholder="出厂密码 3398377037"
+              placeholder="请输入管理员密码"
               value={adminPassword}
               onChange={(e) => setAdminPassword(e.target.value)}
               maxLength={ADMIN_PASSWORD_MAX_LENGTH}
