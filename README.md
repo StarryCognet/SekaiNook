@@ -123,6 +123,8 @@ docs/                    接口契约与移植说明（见下）
 | [docs/api-contract.md](docs/api-contract.md) | 全部 19 个接口的字段级契约、任务规则总表、防刷闸门、日结算、数据表结构、80 条 Dart 易踩的坑、81 项验收清单 |
 | [docs/contract-garden-store.md](docs/contract-garden-store.md) | 花园 store（阳光/勋章/商城/古诗/语文）的持久化格式、日切规则、逐函数逻辑、33 条坑 |
 | [docs/contract-other-stores.md](docs/contract-other-stores.md) | 通知 / 主题 / 设置 / 自定义任务四个 store 的行为契约与持久化键 |
+| [docs/parity-audit.md](docs/parity-audit.md) | 与 Web 版的功能对齐审计：逐页核对表、缺失项 M1–M9、行为不一致 I1–I10、交互形态差异 |
+| [docs/parity-fixes.md](docs/parity-fixes.md) | 上述审计问题的处置记录：14 项已修复、3 项刻意保留的差异及理由、验证方式 |
 
 ## 与 Web 版的差异（有意为之）
 
@@ -143,3 +145,10 @@ docs/                    接口契约与移植说明（见下）
 7. **22:00 判定口径**：与 Web 版一致用**设备本地时间**（`DateTime.now().hour`），
    不是东八区；东八区那套只服务 `/api/ledger/settle` 的日结算
    （`FamilyState.expectedSettleDay`）。App 内首页与账本页现在是同一口径。
+8. **不加全局顶栏**：Web 版 `MainLayout` 有一条顶栏（页面名胶囊 + 余额胶囊 + 通知铃铛 +
+   深浅开关），Flutter 版不复制 —— 目标是 375px 手机宽度，各页自带头部，
+   余额/通知/深浅在首页与设置页都已各有入口。未读角标按 Web 版挂法挂在「首页」Tab。
+9. **不做「chunk 加载失败自动刷新」**：Web 版命中旧 chunk 404 会先自动刷新一次
+   （`sessionStorage: sekainook_chunk_autoreload`）；Flutter Web 是 AOT 单包，
+   没有这种失败模式。错误兜底改为 `ErrorWidget.builder` 的中文卡片 + 手动「重新加载」
+   （见 `lib/core/app_error.dart`）。
