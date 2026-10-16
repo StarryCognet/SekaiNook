@@ -69,13 +69,21 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   int _indexForLocation(String location) {
+    // 顺序要紧：`/family/plan` 必须先于 `/family` 判断
+    if (location.startsWith('/family/plan')) return 2;
     if (location.startsWith('/family')) return 1;
-    if (location.startsWith('/garden')) return 2;
-    if (location.startsWith('/settings')) return 3;
+    if (location.startsWith('/garden')) return 3;
+    if (location.startsWith('/settings')) return 4;
     return 0;
   }
 
-  static const List<String> _locations = <String>['/home', '/family', '/garden', '/settings'];
+  static const List<String> _locations = <String>[
+    '/home',
+    '/family',
+    '/family/plan',
+    '/garden',
+    '/settings',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -106,8 +114,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             onDestinationSelected: (value) => context.go(_locations[value]),
             destinations: <Widget>[
               NavigationDestination(
-                icon: const Icon(Icons.home_outlined),
-                selectedIcon: const Icon(Icons.home),
+                icon: _withBadge(const Icon(Icons.home_outlined), unread, palette.danger),
+                selectedIcon: _withBadge(const Icon(Icons.home), unread, palette.danger),
                 label: '首页',
               ),
               NavigationDestination(
@@ -124,13 +132,18 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 label: '家庭',
               ),
               const NavigationDestination(
+                icon: Icon(Icons.calendar_month_outlined),
+                selectedIcon: Icon(Icons.calendar_month),
+                label: '计划',
+              ),
+              const NavigationDestination(
                 icon: Icon(Icons.local_florist_outlined),
                 selectedIcon: Icon(Icons.local_florist),
                 label: '花园',
               ),
-              NavigationDestination(
-                icon: _withBadge(const Icon(Icons.settings_outlined), unread, palette.danger),
-                selectedIcon: _withBadge(const Icon(Icons.settings), unread, palette.danger),
+              const NavigationDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings),
                 label: '设置',
               ),
             ],

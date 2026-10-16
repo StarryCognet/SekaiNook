@@ -153,6 +153,24 @@ String _relativeTime(DateTime at, DateTime now) {
 /// 带符号金额（与 `LedgerRecord.signedAmount` 同口径）
 String _signed(int amount) => amount > 0 ? '+$amount' : '$amount';
 
+/// 账本分页在路由里的查询参数名。
+///
+/// 对应 Web 版 `goLedger(tab)` 的 `setViewState('family.activeTab', ...)` 搬到地址栏：
+/// `/family?tab=<tasks|pending|history>`（缺省 `tasks`）。
+const String _familyTabParam = 'tab';
+
+/// 去花园的某个菜单（对应 Web 版 `goGarden(menu)`：先把菜单选好，落地就是那一页）。
+///
+/// 菜单 key 来自 `GardenConfig.menus`（`poem`=古诗背诵、`garden`=阳光花园、
+/// `rewards`=我的奖励、`tasks`=今日任务…），参数名用 [GardenConfig.menuParam]。
+/// 用 URL 承载菜单是为了让系统返回键沿菜单回退，而不是直接退出花园。
+String _gardenPath(String menu) => '/garden?${GardenConfig.menuParam}=$menu';
+
+/// 去账本的某一页：打卡任务（`tasks`）/ 待审批（`pending`）/ 历史记录（`history`）。
+///
+/// 对应 Web 版 `goLedger(tab)`：Web 内部第三个 Tab 叫 `records`，URL 契约里统一叫 `history`。
+String _familyPath(String tab) => '/family?$_familyTabParam=$tab';
+
 /// 主题色的浅底（妹妹版的「发光」= 主色浅底 + 柔和阴影，不用硬编码色值）
 Color _accentTint(Color color) => Color.alphaBlend(color.withValues(alpha: 0.14), Colors.transparent);
 
@@ -612,7 +630,7 @@ class _KidHomePageState extends State<KidHomePage> {
             if (showLateAlert) ...<Widget>[
               _gapSm,
               _noticeBar(palette, '已经 22:00 啦，还有 $learningLeft 个学习任务没完成',
-                  Icons.nightlight_outlined, onTap: () => context.go('/garden')),
+                  Icons.nightlight_outlined, onTap: () => context.go(_gardenPath('tasks'))),
             ],
             if (sleepTask != null) ...<Widget>[
               _gapSm,
@@ -734,7 +752,7 @@ class _KidHomePageState extends State<KidHomePage> {
               ),
               const SizedBox(width: AppSpacing.sm),
               InkWell(
-                onTap: () => context.go('/garden'),
+                onTap: () => context.go(_gardenPath('rewards')),
                 borderRadius: BorderRadius.circular(AppRadius.full),
                 child: Stack(
                   clipBehavior: Clip.none,
@@ -1041,7 +1059,7 @@ class _KidHomePageState extends State<KidHomePage> {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: () => context.go('/family'),
+              onPressed: () => context.go(_familyPath('pending')),
               style: TextButton.styleFrom(foregroundColor: palette.primary),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1164,7 +1182,7 @@ class _KidHomePageState extends State<KidHomePage> {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: () => context.go('/garden'),
+              onPressed: () => context.go(_gardenPath('tasks')),
               style: TextButton.styleFrom(foregroundColor: palette.primary),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1297,7 +1315,7 @@ class _KidHomePageState extends State<KidHomePage> {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: () => context.go('/family'),
+              onPressed: () => context.go(_familyPath('tasks')),
               style: TextButton.styleFrom(foregroundColor: palette.primary),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1574,9 +1592,9 @@ class _KidHomePageState extends State<KidHomePage> {
 
   Widget _grid(AppPalette palette, String momName, int unreadCount) {
     final List<_GridEntry> entries = <_GridEntry>[
-      _GridEntry('去打卡', Icons.check_circle_outline, () => context.go('/family')),
-      _GridEntry('背古诗', Icons.menu_book_outlined, () => context.go('/garden')),
-      _GridEntry('我的花园', Icons.wb_sunny_outlined, () => context.go('/garden')),
+      _GridEntry('去打卡', Icons.check_circle_outline, () => context.go(_familyPath('tasks'))),
+      _GridEntry('背古诗', Icons.menu_book_outlined, () => context.go(_gardenPath('poem'))),
+      _GridEntry('我的花园', Icons.wb_sunny_outlined, () => context.go(_gardenPath('garden'))),
       _GridEntry(
         '$momName的话',
         Icons.notifications_outlined,
@@ -1584,8 +1602,8 @@ class _KidHomePageState extends State<KidHomePage> {
         badge: unreadCount,
       ),
       _GridEntry('本周计划', Icons.calendar_today_outlined, () => context.go('/family/plan')),
-      _GridEntry('我的账本', Icons.account_balance_wallet_outlined, () => context.go('/family')),
-      _GridEntry('我的勋章', Icons.emoji_events_outlined, () => context.go('/garden')),
+      _GridEntry('我的账本', Icons.account_balance_wallet_outlined, () => context.go(_familyPath('history'))),
+      _GridEntry('我的勋章', Icons.emoji_events_outlined, () => context.go(_gardenPath('rewards'))),
       _GridEntry('设置', Icons.settings_outlined, () => context.go('/settings')),
     ];
 

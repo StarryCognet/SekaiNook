@@ -25,10 +25,9 @@ class NotificationsPage extends StatefulWidget {
   State<NotificationsPage> createState() => _NotificationsPageState();
 }
 
-enum _NotifyFilter { all, unread }
-
 class _NotificationsPageState extends State<NotificationsPage> {
-  _NotifyFilter _filter = _NotifyFilter.all;
+  /// 筛选（全部 / 未读）**不存字段** —— 唯一真相是地址栏的 `filter` 查询参数，
+  /// 在 `build` 里派生（见 [_goFilter] 的写入侧）。
 
   /// 已经发起过加载的信箱 —— 身份变了要换一格重新拉
   NotifyAudience? _loadedAudience;
@@ -112,7 +111,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     final audience = audienceOf(family.role);
     final items = state.items;
-    final visible = _filter == _NotifyFilter.unread
+
+    // 筛选状态的唯一真相：地址栏 `/home/notifications?filter=all|unread`（缺省 all）。
+    // 非法值（手输 / 旧链接）一律回落到 all。
+    final String rawFilter = GoRouterState.of(context).uri.queryParameters['filter'] ?? '';
+    final String filter =
+        const <String>{'all', 'unread'}.contains(rawFilter) ? rawFilter : 'all';
+    final bool unreadOnly = filter == 'unread';
+
+    final visible = unreadOnly
         ? items.where((item) => item.isUnread).toList(growable: false)
         : items;
 
@@ -134,8 +141,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 '通知功能还没就绪（服务端通知表尚未创建），等家长执行一次数据库迁移就会出现。',
               ),
             if (state.error != null && items.isNotEmpty) _buildRefreshFailedBar(palette),
-            if (items.isNotEmpty) _buildFilter(palette, state.unreadCount),
-            Expanded(child: _buildBody(palette, state, visible)),
+            if (items.isNotEmpty) _buildFilter(palette, state.unreadCount, unreadOnly),
+            Expanded(child: _buildBody(palette, state, visible, unreadOnly)),
           ],
         ),
       ),
@@ -261,7 +268,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
     );
   }
 
-  Widget _buildFilter(AppPalette palette, int unreadCount) {
+  /// 切换筛选：写回地址栏（`context.go` 是 replace 语义，不堆历史），
+  /// 选中态由 URL 派生，所以这里不再 setState。
+  void _goFilter(String filter) {
+    context.go('/home/notifications?filter=$filter');
+  }
+
+  Widget _buildFilter(AppPalette palette, int unreadCount, bool unreadOnly) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -274,15 +287,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
           _filterChip(
             palette,
             label: '全部',
-            selected: _filter == _NotifyFilter.all,
-            onTap: () => setState(() => _filter = _NotifyFilter.all),
+            selected: !unreadOnly,
+            onTap: () => _goFilter('all'),
           ),
           const SizedBox(width: AppSpacing.sm),
           _filterChip(
             palette,
             label: unreadCount > 0 ? '未读 ($unreadCount)' : '未读',
-            selected: _filter == _NotifyFilter.unread,
-            onTap: () => setState(() => _filter = _NotifyFilter.unread),
+            selected: unreadOnly,
+            onTap: () => _goFilter('unread'),
           ),
         ],
       ),
@@ -328,6 +341,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     AppPalette palette,
     NotificationState state,
     List<NotificationRecord> visible,
+    bool unreadOnly,
   ) {
     if (state.loading && state.items.isEmpty) {
       return const LoadingView(message: '正在读取通知…');
@@ -340,8 +354,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
         onRefresh: () => context.read<NotificationState>().refresh(),
         child: _scrollable(
           EmptyView(
-            message: _filter == _NotifyFilter.unread ? '没有未读通知' : '暂时没有通知',
-            hint: _filter == _NotifyFilter.unread ? '下拉可以刷新' : null,
+            message: unreadOnly ? '没有未读通知' : '暂时没有通知',
+            hint: unreadOnly ? '下拉可以刷新' : null,
           ),
         ),
       );

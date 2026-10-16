@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -62,8 +63,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerPr
   /// 每秒钟刷新一次「现在」，用于作息判断（22:00 之后提示罚款）
   late DateTime _now;
 
+  /// 只负责 TabBar 的高亮动画；**分区状态的唯一真相是地址栏的 `tab` 查询参数**
+  /// （见 `build` 里的派生逻辑），因此这里不再存「当前分页」字段。
   TabController? _tabController;
-  String _activeTab = 'tasks';
 
   // ---- 驳回弹窗 ----
   bool _rejecting = false;
@@ -115,8 +117,17 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerPr
 
   bool get _isParent => context.read<FamilyState>().role == FamilyRole.parent;
 
-  /// 当前分页 —— 「待审批」只对家长存在，孩子端若停在那一页要回落到任务区。
-  String get _visibleTab => !_isParent && _activeTab == 'pending' ? 'tasks' : _activeTab;
+  /// 地址栏口径（`tasks` / `pending` / `history`）→ 页面内分区键（`tasks` / `pending` / `records`）。
+  ///
+  /// 「待审批」只对家长存在，孩子端若停在那一页要回落到任务区 —— 与 Web 版一致：
+  /// 只回落**显示**，不改地址栏（免得把用户手输的链接改掉）。
+  static String _areaFor(String tab, {required bool isParent}) {
+    if (!isParent && tab == 'pending') return 'tasks';
+    return tab == 'history' ? 'records' : tab;
+  }
+
+  /// 分区键 → 地址栏口径（反向映射，用于切换时导航）
+  static String _tabParamFor(String area) => area == 'records' ? 'history' : area;
 
   List<String> _tabsFor(bool isParent) => <String>[
         'tasks',
@@ -124,14 +135,20 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerPr
         'records',
       ];
 
-  /// 分页控制器：随身份变化重建（孩子端没有「待审批」页）
-  void _ensureTabController(bool isParent) {
+  /// 分页控制器：随身份变化重建（孩子端没有「待审批」页），
+  /// 并把索引对齐到 URL 派生出来的分区 —— TabBar 的高亮和内容分支都用同一个值，
+  /// 不会出现「高亮在 A、内容显示 B」。
+  void _ensureTabController(bool isParent, int index) {
     final keys = _tabsFor(isParent);
-    final index = math.max(0, keys.indexOf(_visibleTab));
     final current = _tabController;
-    if (current != null && current.length == keys.length) return;
-    current?.dispose();
-    _tabController = TabController(length: keys.length, vsync: this, initialIndex: index);
+    if (current == null || current.length != keys.length) {
+      current?.dispose();
+      _tabController = TabController(length: keys.length, vsync: this, initialIndex: index);
+      return;
+    }
+    // TabBar 是本页面的子孙：在 build 里改索引只会把子孙标脏，
+    // 同一帧内 TabBar 就会按新索引重画，不会残留一帧的错位。
+    if (current.index != index) current.index = index;
   }
 
   /// 轮询：家长 10s 刷待审批（角标实时性），孩子 15s 刷流水（感知审批结果）。
@@ -523,7 +540,14 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerPr
   Widget build(BuildContext context) {
     final state = context.watch<FamilyState>();
     final isParent = state.role == FamilyRole.parent;
-    _ensureTabController(isParent);
+    // 分区状态的唯一真相：地址栏 `/family?tab=tasks|pending|history`（缺省 tasks）。
+    // 非法的值（手输 / 旧链接）一律回落到任务区。
+    final String rawTab = GoRouterState.of(context).uri.queryParameters['tab'] ?? '';
+    final String tab =
+        const <String>{'tasks', 'pending', 'history'}.contains(rawTab) ? rawTab : 'tasks';
+    final String area = _areaFor(tab, isParent: isParent);
+    final int tabIndex = math.max(0, _tabsFor(isParent).indexOf(area));
+    _ensureTabController(isParent, tabIndex);
     _ensurePolling(isParent);
 
     if (_error != null) {
@@ -562,7 +586,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerPr
           const SizedBox(height: AppSpacing.md),
           _buildTrendCard(state.records),
           const SizedBox(height: AppSpacing.md),
-          _buildTabs(state, isParent),
+          _buildTabs(state, isParent, area),
         ],
       ),
     );
@@ -924,17 +948,25 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerPr
 
   // ---- ④ 分页：任务区 / 待审批 / 历史记录 ----
 
-  Widget _buildTabs(FamilyState state, bool isParent) {
+  /// 页面内切换分区：写回地址栏（`context.go` 是 replace 语义，不堆历史），
+  /// 页面内容由 URL 派生，所以这里不再 setState。
+  void _goTab(String area) {
+    context.go('/family?tab=${_tabParamFor(area)}');
+  }
+
+  Widget _buildTabs(FamilyState state, bool isParent, String area) {
     final palette = context.palette;
     final controller = _tabController;
     if (controller == null) return const SizedBox.shrink();
     final labels = _tabsFor(isParent);
+    // 内容分支跟着 URL 派生出来的分区走（不是 TabController.index）
+    final index = math.max(0, labels.indexOf(area));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         TabBar(
           controller: controller,
-          onTap: (index) => setState(() => _activeTab = labels[index]),
+          onTap: (tapped) => _goTab(labels[tapped]),
           tabs: <Widget>[
             Tab(text: '任务区'),
             if (isParent)
@@ -972,7 +1004,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerPr
         ),
         const SizedBox(height: AppSpacing.md),
         IndexedStack(
-          index: controller.index,
+          index: index,
           sizing: StackFit.loose,
           children: <Widget>[
             _buildTasksArea(state, isParent),

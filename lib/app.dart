@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import 'core/app_error.dart';
 import 'router.dart';
 import 'state/custom_tasks_state.dart';
 import 'state/family_state.dart';
@@ -44,10 +45,20 @@ class SekaiNookApp extends StatefulWidget {
 class _SekaiNookAppState extends State<SekaiNookApp> {
   late final GoRouter _router = createRouter(widget.family);
 
+  /// 出错兜底卡片的「重新加载」：递增即重建整棵树，
+  /// 对应 Web 版 `ErrorBoundary` 里的 `window.location.reload()`。
+  int _generation = 0;
+
   @override
   void initState() {
     super.initState();
+    setReloadHandler(_handleReload);
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+  }
+
+  void _handleReload() {
+    if (!mounted) return;
+    setState(() => _generation += 1);
   }
 
   /// 启动时的一次性加载。
@@ -81,6 +92,7 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
       child: Consumer<ThemeState>(
         builder: (BuildContext context, ThemeState theme, Widget? child) {
           return MaterialApp.router(
+            key: ValueKey<int>(_generation),
             title: 'SekaiNook',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.build(theme.themeId, hasBackground: theme.hasBackground),

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 // Material 也有一个 Badge（小红点角标），花园的勋章模型重名，藏掉 Material 那个
 import 'package:flutter/material.dart' hide Badge;
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../config/garden_config.dart';
@@ -60,8 +61,17 @@ IconData _gardenIcon(String key) => switch (key) {
 /// 阳光花园儿童工作台（对应 Web 版 `src/views/garden/` 下的 8 个页面）。
 ///
 /// 8 个菜单：学习总览 / 今日任务 / 古诗背诵 / 语文预习 / 阳光花园 / 阳光商城 /
-/// 我的奖励 / 学习记录。Web 版把菜单挂在 URL 上（`/garden?tab=poem`），
-/// Flutter 侧没有 URL 承载菜单，就用本页 state 保存当前 key，`setState` 切换。
+/// 我的奖励 / 学习记录。菜单和 Web 版一样挂在 URL 上（`/garden?tab=poem`，
+/// 参数名取 `GardenConfig.menuParam`），本页**不再自己存菜单 state**：
+/// 地址栏是菜单的唯一真相，于是能深链、刷新 / 从后台回来不丢当前菜单。
+///
+/// 取舍（与 Web 版不同，是三个端共用的统一契约定的）：切换菜单用
+/// `context.go('/garden?tab=<key>')`，replace 语义、不往返回栈堆历史，所以
+/// 系统返回键从花园**直接退回上一层**，不沿点过的菜单逐个回退。选它的理由：
+/// 菜单切换是同一页内的视图切换，不是新页面；若沿菜单堆历史，孩子在花园里
+/// 点 5 个菜单就要按 5 次返回才出得去，等于给他造了个走不出去的迷宫。
+/// 代价（没有菜单级历史）换来的是「离开花园永远一步」＋ 与底部导航切 tab
+/// （同样是 `context.go`）一致的语义。
 ///
 /// 数据只来自 [GardenState]：阳光余额 = 显示余额（权威值 + 未同步增量），
 /// 今日进度 / 完成率都由 `tasks` 与 `completedCount` 同口径派生。
@@ -73,9 +83,6 @@ class GardenPage extends StatefulWidget {
 }
 
 class _GardenPageState extends State<GardenPage> {
-  /// 当前菜单 key（只在 `GardenConfig.isMenuKey` 通过时切换，未知 key 不渲染空白）
-  String _menu = GardenConfig.defaultMenu;
-
   /// 展开了全文的古诗 id（12 首全文一屏铺开太长，默认收一行显示）
   final Set<String> _expandedPoems = <String>{};
 
@@ -159,10 +166,14 @@ class _GardenPageState extends State<GardenPage> {
     );
   }
 
-  void _switchMenu(String key) {
-    if (key == _menu) return;
+  /// 切菜单 = 改地址栏（`/garden?tab=<key>`），不碰本地 state —— 菜单的唯一真相是 URL。
+  ///
+  /// `go` 是 replace 语义：不往返回栈堆菜单历史，所以系统返回键直接退出花园、
+  /// 不沿菜单回退（原因与代价见类注释）。[current] = 此刻地址栏上的菜单。
+  void _switchMenu(String key, String current) {
     if (!GardenConfig.isMenuKey(key)) return;
-    setState(() => _menu = key);
+    if (key == current) return;
+    context.go('/garden?tab=$key');
   }
 
   void _togglePoem(String poemId) {
@@ -226,6 +237,11 @@ class _GardenPageState extends State<GardenPage> {
     final AppPalette palette = context.palette;
     final GardenState garden = context.watch<GardenState>();
 
+    // 菜单的唯一真相在地址栏：`/garden?tab=<menuKey>`（参数名取 GardenConfig.menuParam，
+    // 不写死 'tab'）。缺省或非法值回退 GardenConfig.defaultMenu，不渲染空白。
+    final String raw = GoRouterState.of(context).uri.queryParameters[GardenConfig.menuParam] ?? '';
+    final String menu = GardenConfig.isMenuKey(raw) ? raw : GardenConfig.defaultMenu;
+
     return Scaffold(
       backgroundColor: palette.bg,
       body: SafeArea(
@@ -235,8 +251,8 @@ class _GardenPageState extends State<GardenPage> {
                 children: <Widget>[
                   if (garden.pending.isNotEmpty) _buildPendingBanner(garden, palette),
                   _buildHeader(garden, palette),
-                  _buildMenuBar(),
-                  Expanded(child: _buildMenuContent(garden, palette)),
+                  _buildMenuBar(menu),
+                  Expanded(child: _buildMenuContent(garden, palette, menu)),
                 ],
               ),
       ),
@@ -347,8 +363,9 @@ class _GardenPageState extends State<GardenPage> {
     );
   }
 
-  /// 横向 Tab 条：8 个菜单（375px 下横向滚动，不做换行挤压）
-  Widget _buildMenuBar() {
+  /// 横向 Tab 条：8 个菜单（375px 下横向滚动，不做换行挤压）。
+  /// [current] 是地址栏上的当前菜单，点谁就把地址栏改成谁。
+  Widget _buildMenuBar(String current) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -357,16 +374,16 @@ class _GardenPageState extends State<GardenPage> {
           for (final GardenMenu menu in GardenConfig.menus)
             _MenuChip(
               menu: menu,
-              selected: menu.key == _menu,
-              onTap: () => _switchMenu(menu.key),
+              selected: menu.key == current,
+              onTap: () => _switchMenu(menu.key, current),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildMenuContent(GardenState garden, AppPalette palette) {
-    switch (_menu) {
+  Widget _buildMenuContent(GardenState garden, AppPalette palette, String menu) {
+    switch (menu) {
       case 'overview':
         return _buildOverview(garden, palette);
       case 'tasks':

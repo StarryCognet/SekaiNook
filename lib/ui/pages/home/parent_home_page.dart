@@ -108,6 +108,17 @@ String _relativeTime(DateTime at, DateTime now) {
 /// 带符号金额（与 `LedgerRecord.signedAmount` 同口径）
 String _signed(int amount) => amount > 0 ? '+$amount' : '$amount';
 
+/// 账本分页在路由里的查询参数名。
+///
+/// 对应 Web 版 `goLedger(tab)` 的 `setViewState('family.activeTab', ...)` 搬到地址栏：
+/// `/family?tab=<tasks|pending|history>`（缺省 `tasks`）。
+const String _familyTabParam = 'tab';
+
+/// 去账本的某一页：打卡任务（`tasks`）/ 待审批（`pending`）/ 历史记录（`history`）。
+///
+/// 对应 Web 版 `goLedger(tab)`：Web 内部第三个 Tab 叫 `records`，URL 契约里统一叫 `history`。
+String _familyPath(String tab) => '/family?$_familyTabParam=$tab';
+
 /// 金额文案（保留两位小数）
 String _yuanText(double value) => value.toStringAsFixed(2);
 
@@ -451,7 +462,7 @@ class _ParentHomePageState extends State<ParentHomePage> {
             children: <Widget>[
               Expanded(
                 child: InkWell(
-                  onTap: () => context.go('/family'),
+                  onTap: () => context.go(_familyPath('pending')),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
@@ -494,7 +505,7 @@ class _ParentHomePageState extends State<ParentHomePage> {
               Container(width: 1, height: AppSpacing.xl, color: palette.border),
               Expanded(
                 child: InkWell(
-                  onTap: () => context.go('/family'),
+                  onTap: () => context.go(_familyPath('history')),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Padding(
                     padding: const EdgeInsets.only(left: AppSpacing.sm, top: AppSpacing.xs),
@@ -560,7 +571,7 @@ class _ParentHomePageState extends State<ParentHomePage> {
         Icons.fact_check_outlined,
         '有 ${family.pendingCount} 条打卡等你审批',
         hint,
-        onTap: () => context.go('/family'),
+        onTap: () => context.go(_familyPath('pending')),
         trailing: const Text('去审批'),
       ));
     }
@@ -913,7 +924,7 @@ class _ParentHomePageState extends State<ParentHomePage> {
               ),
               if (today.length > 5)
                 TextButton(
-                  onPressed: () => context.go('/family'),
+                  onPressed: () => context.go(_familyPath('history')),
                   style: TextButton.styleFrom(
                     foregroundColor: palette.primary,
                     textStyle: const TextStyle(fontSize: AppFontSize.xs),
@@ -982,7 +993,7 @@ class _ParentHomePageState extends State<ParentHomePage> {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: () => context.go('/family'),
+              onPressed: () => context.go(_familyPath('history')),
               style: TextButton.styleFrom(foregroundColor: palette.primary),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1013,10 +1024,14 @@ class _ParentHomePageState extends State<ParentHomePage> {
       _GridEntry(
         '去审批',
         Icons.fact_check_outlined,
-        () => context.go('/family'),
+        () => context.go(_familyPath('pending')),
         badge: family.pendingCount,
       ),
-      _GridEntry('家庭账本', Icons.account_balance_wallet_outlined, () => context.go('/family')),
+      _GridEntry(
+        '家庭账本',
+        Icons.account_balance_wallet_outlined,
+        () => context.go(_familyPath('history')),
+      ),
       _GridEntry('学习计划', Icons.calendar_today_outlined, () => context.go('/family/plan')),
       _GridEntry('阳光花园', Icons.wb_sunny_outlined, () => context.go('/garden')),
       _GridEntry(
