@@ -75,6 +75,28 @@ flutter test --no-pub test/e2e_flow_test.dart --dart-define=API_BASE=http://127.
 - 后端写路径实测：`POST /api/ledger` 回 201 `{id, status:"pending"}`；同 id 重发回 200 + `duplicate:true`；
   `PATCH` 通过后余额才 +10；`DELETE` 后余额复原
 
+## 部署
+
+Flutter Web 产物是纯静态文件，丢给任意静态托管即可。它默认连线上后端
+（`https://sekainook.pages.dev`，属跨域调用，后端已加 CORS 中间件）：
+
+```bash
+# Cloudflare Pages（首次会创建新项目）
+npx wrangler pages deploy build/web --project-name sekainook-app
+```
+
+> 应用用的是 hash 路由（`#/home`），所以**不需要** SPA 的 `_redirects` 兜底规则。
+> 想指向别的后端，构建时加 `--dart-define=API_BASE=https://你的域名`。
+
+Android 装包：
+
+```bash
+adb install -r build/app/outputs/flutter-apk/app-release.apk
+```
+
+> 当前 release 包用的是 Flutter 模板自带的 debug 签名（`android/app/build.gradle.kts` 里留了 TODO）。
+> 要上架应用商店得先配自己的 keystore。
+
 ## 目录结构
 
 ```

@@ -408,13 +408,15 @@ class _KidHomePageState extends State<KidHomePage> {
     setState(() => _checkingId = task.id);
     final String momName = context.read<SettingsState>().momName;
     final FamilyState family = context.read<FamilyState>();
+    // 先把 store 引用取出来：下面有 await，之后再碰 context 会踩 async-gap 警告。
+    final CustomTasksState customTasks = context.read<CustomTasksState>();
     try {
       final TaskConfig execTask = task.toExecTask(userTaskExecId: CustomTasksState.userTaskExecId);
       await family.api.addLedgerRecord(
         execTask,
         autoApprove: task.createdBy == TaskCreator.parent,
       );
-      context.read<CustomTasksState>().markDone(task.id);
+      customTasks.markDone(task.id);
       try {
         await family.loadLedger();
       } catch (_) {
@@ -430,7 +432,7 @@ class _KidHomePageState extends State<KidHomePage> {
     } on LedgerApprovalException {
       // 账其实已经记上了，只是「立即入账」那一步没成功：这条以 pending 躺在待审批里，
       // 所以本地也要算今天已完成 —— 不然孩子再点一次，只会撞上服务端的同名日限。
-      context.read<CustomTasksState>().markDone(task.id);
+      customTasks.markDone(task.id);
       try {
         await family.loadLedger();
       } catch (_) {
