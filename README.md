@@ -42,7 +42,8 @@ npm run dev:api          # wrangler pages dev public --port 8788
 | Web | `flutter build web --dart-define=API_BASE=...` | 产物在 `build/web` |
 | Android | `flutter build apk --release` | 产物在 `build/app/outputs/flutter-apk/` |
 
-实测产物体积：`build/web` 约 24 MB；`app-release.apk` 60.6 MB（未拆分，含 arm64-v8a / armeabi-v7a / x86_64 三个 ABI）。
+实测产物体积：`build/web` 42 MB（含 canvaskit，部署到 Pages 后走 gzip/brotli 会小很多）；
+`app-release.apk` 60.6 MB（未拆分，含 arm64-v8a / armeabi-v7a / x86_64 三个 ABI）。
 想要更小的包用 `flutter build apk --release --split-per-abi`。
 
 > Windows 上 Gradle 的 Kotlin 增量编译缓存偶尔关不掉
