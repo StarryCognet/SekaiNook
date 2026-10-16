@@ -42,6 +42,38 @@ npm run dev:api          # wrangler pages dev public --port 8788
 | Web | `flutter build web --dart-define=API_BASE=...` | 产物在 `build/web` |
 | Android | `flutter build apk --release` | 产物在 `build/app/outputs/flutter-apk/` |
 
+实测产物体积：`build/web` 约 24 MB；`app-release.apk` 60.6 MB（未拆分，含 arm64-v8a / armeabi-v7a / x86_64 三个 ABI）。
+想要更小的包用 `flutter build apk --release --split-per-abi`。
+
+> Windows 上 Gradle 的 Kotlin 增量编译缓存偶尔关不掉
+> （`Could not close incremental caches ... class-fq-name-to-source.tab`），
+> 会让 `:shared_preferences_android:compileReleaseKotlin` 直接失败、`assembleRelease` 挂掉；
+> `android/gradle.properties` 里已关掉 `kotlin.incremental` 换构建稳定。
+
+## 测试与验证
+
+```bash
+# 纯逻辑单测（ISO 周标签，13 个日期用例 + 时区用例）
+flutter test --no-pub test/week_label_test.dart
+
+# 接口契约冒烟：只发 GET，对着真实后端核对字段
+flutter test --no-pub test/api_smoke_test.dart --dart-define=API_BASE=http://127.0.0.1:8788
+
+# 端到端业务闭环：打卡 → 同 id 重发幂等 → 待审批 → 审批 → 余额 +10 → 删除 → 余额复原
+# 注意：会真实写库（跑完自己把那条删掉），别指向生产环境
+flutter test --no-pub test/e2e_flow_test.dart --dart-define=API_BASE=http://127.0.0.1:8788
+```
+
+加 `--no-pub` 是因为 `flutter test` 默认会先跑一次 `pub get`，离线环境会卡在那里。
+
+已经做过的验证：
+
+- `flutter analyze` 零 error
+- 上面三个测试全部通过（对着本地后端 + 线上数据副本）
+- Chrome 里逐个跑通 8 个页面：身份门 / 女儿版首页 / 家长版首页 / 家庭账本 / 花园 / 通知 / 周计划 / 设置
+- 后端写路径实测：`POST /api/ledger` 回 201 `{id, status:"pending"}`；同 id 重发回 200 + `duplicate:true`；
+  `PATCH` 通过后余额才 +10；`DELETE` 后余额复原
+
 ## 目录结构
 
 ```
