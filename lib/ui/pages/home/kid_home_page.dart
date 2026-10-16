@@ -15,7 +15,6 @@ import '../../../core/api_client.dart';
 import '../../../core/api_exception.dart';
 import '../../../core/image_compress.dart';
 import '../../../core/task_rules.dart';
-import '../../../core/week.dart';
 import '../../../data/api/ledger_api.dart';
 import '../../../data/api/upload_api.dart';
 import '../../../data/models/custom_task.dart';
@@ -186,7 +185,7 @@ class KidHomePage extends StatefulWidget {
   State<KidHomePage> createState() => _KidHomePageState();
 }
 
-class _KidHomePageState extends State<KidHomePage> {
+class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
   /// 拉取失败时页面要说话：不能把「没拉到」显示成「这周一分没赚」
   bool _loadFailed = false;
 
@@ -223,6 +222,7 @@ class _KidHomePageState extends State<KidHomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // 花园存档原来只有花园页会 init —— 首页要用它，就得自己装一次（幂等）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -233,6 +233,8 @@ class _KidHomePageState extends State<KidHomePage> {
     // 「我交的那条批了没有」是孩子最想知道的：20 秒问一次
     _timer = Timer.periodic(const Duration(seconds: 20), (_) {
       if (!mounted) return;
+      // 后台不问（对应 Web 版轮询里的 document.hidden 判断），回前台时补一次
+      if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) return;
       unawaited(_refresh());
     });
   }
@@ -249,8 +251,16 @@ class _KidHomePageState extends State<KidHomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
+  }
+
+  /// 回到前台立刻补一次：后台期间跳过的轮询不用再等下一个 20 秒
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    unawaited(_refresh());
   }
 
   // ---- 本地存档 ----
@@ -558,7 +568,9 @@ class _KidHomePageState extends State<KidHomePage> {
     final ({int income, int expense, int net, int count, int checkins}) week =
         _recentSummary(family.records, 7, now);
     final int todayCount = _todayRecords(family.records, now).length;
-    final bool showLateAlert = WeekUtil.beijingHour(now) >= 22 && learningLeft > 0;
+    // 22:00 后还没做完学习任务就提醒：与 Web 版 KidHome 的 now.getHours() 同口径，
+    // 用**设备本地时间**（不是东八区，那套只服务 /api/ledger/settle 的日结算）
+    final bool showLateAlert = now.hour >= 22 && learningLeft > 0;
 
     final List<garden_models.GardenTask> todoTasks = _todoGardenTasks(garden.tasks);
     final List<TaskConfig> quickTasks = _quickTasks();
@@ -664,7 +676,7 @@ class _KidHomePageState extends State<KidHomePage> {
   SleepTask? _sleepTask(FamilyState family, DateTime now) {
     final TaskConfig? task = FamilyRules.taskById('sleep_on_time');
     if (task == null) return null;
-    if (WeekUtil.beijingHour(now) >= 22) return null;
+    if (now.hour >= 22) return null;
     final String? reason = checkTask(task, family.records, now: now);
     if (reason != null) return null;
     final String from = task.window?.start ?? '';

@@ -135,3 +135,11 @@ docs/                    接口契约与移植说明（见下）
    同样发裸二进制（**不是 multipart**）。
 4. **图表**：Web 版用 echarts，Flutter 用 `fl_chart`。
 5. **通知轮询**：间隔与 Web 版一致（15 秒），且在应用退到后台时跳过。
+   页面级轮询（首页 20s / 账本页 10s·15s）同样在后台跳过，回到前台立刻补一次
+   —— 对应 Web 版轮询里的 `document.hidden` 判断。
+6. **导出流水**：Web 版靠浏览器下载 CSV 文件；Flutter 侧（Android 没有下载目录概念，
+   又不引 `share_plus` / `path_provider`）改为**复制到剪贴板**并提示已复制。
+   导出的内容本身与 Web 版同构（同样的表头与行序）。
+7. **22:00 判定口径**：与 Web 版一致用**设备本地时间**（`DateTime.now().hour`），
+   不是东八区；东八区那套只服务 `/api/ledger/settle` 的日结算
+   （`FamilyState.expectedSettleDay`）。App 内首页与账本页现在是同一口径。

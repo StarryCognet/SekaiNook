@@ -123,9 +123,17 @@ class _GardenPageState extends State<GardenPage> {
   int _earnedToday(GardenState garden) =>
       garden.todayEarnedDate == todayKey() ? garden.todayEarned : 0;
 
-  /// 时刻文案（HH:mm，`LedgerRecord.createdAt` 已转本机时区）
-  String _timeLabel(DateTime time) =>
-      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  /// 时刻文案：今天显示「今天 HH:mm」，更早显示「M/d HH:mm」
+  /// （与家庭账本页同一口径 —— 流水里混着不同日期的记录，只给 HH:mm 会把日子看错）
+  String _timeLabel(DateTime time) {
+    final DateTime local = time.toLocal();
+    final DateTime now = DateTime.now();
+    final String hh = local.hour.toString().padLeft(2, '0');
+    final String mm = local.minute.toString().padLeft(2, '0');
+    final bool sameDay =
+        local.year == now.year && local.month == now.month && local.day == now.day;
+    return sameDay ? '今天 $hh:$mm' : '${local.month}/${local.day} $hh:$mm';
+  }
 
   /// 流水标题：服务端写的是规则名（如「背一首古诗」）；万一拿到的是裸 task_id，
   /// 就翻回本地名字，别把 `garden:poem` 这种串丢给孩子看。
@@ -1626,6 +1634,8 @@ class _GardenPageState extends State<GardenPage> {
 
   Widget _buildRecords(GardenState garden, AppPalette palette) {
     final List<LedgerRecord> records = garden.cachedRecords;
+    final List<GardenTask> doneTasks =
+        garden.tasks.where((GardenTask task) => task.done).toList();
 
     return _pageList(<Widget>[
       const SectionHeader(title: '学习记录'),
@@ -1656,6 +1666,24 @@ class _GardenPageState extends State<GardenPage> {
         ),
       ),
       _gapMd,
+      // 「今日已完成」（Web 版 RecordsPage 的那张列表卡）：任务名 + 完成时刻 + 奖励标签
+      const SectionHeader(title: '今日已完成'),
+      if (doneTasks.isEmpty)
+        const AppCard(
+          child: EmptyView(message: '今天还没有完成任务，快去加油吧！'),
+        )
+      else
+        AppCard(
+          child: Column(
+            children: <Widget>[
+              for (int index = 0; index < doneTasks.length; index++) ...<Widget>[
+                if (index > 0) Divider(height: AppSpacing.md, color: palette.border),
+                _doneTaskRow(doneTasks[index], palette),
+              ],
+            ],
+          ),
+        ),
+      _gapMd,
       const SectionHeader(title: '阳光流水', subtitle: '最近的花园流水（含待同步）'),
       if (records.isEmpty)
         const AppCard(
@@ -1673,6 +1701,57 @@ class _GardenPageState extends State<GardenPage> {
           ),
         ),
     ]);
+  }
+
+  /// 「今日已完成」的一行：任务名 + 完成时刻 + 奖励标签
+  /// （对应 Web 版 RecordsPage 的 `List.Item`）
+  Widget _doneTaskRow(GardenTask task, AppPalette palette) {
+    final DateTime? at = task.completedAt;
+    final String timeText = at == null
+        ? ''
+        : '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+
+    return Row(
+      children: <Widget>[
+        Icon(Icons.check_circle_outline, size: 20, color: palette.success),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                task.name,
+                style: TextStyle(
+                  fontSize: AppFontSize.sm,
+                  fontWeight: FontWeight.w600,
+                  color: palette.text,
+                ),
+              ),
+              if (timeText.isNotEmpty)
+                Text(
+                  timeText,
+                  style: TextStyle(
+                    fontSize: AppFontSize.xs,
+                    color: palette.textTertiary,
+                    fontFeatures: kTabularNumbers,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Icon(Icons.wb_sunny_outlined, size: AppFontSize.sm, color: palette.warning),
+        const SizedBox(width: AppSpacing.xs),
+        Text(
+          '+${task.reward}',
+          style: TextStyle(
+            fontSize: AppFontSize.sm,
+            fontWeight: FontWeight.w700,
+            color: palette.warning,
+            fontFeatures: kTabularNumbers,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _recordRow(LedgerRecord record, AppPalette palette) {

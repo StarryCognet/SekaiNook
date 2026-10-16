@@ -12,6 +12,7 @@ import '../../../config/family_rules.dart';
 import '../../../core/api_client.dart';
 import '../../../core/api_exception.dart';
 import '../../../core/image_compress.dart';
+import '../../../core/ledger_csv.dart';
 import '../../../core/task_rules.dart';
 import '../../../data/api/upload_api.dart';
 import '../../../data/models/custom_task.dart';
@@ -50,7 +51,8 @@ class FamilyDashboardPage extends StatefulWidget {
   State<FamilyDashboardPage> createState() => _FamilyDashboardPageState();
 }
 
-class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerProviderStateMixin {
+class _FamilyDashboardPageState extends State<FamilyDashboardPage>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   // ---- 账本状态 ----
   String? _error;
 
@@ -94,6 +96,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerPr
   void initState() {
     super.initState();
     _now = DateTime.now();
+    WidgetsBinding.instance.addObserver(this);
     // 预置的两条学习任务（十个英语单词 / 两首古诗）默认出现在任务列表里。
     // ensurePresets 幂等：重复调用不产生重复项，也不会覆盖家长改过 / 删过的任务。
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -109,10 +112,18 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerPr
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _clockTimer?.cancel();
     _pollTimer?.cancel();
     _tabController?.dispose();
     super.dispose();
+  }
+
+  /// 回到前台立刻补一次：后台期间跳过的轮询不用再等下一个周期
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    _pollOnce();
   }
 
   bool get _isParent => context.read<FamilyState>().role == FamilyRole.parent;
@@ -160,12 +171,20 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerPr
     _pollInterval = want;
     _pollTimer = Timer.periodic(want, (_) {
       if (!mounted) return;
-      if (isParent) {
-        unawaited(context.read<FamilyState>().refreshPending().catchError((Object _) {}));
-      } else {
-        unawaited(context.read<FamilyState>().loadLedger().catchError((Object _) {}));
-      }
+      // 后台不问（对应 Web 版轮询里的 document.hidden 判断），回前台时补一次
+      if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) return;
+      _pollOnce();
     });
+  }
+
+  /// 一次轮询：家长只刷待审批，孩子刷整本流水（与 Web 版两个 useEffect 一致）
+  void _pollOnce() {
+    if (!mounted) return;
+    if (_isParent) {
+      unawaited(context.read<FamilyState>().refreshPending().catchError((Object _) {}));
+    } else {
+      unawaited(context.read<FamilyState>().loadLedger().catchError((Object _) {}));
+    }
   }
 
   Duration? _pollInterval;
@@ -476,41 +495,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerPr
   /// 因此把同一份 CSV 内容放进剪贴板，家长粘到表格软件里即可。
   Future<void> _exportCsv(List<LedgerRecord> records) async {
     if (records.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: _buildCsv(records)));
-    _toast('已导出 ${records.length} 条记录（CSV 已复制到剪贴板）');
+    await Clipboard.setData(ClipboardData(text: buildLedgerCsv(records)));
+    _toast(exportToastText(records.length));
   }
-
-  String _buildCsv(List<LedgerRecord> records) {
-    final buffer = StringBuffer();
-    buffer.write(
-      _csvRow(<String>['时间', '任务', '类型', '积分', '状态', '备注', '图片']),
-    );
-    for (final record in records) {
-      buffer.write('\r\n');
-      buffer.write(_csvRow(<String>[
-        _formatFullTime(record.createdAt),
-        record.taskName,
-        record.type == TaskType.earning ? '赚钱' : '消费/罚款',
-        '${record.amount}',
-        _statusText(record),
-        (record.note ?? '').replaceAll(RegExp('[\r\n]+'), ' '),
-        record.imageUrl ?? '',
-      ]));
-    }
-    return buffer.toString();
-  }
-
-  String _csvRow(List<String> cells) =>
-      cells.map((cell) => '"${cell.replaceAll('"', '""')}"').join(',');
 
   // ---- 展示辅助 ----
-
-  /// 流水状态的中文文案（缺省视为已入账，兼容存量数据）
-  String _statusText(LedgerRecord record) => switch (record.status) {
-        LedgerStatus.pending => '待审批',
-        LedgerStatus.rejected => '已驳回',
-        _ => '已入账',
-      };
 
   /// 格式化流水时间：今天显示「今天 HH:mm」，更早显示「M/d HH:mm」
   String _formatTime(DateTime date) {
@@ -521,13 +510,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage> with TickerPr
     final hh = local.hour.toString().padLeft(2, '0');
     final mm = local.minute.toString().padLeft(2, '0');
     return sameDay ? '今天 $hh:$mm' : '${local.month}/${local.day} $hh:$mm';
-  }
-
-  String _formatFullTime(DateTime date) {
-    final local = date.toLocal();
-    String two(int value) => value.toString().padLeft(2, '0');
-    return '${local.year}-${two(local.month)}-${two(local.day)} '
-        '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
   }
 
   /// 今天的日期文案（对应 `toLocaleDateString('zh-CN', {month:'long', day:'numeric', weekday:'long'})`）

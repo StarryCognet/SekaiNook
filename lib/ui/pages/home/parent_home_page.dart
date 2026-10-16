@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../config/family_rules.dart';
+import '../../../core/ledger_csv.dart';
 import '../../../data/models/ledger_record.dart';
 import '../../../data/models/task_config.dart';
 import '../../../state/family_state.dart';
@@ -151,7 +153,7 @@ class ParentHomePage extends StatefulWidget {
   State<ParentHomePage> createState() => _ParentHomePageState();
 }
 
-class _ParentHomePageState extends State<ParentHomePage> {
+class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObserver {
   /// 顶部实时时钟：每秒刷新一次
   DateTime _now = DateTime.now();
 
@@ -171,6 +173,7 @@ class _ParentHomePageState extends State<ParentHomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(_refresh());
@@ -182,15 +185,25 @@ class _ParentHomePageState extends State<ParentHomePage> {
     // 「有没有新申请」要跟上孩子的提交：20 秒问一次
     _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
       if (!mounted) return;
+      // 后台不问（对应 Web 版轮询里的 document.hidden 判断），回前台时补一次
+      if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) return;
       unawaited(_refresh());
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _clock?.cancel();
     _refreshTimer?.cancel();
     super.dispose();
+  }
+
+  /// 回到前台立刻补一次：后台期间跳过的轮询不用再等下一个 20 秒
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    unawaited(_refresh());
   }
 
   Future<void> _refresh() async {
@@ -310,13 +323,14 @@ class _ParentHomePageState extends State<ParentHomePage> {
     }
   }
 
-  /// 导出流水（Flutter 侧没有 CSV 依赖，只给一句如实反馈）
-  void _export(List<LedgerRecord> records) {
+  /// 导出流水：把同一份 CSV 放进剪贴板（Android 没有浏览器下载，见 `core/ledger_csv.dart`）
+  Future<void> _export(List<LedgerRecord> records) async {
     if (records.isEmpty) {
       _toast('还没有流水可以导出');
       return;
     }
-    _toast('已导出 ${records.length} 条记录', success: true);
+    await Clipboard.setData(ClipboardData(text: buildLedgerCsv(records)));
+    if (mounted) _toast(exportToastText(records.length));
   }
 
   // ---- 页面骨架 ----
