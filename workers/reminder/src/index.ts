@@ -71,6 +71,27 @@ export default {
         return json({ error: `channel 只能是 ${PUSH_CHANNELS.join(' / ')}` }, 400);
       }
 
+      const audienceParam = url.searchParams.get('audience')?.trim().toLowerCase();
+      if (audienceParam && audienceParam !== 'parent' && audienceParam !== 'child') {
+        return json({ error: 'audience 只能是 parent / child' }, 400);
+      }
+
+      const simulateRaw = url.searchParams.get('simulateDone');
+      const simulateDone = simulateRaw === null ? undefined : Number(simulateRaw);
+      if (simulateRaw !== null && !Number.isFinite(simulateDone)) {
+        return json({ error: 'simulateDone 得是数字，例：simulateDone=2' }, 400);
+      }
+
+      const priorityRaw = url.searchParams.get('priority');
+      let priority: number | undefined;
+      if (priorityRaw !== null) {
+        const parsed = Number(priorityRaw);
+        if (!Number.isFinite(parsed) || parsed < 1 || parsed > 5) {
+          return json({ error: 'priority 只能是 1~5' }, 400);
+        }
+        priority = parsed;
+      }
+
       const result = await runReminder(env, {
         trigger: 'manual',
         dry: flag(url, 'dry'),
@@ -78,6 +99,12 @@ export default {
         test: flag(url, 'test'),
         channel: channelParam as PushChannel | undefined,
         now,
+        simulateDone,
+        title: url.searchParams.get('title') ?? undefined,
+        message: url.searchParams.get('message') ?? undefined,
+        audience: audienceParam as 'parent' | 'child' | undefined,
+        endpoint: url.searchParams.get('endpoint') ?? undefined,
+        priority,
       });
       return json(result);
     }
@@ -88,6 +115,7 @@ export default {
         usage: [
           'GET  /health',
           'GET|POST /trigger?token=<REMIND_TOKEN>[&dry=1][&force=1][&test=1][&channel=webpush][&now=2026-10-15T13:30:00Z]',
+          '    可选：&simulateDone=2 &title=… &message=… &audience=parent|child &endpoint=<push endpoint> &priority=1..5',
         ],
       },
       404

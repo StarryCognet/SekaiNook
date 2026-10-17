@@ -46,7 +46,7 @@ export async function sendWebPush(env: ReminderEnv, msg: PushMessage): Promise<P
 
   let rows: SubscriptionRow[];
   try {
-    rows = await readSubscriptions(env);
+    rows = await readSubscriptions(env, msg);
   } catch (error) {
     console.error('read push_subscriptions failed', error);
     return { ok: false, status: 0, detail: '推送订阅表尚未就绪，请先执行数据库迁移' };
@@ -110,9 +110,24 @@ export async function sendWebPush(env: ReminderEnv, msg: PushMessage): Promise<P
   return { ok: sent > 0, status: sent > 0 ? 200 : 0, detail: parts.join('，') };
 }
 
-/** 读订阅；配了 `PUSH_AUDIENCE`（parent|child）就只发给那一侧 */
-async function readSubscriptions(env: ReminderEnv): Promise<SubscriptionRow[]> {
-  const audience = env.PUSH_AUDIENCE?.trim().toLowerCase();
+/**
+ * 读订阅，按需过滤：
+ *  - `msg.endpoint` 指定了某一台 → 只发那一台（自检定点验证用）；
+ *  - 否则看 `msg.audience`（覆盖 `PUSH_AUDIENCE`）→ 只发给 parent 或 child 那一侧；
+ *  - 都没有 → 全部订阅。
+ */
+async function readSubscriptions(env: ReminderEnv, msg: PushMessage): Promise<SubscriptionRow[]> {
+  const endpoint = msg.endpoint?.trim();
+  if (endpoint) {
+    const row = await env.DB.prepare(
+      'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE endpoint = ?'
+    )
+      .bind(endpoint)
+      .all<SubscriptionRow>();
+    return row.results ?? [];
+  }
+
+  const audience = (msg.audience ?? env.PUSH_AUDIENCE)?.trim().toLowerCase();
   const filtered = audience === 'parent' || audience === 'child';
 
   const sql = `SELECT endpoint, p256dh, auth FROM push_subscriptions${filtered ? ' WHERE audience = ?' : ''}`;

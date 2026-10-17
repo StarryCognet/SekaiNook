@@ -33,6 +33,13 @@ export interface PushMessage {
   tags?: string[];
   /** 点通知打开哪个页面 */
   click?: string;
+  /**
+   * 只发给这一侧的设备（覆盖 env.PUSH_AUDIENCE）。目前只有 webpush 通道支持按 audience 过滤
+   * （订阅表里有 audience 字段），自检控制台用它做「只测妈妈那台」。
+   */
+  audience?: 'parent' | 'child';
+  /** 只发给这一台设备（push_subscriptions.endpoint），自检里用来定点验证某一台 */
+  endpoint?: string;
 }
 
 export interface PushResult {

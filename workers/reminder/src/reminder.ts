@@ -34,13 +34,25 @@ export interface ReminderPlan {
   shouldSend: boolean;
   title: string;
   message: string;
+  /** 完成数是「假装」的（自检 simulateDone），不是真实库里数出来的 */
+  simulated?: boolean;
 }
 
-/** 只算不发：今天完成几个、还差几个、该不该提醒、文案是什么 */
-export async function planReminder(env: ReminderEnv, now: Date = new Date()): Promise<ReminderPlan> {
+/**
+ * 只算不发：今天完成几个、还差几个、该不该提醒、文案是什么。
+ * `simulateDone` 只在自检里用：假装今天已完成 N 个，好把各种文案（还差 1~5 个）都验一遍，
+ * 而不用真去写流水。
+ */
+export async function planReminder(
+  env: ReminderEnv,
+  now: Date = new Date(),
+  simulateDone?: number
+): Promise<ReminderPlan> {
   const { dayKey } = beijingClock(now);
   const { startIso, endIso } = beijingDayBoundsOf(dayKey);
-  const done = await countDayCompletions(env.DB, startIso, endIso);
+  const real = await countDayCompletions(env.DB, startIso, endIso);
+  const simulated = typeof simulateDone === 'number' && Number.isFinite(simulateDone);
+  const done = simulated ? Math.max(0, Math.min(Math.round(simulateDone), DAILY_MIN_TASKS)) : real;
   const remaining = Math.max(0, DAILY_MIN_TASKS - done);
 
   return {
@@ -50,6 +62,7 @@ export async function planReminder(env: ReminderEnv, now: Date = new Date()): Pr
     target: DAILY_MIN_TASKS,
     deadline: SLEEP_DEADLINE,
     shouldSend: remaining > 0,
+    simulated,
     title: `今天还差 ${remaining} 个任务`,
     message:
       `已完成 ${done}/${DAILY_MIN_TASKS} —— ${SLEEP_DEADLINE} 前做完，不然扣 ${DAILY_MIN_TASKS_PENALTY} 分。\n` +
@@ -69,6 +82,18 @@ export interface RunOptions {
   channel?: PushChannel;
   /** 手动触发：假装现在是这个时刻（验证跨日/时区口径用） */
   now?: Date;
+  /** 手动触发：假装今天已完成 N 个任务（验证各种文案，不写库） */
+  simulateDone?: number;
+  /** 手动触发：自定义标题（留空用真实文案） */
+  title?: string;
+  /** 手动触发：自定义正文（留空用真实文案） */
+  message?: string;
+  /** 手动触发：只发给 parent / child 那一侧 */
+  audience?: 'parent' | 'child';
+  /** 手动触发：只发给这一台设备（endpoint） */
+  endpoint?: string;
+  /** 手动触发：优先级 1~5 */
+  priority?: number;
 }
 
 export interface RunResult extends ReminderPlan {
@@ -81,26 +106,36 @@ export interface RunResult extends ReminderPlan {
 }
 
 export async function runReminder(env: ReminderEnv, opts: RunOptions): Promise<RunResult> {
-  const plan = await planReminder(env, opts.now);
+  const plan = await planReminder(env, opts.now, opts.simulateDone);
   // 显式传了 dry 就听它的，没传才看环境变量（本地联调常驻 DRY_RUN=1，用 ?dry=0 单次覆盖）
   const dry = opts.dry ?? env.DRY_RUN === '1';
 
+  // 自定义文案优先（自检里用来验证「通知内容能不能按预期变」）
+  const customTitle = opts.title?.trim();
+  const customMessage = opts.message?.trim();
+  const effective: ReminderPlan =
+    customTitle || customMessage
+      ? { ...plan, title: customTitle || plan.title, message: customMessage || plan.message }
+      : plan;
+
   if (opts.test) {
     const testPlan: ReminderPlan = {
-      ...plan,
-      title: 'SekaiNook 测试通知',
-      message: `通道打通了。以后每天 ${SLEEP_DEADLINE} 前半小时会提醒还差几个任务。`,
+      ...effective,
+      title: customTitle || 'SekaiNook 测试通知',
+      message:
+        customMessage ||
+        `通道打通了。以后每天 ${SLEEP_DEADLINE} 前半小时会提醒还差几个任务。`,
       shouldSend: true,
     };
     return await deliver(env, testPlan, { ...opts, force: true, dry });
   }
 
-  if (!plan.shouldSend && !opts.force) {
-    log(opts.trigger, `${plan.dayKey} 已完成 ${plan.done}/${plan.target}，不用提醒`);
-    return { ...plan, sent: false, skipped: 'nothing-to-remind' };
+  if (!effective.shouldSend && !opts.force) {
+    log(opts.trigger, `${effective.dayKey} 已完成 ${effective.done}/${effective.target}，不用提醒`);
+    return { ...effective, sent: false, skipped: 'nothing-to-remind' };
   }
 
-  return await deliver(env, plan, { ...opts, dry });
+  return await deliver(env, effective, { ...opts, dry });
 }
 
 async function deliver(
@@ -125,6 +160,9 @@ async function deliver(
       title: plan.title,
       message: plan.message,
       click: env.APP_URL?.trim() || undefined,
+      audience: opts.audience,
+      endpoint: opts.endpoint,
+      priority: opts.priority,
     },
     opts.channel
   );

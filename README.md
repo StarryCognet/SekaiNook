@@ -146,8 +146,11 @@ functions/api/            # 后端接口（文件路径即 URL 路径）
 ├── settings/index.ts     #   GET/PATCH    /api/settings（家庭称呼 + 全局背景图，跨设备同步）
 ├── push/key.ts           #   GET          /api/push/key（Web Push 的 VAPID 公钥）
 ├── push/subscribe.ts     #   POST/DELETE  /api/push/subscribe（浏览器推送订阅落库 / 退订）
+├── admin/index.ts        #   POST         /api/admin（口令校验 / 改积分 / 一键清零 / 最近调整）
+├── admin/selftest.ts     #   GET/POST     /api/admin/selftest（自检清单 / 跑自检，GET 不需要口令）
 └── maintenance/orphans.ts #  GET/POST     /api/maintenance/orphans（闲置照片扫描 / 清理）
 functions/_lib/           # 后端共用模块（不下划线开头会被当成路由，所以放 _lib）
+functions/_lib/selftest/  # 自检清单与执行器（types / helpers / checks-core / checks-rules / checks-rest）
 migrations/               # D1 建表 SQL（编号递增，必须幂等；0002 给流水加 member 列，0003 建通知表，0004 建 settings 键值表，0005 建推送订阅表）
 public/_routes.json       # 声明 Functions 只接管 /api/*
 public/_redirects         # SPA 路由回退 /* → /index.html 200
@@ -206,8 +209,10 @@ src/
 | GET | `/api/settings` | 读取家庭称呼与全局背景图（`{ names: { momCall, momNickname, kidCall, kidNickname }, background, ready }`，`ready=false` = settings 表还没迁移） |
 | PATCH | `/api/settings` | 部分更新称呼或背景图（只传要改的字段，称呼最多 12 字，留空回默认「妈妈 / 女儿」；`background` 只能是本站 `/api/images/` 地址，传空串 = 移除背景图） |
 | GET | `/api/push/key` | 手机提醒的 VAPID 公钥（`{ publicKey, subject, ready }`，`ready=false` = 订阅表还没迁移） |
-| POST | `/api/push/subscribe` | 保存浏览器推送订阅（`{ audience: "parent"\|"child", subscription: { endpoint, keys: { p256dh, auth } } }`，按 endpoint 幂等 upsert） |
-| DELETE | `/api/push/subscribe` | 退订（请求体 `{ endpoint }`） |
+| POST | `/api/push/subscribe` | 保存浏览器推送订阅（`{ endpoint, keys: { p256dh, auth }, audience?: "parent"\|"child" }`，`audience` 缺省 `child`；按 endpoint 幂等 upsert） |
+| DELETE | `/api/push/subscribe` | 退订（请求体 `{ endpoint }`，取不到时回退 `?endpoint=`） |
+| GET | `/api/admin/selftest` | 自检清单（**不需要密码**）：`{ version, generatedAt, groups, params, presets, clientChecks }` |
+| POST | `/api/admin/selftest` | 跑自检（需管理员口令）：`{ password, items?, params?, clientResults? }` → `{ summary, results, clientMissing }`，详见 [`docs/selftest-console.md`](docs/selftest-console.md) |
 
 接口**刻意不加鉴权**：本项目是家庭内部工具，权限靠前端身份与家长口令约束（见下方开发规则）。
 
@@ -228,7 +233,13 @@ src/
 
 配置、部署、孩子手机上怎么收、本地联调与手动触发方式见 [`workers/reminder/README.md`](workers/reminder/README.md)。
 
-配置、部署、孩子手机上怎么收、本地联调与手动触发方式见 [`workers/reminder/README.md`](workers/reminder/README.md)。
+### 🧪 全站自检（设置 → 管理员）
+
+「设置 → 管理员」里有一块自检面板（Web 与 Flutter 两端都有，**清单只有一份**，由服务端下发）：
+把绑定/迁移/CORS、流水读写幂等、任务规则、周计划、通知、称呼、图片、推送、管理员口令与节流、
+时间戳等 **70 个检查项**跑一遍，可勾选、可改参数（`dryRun` / `dayKey` / `taskId` / 通道 / 自定义推送文案…）、
+可套用预设、可导出 JSON 与 Markdown。写操作的检查项在 `dryRun` 下只「预演」不落库，真跑时自己清理。
+契约（清单结构、参数表、客户端检查项、导出格式）见 [`docs/selftest-console.md`](docs/selftest-console.md)。
 
 ## 📜 业务规则
 

@@ -31,6 +31,7 @@ import {
   ToolOutlined,
   HistoryOutlined,
   BellOutlined,
+  ExperimentOutlined,
 } from "@ant-design/icons";
 import { APP_VERSION, CHANGELOG } from "../../config/changelog";
 import { useFamilyStore } from "../../store/useFamilyStore";
@@ -56,6 +57,7 @@ import { deleteLedgerRecord } from "../../api/familyLedger";
 import { uploadImage } from "../../api/upload";
 import { compressImage, isAbortError } from "../../utils/image";
 import { useBackButton } from "../../utils/useBackButton";
+import SelftestPanel from "./SelftestPanel";
 import { fetchPushKey } from "../../api/push";
 import {
   disablePush,
@@ -323,6 +325,12 @@ export default function SettingsPage() {
   const [adminAdjustmentsLoading, setAdminAdjustmentsLoading] = useState(false);
   /** 正在撤销的那条流水 id */
   const [adminRevokingId, setAdminRevokingId] = useState<string | null>(null);
+  /**
+   * 管理员分区里再套一层：全站自检面板。
+   * 它跑的是服务端那套管理员接口，所以直接复用上面那个已解锁的 adminPassword，
+   * 不新开 SectionId、也不再多要一次密码。
+   */
+  const [selftestOpen, setSelftestOpen] = useState(false);
 
   // 口令校验中（异步比对摘要）与剩余锁定秒数（0 = 未锁定）
   const [pinChecking, setPinChecking] = useState(false);
@@ -417,6 +425,7 @@ export default function SettingsPage() {
   const closeSection = () => {
     setSection(null);
     setAdminUnlocked(false);
+    setSelftestOpen(false);
   };
 
   /** 进第二层：管理员那一项先要密码，其余直接进 */
@@ -455,6 +464,8 @@ export default function SettingsPage() {
   useBackButton(pinModalOpen, () => setPinModalOpen(false));
   useBackButton(changePinOpen, () => setChangePinOpen(false));
   useBackButton(adminModalOpen, () => setAdminModalOpen(false));
+  // 自检面板是管理员里的第三层：返回键先退回管理员页，而不是一路退出设置
+  useBackButton(selftestOpen, () => setSelftestOpen(false));
 
   // 锁定中每秒刷新剩余秒数；剩余时间读的是 localStorage，刷新页面也绕不过去
   useEffect(() => {
@@ -1164,11 +1175,34 @@ export default function SettingsPage() {
       )}
 
       {/* ================= 第二层：管理员（家庭后台，谁都能看见入口，进去要密码） ================= */}
-      {section === "superadmin" && (
+      {section === "superadmin" && !selftestOpen && (
         <section className={styles.group}>
           {renderBackBar()}
           <h2 className={styles.groupTitle}>管理员</h2>
           <p className={styles.groupDesc}>直接校准积分数，改完立刻生效</p>
+
+          {/* 全站自检：复用上面已经解开的那道密码，不再多要一次 */}
+          <Card className={styles.infoCard} variant="borderless">
+            <div className={styles.infoHeader}>
+              <div className={styles.infoIcon}>
+                <ExperimentOutlined />
+              </div>
+              <div className={styles.infoText}>
+                <div className={styles.appName}>全站自检</div>
+                <div className={styles.appDesc}>
+                  把整站从浏览器到服务端跑一遍：检查项按组勾选，浏览器那几项在本机先跑，剩下的交给后端；
+                  失败的排最前面，报告能导出 JSON 或复制成 Markdown
+                </div>
+              </div>
+            </div>
+            <Button
+              block
+              className={styles.nameSaveBtn}
+              onClick={() => setSelftestOpen(true)}
+            >
+              打开自检面板
+            </Button>
+          </Card>
 
           {/* 直接改积分数 */}
           <Card className={styles.infoCard} variant="borderless">
@@ -1359,6 +1393,20 @@ export default function SettingsPage() {
               改密码
             </Button>
           </Card>
+        </section>
+      )}
+
+      {/* ================= 管理员里的第三层：全站自检（返回键退到管理员，不直接退出设置） ================= */}
+      {section === "superadmin" && selftestOpen && (
+        <section className={styles.group}>
+          <button
+            type="button"
+            className={styles.backBtn}
+            onClick={() => setSelftestOpen(false)}
+          >
+            <ArrowLeftOutlined /> 管理员
+          </button>
+          <SelftestPanel password={adminPassword} />
         </section>
       )}
 

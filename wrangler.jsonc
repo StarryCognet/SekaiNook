@@ -25,6 +25,10 @@
   // ⚠️ 这两处必须是同一对密钥，改了要一起改。
   "vars": {
     "VAPID_PUBLIC_KEY": "BD4ePdfDf4U2Q5pFQuJ85o6bFNuUhKaiwvF-VAUyKRS-S8epOpLggQirGEV1RzMnmLM6ZrtBHH0_yLebZ-6hGsQ",
-    "VAPID_SUBJECT": "https://sekainook.pages.dev"
+    "VAPID_SUBJECT": "https://sekainook.pages.dev",
+    // 提醒 Worker 的地址：设置页的「自检控制台」要打它（/health、/trigger）。
+    // 调用令牌走 secret：npx wrangler pages secret put REMIND_TOKEN
+    // （令牌只留在服务端 —— 自检是服务端代打 Worker，浏览器拿不到它）
+    "REMINDER_URL": "https://sekainook-reminder.3398377037.workers.dev"
   }
 }
