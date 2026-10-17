@@ -58,7 +58,8 @@ import { uploadImage } from "../../api/upload";
 import { compressImage, isAbortError } from "../../utils/image";
 import { useBackButton } from "../../utils/useBackButton";
 import SelftestPanel from "./SelftestPanel";
-import { fetchPushKey } from "../../api/push";
+import { ApiError } from "../../api/http";
+import { fetchPushKey, sendTestPush } from "../../api/push";
 import {
   disablePush,
   enablePush,
@@ -158,6 +159,8 @@ function PushSection({ audience, backBar }: PushSectionProps) {
   const [state, setState] = useState<PushState | null>(null);
   const [keyState, setKeyState] = useState<PushKeyState>("loading");
   const [busy, setBusy] = useState(false);
+  /** 测试通知在飞：防连点（后端也有 15 秒冷却，这里先自己拦一道） */
+  const [testBusy, setTestBusy] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -198,6 +201,28 @@ function PushSection({ audience, backBar }: PushSectionProps) {
     }
   };
 
+  /**
+   * 发一条测试通知。
+   * 不管有没有订阅都放行：没订阅时后端回的 detail 正好告诉用户「还没设备订阅」，
+   * 这比把按钮灰掉更有用。
+   */
+  const handleSendTest = async () => {
+    setTestBusy(true);
+    try {
+      const result = await sendTestPush(audience);
+      // 200 也分两种：sent 为 false 是「一台都没订阅」，属于要引导用户去开开关的提示
+      if (result.sent) message.success(result.detail);
+      else message.warning(result.detail);
+    } catch (e) {
+      const text = e instanceof Error ? e.message : "发送失败，请稍后再试";
+      // 429 只是后端冷却（刚发过，N 秒后再试），不是故障，不该报红
+      if (e instanceof ApiError && e.status === 429) message.warning(text);
+      else message.error(text);
+    } finally {
+      setTestBusy(false);
+    }
+  };
+
   return (
     <section className={styles.group}>
       {backBar}
@@ -228,6 +253,19 @@ function PushSection({ audience, backBar }: PushSectionProps) {
         >
           {subscribed ? "关闭提醒" : "开启提醒"}
         </Button>
+
+        <Button
+          block
+          className={styles.nameSaveBtn}
+          loading={testBusy}
+          disabled={testBusy}
+          onClick={handleSendTest}
+        >
+          {testBusy ? "发送中…" : "发一条测试通知"}
+        </Button>
+        <div className={styles.roleHint}>
+          点一下会立刻给已订阅的手机发一条测试通知，用来确认通道通不通。
+        </div>
 
         {keyState === "missing" && (
           <div className={styles.roleHint}>

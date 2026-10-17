@@ -146,6 +146,7 @@ functions/api/            # 后端接口（文件路径即 URL 路径）
 ├── settings/index.ts     #   GET/PATCH    /api/settings（家庭称呼 + 全局背景图，跨设备同步）
 ├── push/key.ts           #   GET          /api/push/key（Web Push 的 VAPID 公钥）
 ├── push/subscribe.ts     #   POST/DELETE  /api/push/subscribe（浏览器推送订阅落库 / 退订）
+├── push/test.ts          #   POST         /api/push/test（设置页「发一条测试通知」：Pages 用令牌转发 Worker）
 ├── admin/index.ts        #   POST         /api/admin（口令校验 / 改积分 / 一键清零 / 最近调整）
 ├── admin/selftest.ts     #   GET/POST     /api/admin/selftest（自检清单 / 跑自检，GET 不需要口令）
 └── maintenance/orphans.ts #  GET/POST     /api/maintenance/orphans（闲置照片扫描 / 清理）
@@ -211,6 +212,7 @@ src/
 | GET | `/api/push/key` | 手机提醒的 VAPID 公钥（`{ publicKey, subject, ready }`，`ready=false` = 订阅表还没迁移） |
 | POST | `/api/push/subscribe` | 保存浏览器推送订阅（`{ endpoint, keys: { p256dh, auth }, audience?: "parent"\|"child" }`，`audience` 缺省 `child`；按 endpoint 幂等 upsert） |
 | DELETE | `/api/push/subscribe` | 退订（请求体 `{ endpoint }`，取不到时回退 `?endpoint=`） |
+| POST | `/api/push/test` | 立刻发一条测试通知（请求体 `{ audience?: "parent"\|"child" }`，缺省全部已订阅设备）→ `{ ok, sent, channel, detail }`；同一 audience **15 秒内只允许一次**（429 + `remainingSeconds`）。Worker 的令牌留在服务端，浏览器拿不到 |
 | GET | `/api/admin/selftest` | 自检清单（**不需要密码**）：`{ version, generatedAt, groups, params, presets, clientChecks }` |
 | POST | `/api/admin/selftest` | 跑自检（需管理员口令）：`{ password, items?, params?, clientResults? }` → `{ summary, results, clientMissing }`，详见 [`docs/selftest-console.md`](docs/selftest-console.md) |
 
@@ -230,6 +232,9 @@ src/
   **两边都不用装 App**（iOS 需 16.4+ 且必须从主屏图标打开）。另备 `ntfy` / `bark` / 通用 `webhook` 三条通道 ——
   **注意 ntfy.sh 免费版按出口 IP 限流，Cloudflare Worker 共用出口 IP，实测会被 429（code 42908）**；
 - 一天只打扰一次：在 `settings` 表抢 `reminder_sent_<日期>` 标记做幂等，发送失败会把标记还回去。
+- 设置页「手机提醒」里有**「发一条测试通知」**：点一下立刻推一条测试消息，用来确认通道通不通
+  （`POST /api/push/test` → Pages 用 `REMIND_TOKEN` 转发 Worker 的 `/trigger?test=1`，令牌不下发到浏览器；
+  同一目标 15 秒冷却）。Flutter 版的「设置 → 手机提醒」也接了同一个按钮。
 
 配置、部署、孩子手机上怎么收、本地联调与手动触发方式见 [`workers/reminder/README.md`](workers/reminder/README.md)。
 
