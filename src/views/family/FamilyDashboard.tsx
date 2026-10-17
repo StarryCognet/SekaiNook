@@ -17,6 +17,8 @@ import {
   DeleteOutlined,
   RollbackOutlined,
   DownloadOutlined,
+  DownOutlined,
+  UpOutlined,
 } from '@ant-design/icons';
 import { addLedgerRecord, LedgerApprovalError, describeSettleApplied, resubmitRequest, settleLedgerOncePerDay } from '../../api/familyLedger';
 import { useViewState } from '../../utils/useViewState';
@@ -24,7 +26,12 @@ import { exportLedgerCsv } from '../../utils/exportLedger';
 import { checkTask, isTaskDone } from '../../utils/taskRules';
 import { getTasksByType, pointsToYuan, EXCHANGE_RATE_TEXT } from '../../config/familyRules';
 import { useFamilyStore } from '../../store/useFamilyStore';
-import { useCustomTasksStore, USER_TASK_EXEC_ID, isRecordedToday } from '../../store/useCustomTasksStore';
+import {
+  useCustomTasksStore,
+  USER_TASK_EXEC_ID,
+  isRecordedToday,
+  beijingDayKey,
+} from '../../store/useCustomTasksStore';
 import type { CustomTask } from '../../store/useCustomTasksStore';
 import { PageLoading, EmptyState, ErrorState } from '../../components/StateViews';
 import BalanceTrend from '../../components/BalanceTrend';
@@ -33,8 +40,12 @@ import { designTokens } from '../../theme/tokens';
 import type { LedgerRecord, LedgerStatus, TaskConfig, TaskType } from '../../types/family';
 import styles from './FamilyDashboard.module.css';
 
-/** 历史记录每页条数（手机端长列表一次性渲染会卡，改为「加载更多」分页） */
-const RECORDS_PAGE_SIZE = 20;
+/**
+ * 历史记录一次展示的天数。
+ * 改成**按天分页**（原来是按 20 条分页）：分组后按条数切会把同一天拦腰截断，
+ * 一屏里冒出两个「今天」的组头 —— 按天切就不会。
+ */
+const RECORDS_PAGE_DAYS = 7;
 
 /** 历史记录状态筛选值：全部 / 待审批 / 已入账 / 已驳回 */
 type RecordFilter = 'all' | LedgerStatus;
@@ -44,6 +55,52 @@ interface CustomTaskForm {
   type: TaskType;
   name: string;
   value: number;
+}
+
+/**
+ * 快捷任务区里的一条按钮 —— 内置任务与自定义任务在这里统一成同一种形状，
+ * 免得「赚钱 / 消费罚款」×「内置 / 自定义」四段 JSX 各写一遍。
+ */
+interface TaskEntry {
+  /** React key（自定义任务用本地 id，它和提交时用的执行 task_id 不是一回事） */
+  key: string;
+  /** 点开后交给打卡弹窗的任务 */
+  task: TaskConfig;
+  /** 来自哪条自定义任务（提交成功要标成「今天做过」）；内置任务为 null */
+  custom: CustomTask | null;
+  /** 今天是否已达上限（已达的收进「今日已完成」，不再占着任务区） */
+  done: boolean;
+}
+
+/** 历史记录按天分组后的一天 */
+interface DayGroup {
+  /** 东八区日历天 YYYY-MM-DD（与服务端日限 / 结算同一时区） */
+  key: string;
+  /** 组标题：今天 / 昨天 / 8月12日 周三 */
+  label: string;
+  records: LedgerRecord[];
+  /** 当天【已入账】净额 —— 口径与余额一致（无 status 或 approved）；待审批、已驳回不计 */
+  net: number;
+  /** 当天待审批条数（免得家长把小计当成已经到账） */
+  pendingCount: number;
+}
+
+/** 东八区日历天 → 「今天 / 昨天 / 8月12日 周三」 */
+function formatDayLabel(dayKey: string, todayKey: string, yesterdayKey: string): string {
+  if (dayKey === todayKey) return '今天';
+  if (dayKey === yesterdayKey) return '昨天';
+  const parts = dayKey.split('-').map(Number);
+  const year = parts[0];
+  const month = parts[1];
+  const day = parts[2];
+  if (year === undefined || month === undefined || day === undefined) return dayKey;
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return dayKey;
+  const at = new Date(Date.UTC(year, month - 1, day));
+  const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][at.getUTCDay()];
+  // 同一年不写年份（「8月12日 周三」比「2025年8月12日 周三」好扫）
+  return dayKey.slice(0, 4) === todayKey.slice(0, 4)
+    ? `${month}月${day}日 ${week}`
+    : `${year}年${month}月${day}日 ${week}`;
 }
 
 /** 核心仪表盘：积分银行 + 任务区 / 待审批区 / 历史记录区 */
@@ -109,11 +166,17 @@ export default function FamilyDashboard() {
   const [settling, setSettling] = useState(false);
   /** 兑换区输入框里的积分数（null = 还没填，视为 0） */
   const [exchangePoints, setExchangePoints] = useState<number | null>(null);
-  /** 历史记录状态筛选 + 已渲染条数（分页）—— 跨页面切换保留，切走再回来还是原样 */
+  /** 历史记录状态筛选 + 已渲染天数（按天分页）—— 跨页面切换保留，切走再回来还是原样 */
   const [recordFilter, setRecordFilter] = useViewState<RecordFilter>('family.recordFilter', 'all');
-  const [visibleCount, setVisibleCount] = useViewState<number>('family.visibleCount', RECORDS_PAGE_SIZE);
+  const [visibleDays, setVisibleDays] = useViewState<number>('family.visibleDays', RECORDS_PAGE_DAYS);
   /** 首次挂载不算「切换筛选」，否则会把恢复出来的分页进度清零 */
   const filterMountedRef = useRef(false);
+  /** 「今日已完成」是否展开（默认收起：做完的任务不该继续占着任务区） */
+  const [showDoneTasks, setShowDoneTasks] = useState(false);
+  /** 家长的自定义任务管理区是否展开（默认收起：表单不该天天占着屏幕） */
+  const [showCustomManager, setShowCustomManager] = useState(false);
+  /** 兑现弹窗开关（余额卡上只留一个按钮，填写与确认都在弹窗里） */
+  const [settleOpen, setSettleOpen] = useState(false);
 
   const earningTasks = getTasksByType('earning');
   const spendingTasks = getTasksByType('spending');
@@ -124,17 +187,94 @@ export default function FamilyDashboard() {
   const homeworkTask = earningTasks.find((t) => t.id === 'finish_homework');
   const sleepTask = earningTasks.find((t) => t.id === 'sleep_on_time');
 
+  /**
+   * 自定义任务在服务端要有对应的「执行 id」：预置两条各走自己的 id（日限 1、即时到账），
+   * 其余全部写 `user_task_exec`，服务端按**任务名**判重 + 三层闸门。
+   * 快捷任务区把自定义任务也摆成按钮，点开后走**同一个打卡弹窗**（可传照片 / 写备注），
+   * 不再点一下就立刻加积分 —— 与内置任务的操作完全一致。
+   */
+  const toExecTask = (task: CustomTask): TaskConfig => ({
+    id: task.kind === 'preset' ? task.id : USER_TASK_EXEC_ID,
+    name: task.name,
+    type: task.type,
+    value: task.value,
+    unit: '积分',
+  });
+
+  /** 自定义任务今天是否已经做过（账本里已有流水，或本机标记过） */
+  const customTaskDone = (task: CustomTask): boolean =>
+    isRecordedToday(task, records, now) || isTaskDoneToday(task.id);
+
+  /** 内置任务 → 按钮条目 */
+  const toEntry = (task: TaskConfig, done: boolean): TaskEntry => ({
+    key: task.id,
+    task,
+    custom: null,
+    done,
+  });
+
+  /**
+   * 快捷任务按「今天做完没有」分成两组：待做留在明面上，做完的收进「今日已完成」折叠区，
+   * 这样列表只会越用越短。判断与打卡置灰（isTaskDone）同一套规则 ——
+   * 日限没满的任务（比如每天 2 次的洗碗）打完一次仍然留在待做里。
+   */
+  const earningEntries: TaskEntry[] = [
+    ...earningTasks.map((task) => toEntry(task, isTaskDone(task, records, now))),
+    ...customEarningTasks.map((task) => ({
+      key: task.id,
+      task: toExecTask(task),
+      custom: task,
+      done: customTaskDone(task),
+    })),
+  ];
+  const spendingEntries: TaskEntry[] = [
+    ...spendingTasks.map((task) => toEntry(task, isTaskDone(task, records, now))),
+    ...customSpendingTasks.map((task) => ({
+      key: task.id,
+      task: toExecTask(task),
+      custom: task,
+      done: customTaskDone(task),
+    })),
+  ];
+  /** 今日已完成的任务（两组加起来，用于折叠行文案与展开后的列表） */
+  const doneEntries = [...earningEntries, ...spendingEntries].filter((entry) => entry.done);
+
   /** 历史记录：按状态筛选（all = 全部） */
   const filteredRecords = useMemo(
     () => (recordFilter === 'all' ? records : records.filter((r) => (r.status ?? 'approved') === recordFilter)),
     [records, recordFilter]
   );
 
-  /** 当前已渲染的历史记录（加载更多分页） */
-  const visibleRecords = useMemo(
-    () => filteredRecords.slice(0, visibleCount),
-    [filteredRecords, visibleCount]
-  );
+  /**
+   * 历史记录按天分组：组头给「今天 / 昨天 / 8月12日 周三」+ 当天净额小计，条目挂在下面。
+   * 净额口径与余额完全一致（无 status 或 approved），所以每天的小计加起来就是那天的账面变化；
+   * 待审批只报条数、不进小计 —— 钱还没到账，不能算进去。
+   * 分天用东八区（与服务端日限 / 结算同一时区），否则晚上 8 点后本机会把今天算成明天。
+   */
+  const todayKey = beijingDayKey(now);
+  const yesterdayKey = beijingDayKey(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+  const dayGroups: DayGroup[] = [];
+  const dayIndex = new Map<string, DayGroup>();
+  for (const record of filteredRecords) {
+    const at = new Date(record.created_at);
+    const key = Number.isNaN(at.getTime()) ? 'unknown' : beijingDayKey(at);
+    let group = dayIndex.get(key);
+    if (!group) {
+      group = { key, label: formatDayLabel(key, todayKey, yesterdayKey), records: [], net: 0, pendingCount: 0 };
+      dayIndex.set(key, group);
+      dayGroups.push(group);
+    }
+    group.records.push(record);
+    const status = record.status ?? 'approved';
+    if (status === 'approved') group.net += record.amount;
+    if (status === 'pending') group.pendingCount += 1;
+  }
+  // 按天倒序：新的一天永远在最前（接口顺序变了也不会乱）
+  dayGroups.sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0));
+  /** 当前已渲染的天（「加载更多」按天加，不会把同一天切成两段） */
+  const visibleGroups = dayGroups.slice(0, visibleDays);
+  /** 还没露面的天数（给「加载更多」写文案） */
+  const hiddenDayCount = dayGroups.length - visibleGroups.length;
 
   /**
    * 拉账本：**成功才清掉 error** —— 以前全文件没有 setError(null)，
@@ -174,8 +314,8 @@ export default function FamilyDashboard() {
       filterMountedRef.current = true;
       return;
     }
-    setVisibleCount(RECORDS_PAGE_SIZE);
-  }, [recordFilter, setVisibleCount]);
+    setVisibleDays(RECORDS_PAGE_DAYS);
+  }, [recordFilter, setVisibleDays]);
 
   // 每秒刷新当前时间（用于作息判断）
   useEffect(() => {
@@ -320,20 +460,6 @@ export default function FamilyDashboard() {
     message.success(`「${created.name}」已加进快捷任务，点一下就能打卡`);
   };
 
-  /**
-   * 自定义任务在服务端要有对应的「执行 id」：预置两条各走自己的 id（日限 1、即时到账），
-   * 其余全部写 `user_task_exec`，服务端按**任务名**判重 + 三层闸门。
-   * 快捷任务区把自定义任务也摆成按钮，点开后走**同一个打卡弹窗**（可传照片 / 写备注），
-   * 不再点一下就立刻加积分 —— 与内置任务的操作完全一致。
-   */
-  const toExecTask = (task: CustomTask): TaskConfig => ({
-    id: task.kind === 'preset' ? task.id : USER_TASK_EXEC_ID,
-    name: task.name,
-    type: task.type,
-    value: task.value,
-    unit: '积分',
-  });
-
   if (error) {
     return (
       <div className={styles.errorWrap}>
@@ -470,11 +596,15 @@ export default function FamilyDashboard() {
       );
       await loadLedger();
       setExchangePoints(null);
+      setSettleOpen(false);
       message.success(`已兑换 ${yuan} 元，扣掉 ${amount} 积分`);
     } catch (e) {
       // 账记上了但自动审批失败：积分没扣掉，那笔在待审批里 —— 不能说「已兑换」
       if (e instanceof LedgerApprovalError) {
         await loadLedger().catch(() => undefined);
+        // 弹窗也关掉、输入清空：这一笔已经记上了，留在那儿再点一次会重复记账
+        setExchangePoints(null);
+        setSettleOpen(false);
         message.warning(`已记账，但审批没成功 —— ${amount} 积分还没扣掉，记录在待审批里，去点一下通过`);
       } else {
         message.error(e instanceof Error ? e.message : '兑换失败，请重试');
@@ -501,10 +631,41 @@ export default function FamilyDashboard() {
     return <Tag color="success">已入账</Tag>;
   };
 
+  /** 一条快捷任务按钮（内置 / 自定义共用；done=true 的收在「今日已完成」里） */
+  const renderTaskButton = (entry: TaskEntry) => {
+    const earning = entry.task.value > 0;
+    return (
+      <Button
+        key={entry.key}
+        type={earning ? 'primary' : 'default'}
+        danger={!earning}
+        className={`${styles.actionBtn} btn-press`}
+        // 已完成的按钮不再上色：交给 antd 的禁用样式变灰，一眼能看出这条做过了
+        style={
+          earning && !entry.done
+            ? { background: designTokens.colors.success, borderColor: designTokens.colors.success }
+            : undefined
+        }
+        icon={entry.done ? <CheckCircleOutlined /> : earning ? <PlusOutlined /> : <MinusOutlined />}
+        disabled={entry.done}
+        onClick={() => {
+          // 从自定义任务按钮进来的：提交成功后要标成「今天做过」
+          modalCustomTaskRef.current = entry.custom;
+          setActiveTask(entry.task);
+        }}
+      >
+        <span className={styles.actionBtnText}>{entry.task.name}</span>
+        <span className={`num ${styles.actionBtnValue}`}>
+          {entry.task.value > 0 ? `+${entry.task.value}` : entry.task.value}
+        </span>
+      </Button>
+    );
+  };
+
   /** 任务区内容 */
   const renderTasks = () => (
     <div className={styles.tasksArea}>
-      {/* 快捷任务 */}
+      {/* 快捷任务：只摊开今天还没做完的；做完的收进下面「今日已完成」 */}
       <div className={styles.actionSection}>
         <div className={styles.actionTitle}>快捷任务</div>
         <div className={styles.actionGrid}>
@@ -513,104 +674,63 @@ export default function FamilyDashboard() {
             <div className={styles.actionGroupLabel}>
               <RiseOutlined /> 赚钱任务
             </div>
-            {earningTasks.map((task) => (
-              <Button
-                key={task.id}
-                type="primary"
-                className={`${styles.actionBtn} btn-press`}
-                style={{
-                  background: designTokens.colors.success,
-                  borderColor: designTokens.colors.success,
-                }}
-                icon={<PlusOutlined />}
-                disabled={isDone(task)}
-                onClick={() => {
-                  modalCustomTaskRef.current = null;
-                  setActiveTask(task);
-                }}
-              >
-                <span className={styles.actionBtnText}>{task.name}</span>
-                <span className={`num ${styles.actionBtnValue}`}>+{task.value}</span>
-              </Button>
-            ))}
-            {/* 自定义任务：同样摆在快捷任务区，点开走打卡弹窗（可传照片 / 写备注），提交后才写流水 */}
-            {customEarningTasks.map((task) => {
-              const done = isRecordedToday(task, records, now) || isTaskDoneToday(task.id);
-              return (
-                <Button
-                  key={task.id}
-                  type="primary"
-                  className={`${styles.actionBtn} btn-press`}
-                  style={{
-                    background: designTokens.colors.success,
-                    borderColor: designTokens.colors.success,
-                  }}
-                  icon={<PlusOutlined />}
-                  disabled={done}
-                  onClick={() => {
-                    modalCustomTaskRef.current = task;
-                    setActiveTask(toExecTask(task));
-                  }}
-                >
-                  <span className={styles.actionBtnText}>{task.name}</span>
-                  <span className={`num ${styles.actionBtnValue}`}>
-                    {task.value > 0 ? `+${task.value}` : task.value}
-                  </span>
-                </Button>
-              );
-            })}
+            {earningEntries.filter((entry) => !entry.done).map(renderTaskButton)}
+            {earningEntries.every((entry) => entry.done) && (
+              <div className={styles.groupAllDone}>今天的都做完啦</div>
+            )}
           </div>
           {/* 消费/罚款 */}
           <div className={styles.actionGroup}>
             <div className={styles.actionGroupLabel}>
               <FallOutlined /> 消费 / 罚款
             </div>
-            {spendingTasks.map((task) => (
-              <Button
-                key={task.id}
-                danger
-                className={`${styles.actionBtn} btn-press`}
-                icon={<MinusOutlined />}
-                disabled={isDone(task)}
-                onClick={() => {
-                  modalCustomTaskRef.current = null;
-                  setActiveTask(task);
-                }}
-              >
-                <span className={styles.actionBtnText}>{task.name}</span>
-                <span className={`num ${styles.actionBtnValue}`}>{task.value}</span>
-              </Button>
-            ))}
-            {/* 自定义的消费 / 罚款任务：同样走打卡弹窗 */}
-            {customSpendingTasks.map((task) => {
-              const done = isRecordedToday(task, records, now) || isTaskDoneToday(task.id);
-              return (
-                <Button
-                  key={task.id}
-                  danger
-                  className={`${styles.actionBtn} btn-press`}
-                  icon={<MinusOutlined />}
-                  disabled={done}
-                  onClick={() => {
-                    modalCustomTaskRef.current = task;
-                    setActiveTask(toExecTask(task));
-                  }}
-                >
-                  <span className={styles.actionBtnText}>{task.name}</span>
-                  <span className={`num ${styles.actionBtnValue}`}>{task.value}</span>
-                </Button>
-              );
-            })}
+            {spendingEntries.filter((entry) => !entry.done).map(renderTaskButton)}
+            {spendingEntries.every((entry) => entry.done) && (
+              <div className={styles.groupAllDone}>今天的都记完啦</div>
+            )}
           </div>
         </div>
+
+        {/* 已完成折叠：默认收起 —— 打过卡的任务不该继续占着屏幕 */}
+        {doneEntries.length > 0 && (
+          <div className={styles.doneBlock}>
+            <Button
+              type="text"
+              block
+              className={styles.doneToggle}
+              onClick={() => setShowDoneTasks((open) => !open)}
+              aria-expanded={showDoneTasks}
+            >
+              <span className={styles.toggleInner}>
+                <CheckCircleOutlined />
+                <span>今日已完成 {doneEntries.length} 项</span>
+                {showDoneTasks ? <UpOutlined /> : <DownOutlined />}
+              </span>
+            </Button>
+            {showDoneTasks && <div className={styles.doneList}>{doneEntries.map(renderTaskButton)}</div>}
+          </div>
+        )}
       </div>
 
       {/* 自定义任务（仅家长：任务由家长定义，小孩只需打卡） */}
       {isParent && (
         <Card className={styles.customCard} variant="borderless">
-          <div className={styles.customTitle}>
-            <PlusOutlined /> 自定义任务
-          </div>
+          {/* 管理区默认收起：表单和任务清单不该天天占着任务区的下半屏 */}
+          <Button
+            type="text"
+            block
+            className={styles.customToggle}
+            onClick={() => setShowCustomManager((open) => !open)}
+            aria-expanded={showCustomManager}
+          >
+            <span className={styles.toggleInner}>
+              <PlusOutlined />
+              <span>{customTasks.length > 0 ? `自定义任务 · ${customTasks.length} 个` : '自定义任务'}</span>
+              {showCustomManager ? <UpOutlined /> : <DownOutlined />}
+            </span>
+          </Button>
+          {showCustomManager && (
+          <>
           <Form form={form} layout="vertical" onFinish={handleCustomTask} className={styles.customForm}>
             <div className={styles.customRow}>
               <Form.Item name="type" label="类型" rules={[{ required: true, message: '请选择类型' }]}>
@@ -677,12 +797,102 @@ export default function FamilyDashboard() {
               </List.Item>
             )}
           />
+          </>
+          )}
         </Card>
       )}
     </div>
   );
 
-  /** 历史记录区内容 */
+  /** 一条流水（按天分组后组头已经给了当天小计，条目只留必要信息） */
+  const renderRecordRow = (record: LedgerRecord) => (
+    <li key={record.id} className={styles.recordRow}>
+      <div
+        className={styles.recordIcon}
+        style={{
+          background: record.amount >= 0 ? 'rgba(15, 155, 108, 0.12)' : 'rgba(233, 69, 96, 0.12)',
+          color: record.amount >= 0 ? designTokens.colors.success : designTokens.colors.danger,
+        }}
+      >
+        {record.amount >= 0 ? <RiseOutlined /> : <FallOutlined />}
+      </div>
+      <div className={styles.recordMain}>
+        <div className={styles.recordTitle}>{record.task_name}</div>
+        {/* 时间与备注并作一行：原来备注单独占一行，条目被撑得很高 */}
+        <div className={styles.recordSub}>
+          {formatTime(record.created_at)}
+          {record.note ? ` · ${record.note}` : ''}
+        </div>
+      </div>
+      <div className={styles.recordRight}>
+        <span className={styles.recordTop}>
+          <span
+            className={`num ${styles.recordAmount}`}
+            style={{
+              color: record.amount >= 0 ? designTokens.colors.success : designTokens.colors.danger,
+            }}
+          >
+            {record.amount >= 0 ? '+' : ''}
+            {record.amount}
+          </span>
+          {/* 审批状态 */}
+          {renderStatusTag(record)}
+        </span>
+        {/* 图片缩略图（点击查看大图） */}
+        {record.image_url && (
+          <Image
+            src={record.image_url}
+            alt={record.task_name}
+            width={44}
+            height={44}
+            className={styles.recordImage}
+            preview={{ mask: <EyeOutlined /> }}
+          />
+        )}
+        {/* 小孩撤回自己待审批的申请 */}
+        {!isParent && record.status === 'pending' && (
+          <Popconfirm
+            title="撤回这条申请？"
+            description="撤回后记录会被删除，可以重新打卡"
+            okText="撤回"
+            cancelText="取消"
+            onConfirm={() => handleWithdraw(record.id)}
+          >
+            <Button size="small" icon={<RollbackOutlined />} className={styles.resubmitBtn}>
+              撤回
+            </Button>
+          </Popconfirm>
+        )}
+        {/* 驳回后重新提交：这是孩子对自己申请的补救动作 —— 家长端不给这个按钮，
+            只留一句只读说明（家长看到「重新提交」也会以为该由自己点） */}
+        {!isParent && record.status === 'rejected' && (
+          <Button size="small" className={styles.resubmitBtn} onClick={() => handleResubmit(record.id)}>
+            重新提交
+          </Button>
+        )}
+        {isParent && record.status === 'rejected' && (
+          <span className={styles.rejectedNote}>已驳回 · 孩子可重新提交</span>
+        )}
+        {/* 删除（仅家长）：含图片时后端一并删除 R2 图片 */}
+        {isParent && (
+          <Popconfirm
+            title="确认删除该记录？"
+            description={record.image_url ? '关联图片也会一并删除，且不可恢复' : '删除后不可恢复'}
+            okText="删除"
+            okButtonProps={{ danger: true }}
+            cancelText="取消"
+            onConfirm={() => handleDelete(record.id)}
+          >
+            <Button size="small" danger icon={<DeleteOutlined />} className={styles.resubmitBtn}>
+              删除
+            </Button>
+          </Popconfirm>
+        )}
+      </div>
+    </li>
+  );
+
+  /** 历史记录区内容：按天分组（组头给净额小计），条目挂在每天下面 */
   const renderRecords = () => (
     <Card className={styles.recordsCard} variant="borderless">
       {/* 状态筛选 + 导出（导出仅家长） */}
@@ -709,105 +919,41 @@ export default function FamilyDashboard() {
         <EmptyState description={recordFilter === 'all' ? '暂无流水记录' : '该状态下暂无记录'} />
       ) : (
         <>
-          <List
-            dataSource={visibleRecords}
-            renderItem={(record) => (
-              <List.Item className={styles.recordItem}>
-                <List.Item.Meta
-                  avatar={
-                    <div
-                      className={styles.recordIcon}
-                      style={{
-                        background:
-                          record.amount >= 0
-                            ? 'rgba(15, 155, 108, 0.12)'
-                            : 'rgba(233, 69, 96, 0.12)',
-                        color: record.amount >= 0 ? designTokens.colors.success : designTokens.colors.danger,
-                      }}
-                    >
-                      {record.amount >= 0 ? <RiseOutlined /> : <FallOutlined />}
-                    </div>
-                  }
-                  title={record.task_name}
-                  description={formatTime(record.created_at)}
-                />
-                <div className={styles.recordRight}>
-                  {/* 审批状态 */}
-                  {renderStatusTag(record)}
-                  <span
-                    className={`num ${styles.recordAmount}`}
-                    style={{
-                      color: record.amount >= 0 ? designTokens.colors.success : designTokens.colors.danger,
-                    }}
-                  >
-                    {record.amount >= 0 ? '+' : ''}
-                    {record.amount}
+          <div className={styles.dayList}>
+            {visibleGroups.map((group) => (
+              <section key={group.key} className={styles.dayGroup}>
+                <div className={styles.dayHead}>
+                  <span className={styles.dayLabel}>{group.label}</span>
+                  <span className={styles.dayMeta}>
+                    {group.pendingCount > 0 && (
+                      <span className={styles.dayPending}>{group.pendingCount} 条待审批</span>
+                    )}
+                    {group.net !== 0 && (
+                      <span
+                        className={`num ${styles.dayNet}`}
+                        style={{
+                          color: group.net > 0 ? designTokens.colors.success : designTokens.colors.danger,
+                        }}
+                      >
+                        {group.net > 0 ? '+' : ''}
+                        {group.net}
+                      </span>
+                    )}
                   </span>
-                  {/* 备注 */}
-                  {record.note && <div className={styles.recordNote}>{record.note}</div>}
-                  {/* 图片缩略图（点击查看大图） */}
-                  {record.image_url && (
-                    <Image
-                      src={record.image_url}
-                      alt={record.task_name}
-                      width={48}
-                      height={48}
-                      className={styles.recordImage}
-                      preview={{ mask: <EyeOutlined /> }}
-                    />
-                  )}
-                  {/* 小孩撤回自己待审批的申请 */}
-                  {!isParent && record.status === 'pending' && (
-                    <Popconfirm
-                      title="撤回这条申请？"
-                      description="撤回后记录会被删除，可以重新打卡"
-                      okText="撤回"
-                      cancelText="取消"
-                      onConfirm={() => handleWithdraw(record.id)}
-                    >
-                      <Button size="small" icon={<RollbackOutlined />} className={styles.resubmitBtn}>
-                        撤回
-                      </Button>
-                    </Popconfirm>
-                  )}
-                  {/* 驳回后重新提交：这是孩子对自己申请的补救动作 —— 家长端不给这个按钮，
-                      只留一句只读说明（家长看到「重新提交」也会以为该由自己点） */}
-                  {!isParent && record.status === 'rejected' && (
-                    <Button size="small" className={styles.resubmitBtn} onClick={() => handleResubmit(record.id)}>
-                      重新提交
-                    </Button>
-                  )}
-                  {isParent && record.status === 'rejected' && (
-                    <span className={styles.rejectedNote}>已驳回 · 孩子可重新提交</span>
-                  )}
-                  {/* 删除（仅家长）：含图片时后端一并删除 R2 图片 */}
-                  {isParent && (
-                    <Popconfirm
-                      title="确认删除该记录？"
-                      description={record.image_url ? '关联图片也会一并删除，且不可恢复' : '删除后不可恢复'}
-                      okText="删除"
-                      okButtonProps={{ danger: true }}
-                      cancelText="取消"
-                      onConfirm={() => handleDelete(record.id)}
-                    >
-                      <Button size="small" danger icon={<DeleteOutlined />} className={styles.resubmitBtn}>
-                        删除
-                      </Button>
-                    </Popconfirm>
-                  )}
                 </div>
-              </List.Item>
-            )}
-          />
-          {/* 长列表分页：一次 20 条，点一次多 20 条 */}
-          {filteredRecords.length > visibleRecords.length && (
+                <ul className={styles.recordList}>{group.records.map(renderRecordRow)}</ul>
+              </section>
+            ))}
+          </div>
+          {/* 按天分页：一次 7 天，点一次多 7 天（同一天不会被切成两段） */}
+          {hiddenDayCount > 0 && (
             <Button
               block
               type="dashed"
               className={styles.loadMore}
-              onClick={() => setVisibleCount((count) => count + RECORDS_PAGE_SIZE)}
+              onClick={() => setVisibleDays((days) => days + RECORDS_PAGE_DAYS)}
             >
-              加载更多（还有 {filteredRecords.length - visibleRecords.length} 条）
+              加载更多（还有 {hiddenDayCount} 天）
             </Button>
           )}
         </>
@@ -839,7 +985,7 @@ export default function FamilyDashboard() {
           <List
           dataSource={pendingRecords}
           renderItem={(record) => (
-            <List.Item className={styles.recordItem}>
+            <List.Item className={styles.pendingItem}>
               <List.Item.Meta
                 avatar={
                   <div
@@ -865,7 +1011,7 @@ export default function FamilyDashboard() {
                   {record.amount >= 0 ? '+' : ''}
                   {record.amount}
                 </span>
-                {record.note && <div className={styles.recordNote}>{record.note}</div>}
+                {record.note && <div className={styles.pendingNote}>{record.note}</div>}
                 {record.image_url && (
                   <Image
                     src={record.image_url}
@@ -934,42 +1080,20 @@ export default function FamilyDashboard() {
           </div>
           <div className={styles.balanceSub}>可用积分</div>
           {isParent && pendingCount > 0 && (
-            <div className={styles.pendingHint}>
+            // 点一下就跳到「待审批」页签处理，不用家长自己去翻
+            <button type="button" className={styles.pendingHint} onClick={() => setActiveTab('pending')}>
               <AuditOutlined /> 待审批 {pendingCount} 项
-            </div>
+            </button>
           )}
-          {/* 积分兑换现金：100 积分 = 10 元，可以只兑换一部分（仅家长、余额为正时） */}
+          {/* 兑现入口：余额卡只留一个按钮，填写与确认都挪进弹窗（见文件末尾的 Modal） */}
           {isParent && balance > 0 && (
-            <div className={styles.exchangeBox}>
-              <div className={styles.balanceSub}>积分兑换现金 · {EXCHANGE_RATE_TEXT}</div>
-              <InputNumber
-                className={styles.exchangeInput}
-                min={1}
-                max={balance}
-                precision={0}
-                value={exchangePoints}
-                onChange={(v) => setExchangePoints(typeof v === 'number' ? v : null)}
-                placeholder={`想兑换多少积分（最多 ${balance}）`}
-                addonAfter="积分"
-              />
-              <Popconfirm
-                title={`兑换 ${exchangeValue} 积分 = ${exchangeYuan} 元？`}
-                description="会记一条「现金兑现」支出，剩下的积分留在账上；如需回退请删除该记录"
-                okText="确认兑换"
-                cancelText="取消"
-                disabled={!canExchange}
-                onConfirm={() => handleSettle(exchangeValue)}
-              >
-                <Button
-                  className={styles.settleBtn}
-                  icon={<WalletOutlined />}
-                  loading={settling}
-                  disabled={!canExchange}
-                >
-                  兑换 {exchangeYuan} 元现金
-                </Button>
-              </Popconfirm>
-            </div>
+            <Button
+              className={styles.settleEntry}
+              icon={<WalletOutlined />}
+              onClick={() => setSettleOpen(true)}
+            >
+              兑现现金
+            </Button>
           )}
         </Card>
 
@@ -1107,6 +1231,38 @@ export default function FamilyDashboard() {
           maxLength={60}
           showCount
         />
+      </Modal>
+
+      {/* ===== 兑现弹窗：余额卡上只留一个入口，填写与确认都在这里 ===== */}
+      <Modal
+        open={settleOpen}
+        title="积分兑换现金"
+        okText={canExchange ? `兑换 ${exchangeYuan} 元` : '兑换'}
+        cancelText="取消"
+        okButtonProps={{ disabled: !canExchange }}
+        confirmLoading={settling}
+        onOk={() => void handleSettle(exchangeValue)}
+        onCancel={() => setSettleOpen(false)}
+        destroyOnHidden
+      >
+        <p className={styles.exchangeHint}>
+          汇率 {EXCHANGE_RATE_TEXT}，可以只兑现一部分，剩下的积分留在账上；兑换会记一条「现金兑现」支出，
+          需要回退就到历史记录里删掉那条。
+        </p>
+        <InputNumber
+          className={styles.exchangeInput}
+          min={1}
+          max={balance}
+          precision={0}
+          value={exchangePoints}
+          onChange={(v) => setExchangePoints(typeof v === 'number' ? v : null)}
+          placeholder={`想兑换多少积分（最多 ${balance}）`}
+          addonAfter="积分"
+        />
+        <div className={styles.exchangeTip}>
+          将兑换 <span className="num">{exchangeValue}</span> 积分 ={' '}
+          <span className="num">{exchangeYuan}</span> 元
+        </div>
       </Modal>
 
       {/* ===== 任务打卡弹窗（照片与备注草稿由组件内部管理） ===== */}

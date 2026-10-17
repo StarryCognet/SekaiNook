@@ -69,6 +69,7 @@
   margin-top: 4px;
 }
 
+/* 待审批提示：做成能点的按钮，点一下直接跳到「待审批」页签 */
 .pendingHint {
   margin-top: 10px;
   padding: 4px 12px;
@@ -78,7 +79,14 @@
   font-size: 13px;
   color: #fff;
   background: #1677ff;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
   border-radius: 999px;
+}
+
+.pendingHint:hover {
+  background: #3b8bff;
 }
 
 /* ===== 快捷操作 ===== */
@@ -138,6 +146,44 @@
   font-size: 14px;
 }
 
+/* 某一组今天全做完了：给一句反馈，不留一块空白 */
+.groupAllDone {
+  padding: 10px 0;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+
+/* ===== 「今日已完成 N 项」折叠区 ===== */
+.doneBlock {
+  margin-top: 4px;
+}
+
+.doneToggle {
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+  color: var(--color-text-secondary);
+}
+
+/* 折叠标题（已完成 / 自定义任务）共用：文案在左、箭头贴右 */
+.toggleInner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.toggleInner > :last-child {
+  margin-left: auto;
+}
+
+.doneList {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 /* ===== Tab 切换 ===== */
 .tabs {
   background: var(--color-surface);
@@ -165,14 +211,13 @@
   border: 1px solid var(--color-border);
 }
 
-.customTitle {
+/* 自定义任务折叠标题（点开才显示表单与清单） */
+.customToggle {
+  height: 40px;
+  padding: 0;
   font-size: 15px;
   font-weight: 600;
   color: var(--color-text);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .customForm {
@@ -197,8 +242,96 @@
   min-height: 200px;
 }
 
-.recordItem {
-  padding: 8px 0;
+/* ===== 历史记录：按天分组 ===== */
+.dayList {
+  display: flex;
+  flex-direction: column;
+}
+
+.dayGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 组头：左边「今天 / 昨天 / 8月12日 周三」，右边当天净额小计 */
+.dayHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 0 6px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dayLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.dayMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dayPending {
+  font-size: 12px;
+  color: var(--color-warning);
+}
+
+.dayNet {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.recordList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.recordRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.recordRow:last-child {
+  border-bottom: none;
+}
+
+.recordMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.recordTitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 时间 + 备注挤一行，超长省略（原来备注单独占一列，把行撑高） */
+.recordSub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 金额与状态标签并排（原来竖着堆两行） */
+.recordTop {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .recordIcon {
@@ -222,16 +355,6 @@
   align-items: flex-end;
   gap: 6px;
   flex-shrink: 0;
-}
-
-.recordNote {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  max-width: 160px;
-  text-align: right;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .recordImage {
@@ -350,6 +473,11 @@
     grid-template-columns: 1fr;
   }
 
+  /* 已完成折叠区在手机上单列，和上面的任务按钮一致 */
+  .doneList {
+    grid-template-columns: 1fr;
+  }
+
   /* 余额数字缩小，适配窄屏 */
   .balanceValue {
     font-size: 40px;
@@ -381,29 +509,39 @@
   margin-top: 12px;
 }
 
-/* ===== 积分兑换现金（仅家长，余额为正时出现） ===== */
-.settleBtn {
-  width: 100%;
-  height: 40px;
+/* ===== 兑现现金（仅家长，余额为正时出现）：入口在余额卡上，填写与确认都在弹窗里 ===== */
+/* 深色渐变卡上没法用主题变量，沿用这个位置既有的白色半透明做法 */
+.settleEntry {
   margin-top: 12px;
-  border-radius: 10px;
+  height: 36px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
 }
 
-/* 兑换区：汇率行 + 输入框 + 按钮竖排（间距交给 flex gap，别用 margin） */
-.exchangeBox {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.settleEntry:hover {
+  background: rgba(255, 255, 255, 0.26) !important;
+  border-color: rgba(255, 255, 255, 0.6) !important;
+  color: #fff !important;
 }
 
 .exchangeInput {
   width: 100%;
 }
 
-/* 竖排时间距由 gap 管，去掉按钮自带的 margin-top */
-.exchangeBox .settleBtn {
-  margin-top: 0;
+.exchangeHint {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+/* 输入框下方「将兑换 X 积分 = Y 元」 */
+.exchangeTip {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
 }
 
 /* ===== 趋势图容器（手机端靠 order 排到 Tab 之后） ===== */
@@ -423,6 +561,21 @@
 .pendingCount {
   font-size: 13px;
   color: var(--color-text-secondary);
+}
+
+/* 待审批每一条：沿用原来的密度（整条上下留白、备注右对齐省略） */
+.pendingItem {
+  padding: 8px 0;
+}
+
+.pendingNote {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  max-width: 160px;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rejectHint {
