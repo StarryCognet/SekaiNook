@@ -75,6 +75,14 @@ flutter test --no-pub test/app_nav_bar_test.dart
 
 # 七套主题的对比度回归（42 条：字压在各种底上是否读得清）
 flutter test --no-pub test/palette_contrast_test.dart
+
+# 本地提醒（17 个用例：完成数口径、东八区切日、排程时刻、撤程、落盘、测试按钮）
+flutter test --no-pub test/local_notify_test.dart
+
+# 口径对账：App 算的「今天完成了几个」必须与提醒 Worker 算的一样
+# （需要本地 8788 + 8789 两个服务；不加 --dart-define=PARITY=true 会跳过）
+flutter test --no-pub test/reminder_parity_test.dart \
+  --dart-define=PARITY=true --dart-define=API_BASE=http://127.0.0.1:8788
 ```
 
 加 `--no-pub` 是因为 `flutter test` 默认会先跑一次 `pub get`，离线环境会卡在那里。

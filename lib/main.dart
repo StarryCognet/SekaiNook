@@ -15,6 +15,7 @@ import 'data/api/settings_api.dart';
 import 'state/custom_tasks_state.dart';
 import 'state/family_state.dart';
 import 'state/garden_state.dart';
+import 'state/local_notify_state.dart';
 import 'state/notification_state.dart';
 import 'state/settings_state.dart';
 import 'state/theme_state.dart';
@@ -62,6 +63,7 @@ Future<void> main() async {
       notifications: NotificationState(api: NotificationApi(client)),
       customTasks: CustomTasksState(prefs: prefs),
       garden: GardenState(prefs: prefs, ledgerApi: ledgerApi),
+      localNotify: LocalNotifyState(prefs: prefs),
     ),
   );
 

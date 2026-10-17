@@ -76,4 +76,16 @@ abstract final class AppConstants {
 
   /// 已经庆祝过的勋章 id（避免每次进页面都弹一次庆祝动画）
   static const String keyBadgesCelebrated = 'sekainook_badges_celebrated';
+
+  // ---- App 本地通知（安卓系统通知栏）----
+
+  /// 本地提醒开关（开着的设备每天 21:30 弹一条「今天还差几个任务」）
+  static const String keyLocalNotifyEnabled = 'sekainook_local_notify_on';
+
+  /// 已排程的下一次提醒时刻（ISO 字符串，本机时区）——
+  /// 插件的 pendingNotificationRequests 不返回触发时间，只能自己记
+  static const String keyLocalNotifyNext = 'sekainook_local_notify_next';
+
+  /// 上一次排程时算的是哪一天（东八区日期键），用于判断文案是否过期
+  static const String keyLocalNotifyDay = 'sekainook_local_notify_day';
 }

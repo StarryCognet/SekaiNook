@@ -6,10 +6,12 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'core/app_error.dart';
+import 'data/models/ledger_record.dart';
 import 'router.dart';
 import 'state/custom_tasks_state.dart';
 import 'state/family_state.dart';
 import 'state/garden_state.dart';
+import 'state/local_notify_state.dart';
 import 'state/notification_state.dart';
 import 'state/settings_state.dart';
 import 'state/theme_state.dart';
@@ -31,6 +33,7 @@ class SekaiNookApp extends StatefulWidget {
     required this.notifications,
     required this.customTasks,
     required this.garden,
+    required this.localNotify,
   });
 
   final FamilyState family;
@@ -39,6 +42,7 @@ class SekaiNookApp extends StatefulWidget {
   final NotificationState notifications;
   final CustomTasksState customTasks;
   final GardenState garden;
+  final LocalNotifyState localNotify;
 
   @override
   State<SekaiNookApp> createState() => _SekaiNookAppState();
@@ -51,11 +55,32 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
   /// 对应 Web 版 `ErrorBoundary` 里的 `window.location.reload()`。
   int _generation = 0;
 
+  /// 上一次喂给本地提醒的账本（同一份 List 就不重复排程）
+  List<LedgerRecord>? _syncedRecords;
+
   @override
   void initState() {
     super.initState();
     setReloadHandler(_handleReload);
+    widget.family.addListener(_onFamilyChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+  }
+
+  @override
+  void dispose() {
+    widget.family.removeListener(_onFamilyChanged);
+    super.dispose();
+  }
+
+  /// 账本一刷新就重排本地提醒：任务做完了撤掉，没做完就把「还差几个」改准。
+  ///
+  /// 监听放在这里而不是 [LocalNotifyState] 里，是为了让状态层不认识 FamilyState ——
+  /// 通知只关心「一串流水」，谁给的都一样。
+  void _onFamilyChanged() {
+    final records = widget.family.records;
+    if (identical(records, _syncedRecords)) return;
+    _syncedRecords = records;
+    unawaited(widget.localNotify.syncFromRecords(records));
   }
 
   void _handleReload() {
@@ -72,6 +97,10 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
     unawaited(widget.settings.load());
     widget.customTasks.ensurePresets();
     widget.garden.init();
+
+    // 本地通知：初始化插件、恢复开关状态；点通知跳到首页。
+    widget.localNotify.bindTapHandler((payload) => _router.go(payload));
+    unawaited(widget.localNotify.init());
 
     final role = widget.family.role;
     if (role != null) {
@@ -90,6 +119,7 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
         ChangeNotifierProvider<NotificationState>.value(value: widget.notifications),
         ChangeNotifierProvider<CustomTasksState>.value(value: widget.customTasks),
         ChangeNotifierProvider<GardenState>.value(value: widget.garden),
+        ChangeNotifierProvider<LocalNotifyState>.value(value: widget.localNotify),
       ],
       child: Consumer<ThemeState>(
         builder: (BuildContext context, ThemeState theme, Widget? child) {

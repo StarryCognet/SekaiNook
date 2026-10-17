@@ -6,18 +6,22 @@ import '../../../core/api_exception.dart';
 import '../../../data/api/push_api.dart';
 import '../../../data/models/notification_record.dart';
 import '../../../state/family_state.dart';
+import '../../../state/local_notify_state.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 
-/// 「设置 → 手机提醒」区块（对应 Web 版设置页里的同一块）。
+/// 「设置 → 手机提醒」区块。
 ///
-/// 这块只讲清两件事，再留一个动作：
-/// - 想收到提醒，得先在**网站 / PWA** 里订阅一次（iPhone 还要先「添加到主屏幕」）；
-/// - 这个 App 还不能直接收 Web Push（本地通知没接），所以按钮的作用是
-///   「给已经订阅过的手机发一条测试通知」，确认提醒通道通不通。
+/// 提醒有**两条独立通道**，这块把两条都摆出来，别让用户以为只有一种：
 ///
+/// 1. **App 自己提醒（本地通知）**：装了 App 的手机由 App 排程系统通知，
+///    不依赖网络、不依赖订阅 —— 安卓上就是这个。
+/// 2. **浏览器推送（Web Push）**：由服务端 Worker 在 21:30 推给网站 / PWA，
+///    手机得先在网站上订阅一次（iPhone 还要先「添加到主屏幕」）。
+///
+/// 两条都开着的设备会各响一次，所以文案里写明了「装了 App 就用上面这个」。
 /// 提示样式不在本文件里另起一套：[onToast] 由设置页把它自己的 SnackBar
 /// （`_toast`）传进来，全页只有一种提示。
 class PushSection extends StatefulWidget {
@@ -33,7 +37,7 @@ class PushSection extends StatefulWidget {
 class _PushSectionState extends State<PushSection> {
   late final PushApi _api = PushApi();
 
-  /// 正在发：按钮置灰防连点（服务端有冷却，连点只会再换回一条 429）
+  /// 正在发（服务端推送）：按钮置灰防连点（服务端有冷却，连点只会再换回一条 429）
   bool _sending = false;
 
   /// 身份 → 订阅分组。[FamilyRole] 只有家长 / 小孩两种，身份还没选出来时返回
@@ -61,6 +65,38 @@ class _PushSectionState extends State<PushSection> {
     }
   }
 
+  /// 把状态层刚写下的结果提示捞出来显示，然后清掉（避免下次进页面又弹一遍）
+  void _flushMessage(LocalNotifyState state) {
+    final String? message = state.message;
+    if (message == null) return;
+    widget.onToast(message, !state.enabled && !state.permissionGranted);
+    state.clearMessage();
+  }
+
+  Future<void> _localEnable() async {
+    final LocalNotifyState state = context.read<LocalNotifyState>();
+    await state.enable();
+    if (!mounted) return;
+    setState(() {});
+    _flushMessage(state);
+  }
+
+  Future<void> _localDisable() async {
+    final LocalNotifyState state = context.read<LocalNotifyState>();
+    await state.disable();
+    if (!mounted) return;
+    setState(() {});
+    _flushMessage(state);
+  }
+
+  Future<void> _localTest() async {
+    final LocalNotifyState state = context.read<LocalNotifyState>();
+    await state.sendTest();
+    if (!mounted) return;
+    setState(() {});
+    _flushMessage(state);
+  }
+
   Future<void> _send() async {
     final NotifyAudience? audience = _audienceOf(context.read<FamilyState>().role);
     setState(() => _sending = true);
@@ -86,6 +122,7 @@ class _PushSectionState extends State<PushSection> {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     final FamilyRole? role = context.watch<FamilyState>().role;
+    final LocalNotifyState local = context.watch<LocalNotifyState>();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,15 +136,74 @@ class _PushSectionState extends State<PushSection> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 const _PushHead(
-                  title: '怎么才能收到',
-                  description: '提醒走的是浏览器推送，得先在手机上订阅一次；订阅入口在网站上，不在这个 App 里。',
+                  title: '这个 App 自己提醒（本地通知）',
+                  description: '装了 App 的手机由 App 自己排系统通知：不用开网页、不用订阅，'
+                      '每天 21:30 提醒今天还差几个任务。',
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                _PushBullet(text: '在手机上打开 ${AppConstants.apiBase}，进「设置 → 手机提醒」，把开关打开。'),
-                const _PushBullet(
-                  text: 'iPhone 要先在 Safari 里点「分享 → 添加到主屏幕」，再从主屏上那个图标进去开（Safari 标签页里开不了）。',
+                _StatusRow(
+                  palette: palette,
+                  label: '当前状态',
+                  value: _localStatusText(local),
+                  tone: local.enabled ? _Tone.good : _Tone.plain,
                 ),
-                const _PushBullet(text: '订阅过的手机，任务没做完时会提前半小时收到提醒。'),
+                if (local.enabled && local.nextFireAt != null)
+                  _StatusRow(
+                    palette: palette,
+                    label: '下次提醒',
+                    value: _fireAtText(local.nextFireAt!),
+                    tone: _Tone.plain,
+                  ),
+                if (local.enabled && local.scheduledBody != null) ...<Widget>[
+                  const SizedBox(height: AppSpacing.xs),
+                  _PreviewBox(
+                    palette: palette,
+                    title: local.scheduledTitle ?? '',
+                    body: local.scheduledBody ?? '',
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.sm),
+                if (!local.supported)
+                  Text(
+                    '网页版不支持这个（网页请用下面那张卡的浏览器推送）。'
+                    '装安卓 App 之后，这里就能直接开。',
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.textSecondary,
+                      height: 1.5,
+                    ),
+                  )
+                else ...<Widget>[
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: <Widget>[
+                      if (!local.enabled)
+                        FilledButton(
+                          onPressed: local.busy ? null : _localEnable,
+                          child: const Text('开启本地提醒'),
+                        )
+                      else
+                        OutlinedButton(
+                          onPressed: local.busy ? null : _localDisable,
+                          child: const Text('关掉本地提醒'),
+                        ),
+                      OutlinedButton(
+                        onPressed: local.busy ? null : _localTest,
+                        child: const Text('发一条本地测试通知'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '文案按「最后一次打开 App 时」的完成数算；做完 5 个任务后这条提醒会自动撤掉。',
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.textTertiary,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -120,9 +216,32 @@ class _PushSectionState extends State<PushSection> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 const _PushHead(
-                  title: '发一条测试通知',
-                  description:
-                      '这个 App 还不能直接收 Web Push（本地通知没接），所以这里只替已经订阅过的手机试一下通道：手机真收到了，就说明提醒是通的。',
+                  title: '在网站上订阅（浏览器推送）',
+                  description: '不想装 App 的手机（比如 iPhone）走这条：提醒由服务器推给浏览器，'
+                      '得先在手机上订阅一次，订阅入口在网站上。',
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _PushBullet(text: '在手机上打开 ${AppConstants.apiBase}，进「设置 → 手机提醒」，把开关打开。'),
+                const _PushBullet(
+                  text: 'iPhone 要先在 Safari 里点「分享 → 添加到主屏幕」，再从主屏上那个图标进去开（Safari 标签页里开不了）。',
+                ),
+                const _PushBullet(
+                  text: '两条通道同时开着的手机，到点会各响一次 —— 装了 App 的安卓机建议只留上面那条。',
+                ),
+              ],
+            ),
+          ),
+        ),
+        EnterBox(
+          index: 2,
+          child: AppCard(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const _PushHead(
+                  title: '给已订阅的手机发一条测试通知',
+                  description: '这条走服务端推送，测的是网站订阅那条通道：手机真收到了，说明浏览器推送是通的。',
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
@@ -139,6 +258,117 @@ class _PushSectionState extends State<PushSection> {
           ),
         ),
       ],
+    );
+  }
+
+  String _localStatusText(LocalNotifyState local) {
+    if (!local.supported) return '这个平台不支持';
+    if (!local.enabled) return '还没开启';
+    if (!local.permissionGranted) return '已开启，但系统里通知权限是关的';
+    if (local.nextFireAt == null) return '已开启 · 今天任务已做完，不再提醒';
+    return '已开启 · 每天 21:30';
+  }
+
+  /// 「下次提醒」显示成 `10/17 21:30`（北京墙钟时间，不带时区后缀）
+  String _fireAtText(DateTime when) {
+    final String mm = when.month.toString().padLeft(2, '0');
+    final String dd = when.day.toString().padLeft(2, '0');
+    final String hh = when.hour.toString().padLeft(2, '0');
+    final String mi = when.minute.toString().padLeft(2, '0');
+    return '$mm/$dd $hh:$mi';
+  }
+}
+
+/// 状态行的语气：正常 / 已完成（绿）/ 中性
+enum _Tone { plain, good }
+
+class _StatusRow extends StatelessWidget {
+  const _StatusRow({
+    required this.palette,
+    required this.label,
+    required this.value,
+    required this.tone,
+  });
+
+  final AppPalette palette;
+  final String label;
+  final String value;
+  final _Tone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 72,
+            child: Text(
+              label,
+              style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: AppFontSize.xs,
+                fontWeight: FontWeight.w600,
+                color: tone == _Tone.good ? palette.successInk : palette.text,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 下次通知的文案预览（用通知栏的样式：粗标题 + 细正文）
+class _PreviewBox extends StatelessWidget {
+  const _PreviewBox({required this.palette, required this.title, required this.body});
+
+  final AppPalette palette;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: palette.softColor(hasBackground: false),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '通知会长这样',
+            style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: AppFontSize.sm,
+              fontWeight: FontWeight.w600,
+              color: palette.text,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            body,
+            style: TextStyle(
+              fontSize: AppFontSize.xs,
+              color: palette.textSecondary,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

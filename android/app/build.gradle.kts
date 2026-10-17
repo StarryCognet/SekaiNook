@@ -10,6 +10,9 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // flutter_local_notifications 10+ 依赖 Java 8+ API desugaring：
+        // 定时通知在旧安卓（API < 26）上的兼容实现走的是 java.time，不开启会在运行期崩。
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -46,4 +49,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // 与 flutter_local_notifications 要求的版本一致（见其 README 的 Gradle setup）
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
