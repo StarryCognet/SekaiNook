@@ -10,8 +10,8 @@ import '../../state/family_state.dart';
 import '../../state/garden_state.dart';
 import '../../state/notification_state.dart';
 import '../../state/theme_state.dart';
-import '../../theme/app_theme.dart';
 import '../widgets/motion_widgets.dart';
+import 'app_nav_bar.dart';
 
 /// 主壳：底部导航 + 通知轮询（对应 Web 版 `src/layouts/MainLayout.tsx`）。
 ///
@@ -89,7 +89,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     final location = GoRouterState.of(context).uri.path;
     final index = _indexForLocation(location);
     final unread = context.select<NotificationState, int>((state) => state.unreadCount);
@@ -106,68 +105,44 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         offset: 16,
         child: widget.child,
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: palette.cardColor(hasBackground: hasBackground),
-          border: Border(top: BorderSide(color: palette.border)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: NavigationBar(
-            height: 58,
-            selectedIndex: index,
-            backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            indicatorColor: palette.primarySoft,
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            onDestinationSelected: (value) => context.go(_locations[value]),
-            destinations: <Widget>[
-              NavigationDestination(
-                icon: _withBadge(const Icon(Icons.home_outlined), unread, palette.danger),
-                selectedIcon: _withBadge(const Icon(Icons.home), unread, palette.danger),
-                label: '首页',
-              ),
-              NavigationDestination(
-                icon: _withBadge(
-                  const Icon(Icons.receipt_long_outlined),
-                  isParent ? pending : 0,
-                  palette.danger,
-                ),
-                selectedIcon: _withBadge(
-                  const Icon(Icons.receipt_long),
-                  isParent ? pending : 0,
-                  palette.danger,
-                ),
-                label: '家庭',
-              ),
-              const NavigationDestination(
-                icon: Icon(Icons.calendar_month_outlined),
-                selectedIcon: Icon(Icons.calendar_month),
-                label: '计划',
-              ),
-              const NavigationDestination(
-                icon: Icon(Icons.local_florist_outlined),
-                selectedIcon: Icon(Icons.local_florist),
-                label: '花园',
-              ),
-              const NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: '设置',
-              ),
-            ],
-          ),
+      // 悬浮胶囊底栏：选中靠弹簧透镜滑过去（跟手、会果冻），整条还随按下膨胀
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: AppNavBar(
+          selectedIndex: index,
+          hasBackground: hasBackground,
+          onSelected: (value) => context.go(_locations[value]),
+          destinations: <AppNavDestination>[
+            AppNavDestination(
+              icon: Icons.home_outlined,
+              selectedIcon: Icons.home,
+              label: '首页',
+              badge: unread,
+            ),
+            AppNavDestination(
+              icon: Icons.receipt_long_outlined,
+              selectedIcon: Icons.receipt_long,
+              label: '家庭',
+              badge: isParent ? pending : 0,
+            ),
+            const AppNavDestination(
+              icon: Icons.calendar_month_outlined,
+              selectedIcon: Icons.calendar_month,
+              label: '计划',
+            ),
+            const AppNavDestination(
+              icon: Icons.local_florist_outlined,
+              selectedIcon: Icons.local_florist,
+              label: '花园',
+            ),
+            const AppNavDestination(
+              icon: Icons.settings_outlined,
+              selectedIcon: Icons.settings,
+              label: '设置',
+            ),
+          ],
         ),
       ),
-    );
-  }
-
-  Widget _withBadge(Widget icon, int count, Color color) {
-    if (count <= 0) return icon;
-    return Badge(
-      label: Text(count > 99 ? '99+' : '$count', style: const TextStyle(fontSize: 10)),
-      backgroundColor: color,
-      child: icon,
     );
   }
 }

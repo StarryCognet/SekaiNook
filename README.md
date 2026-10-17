@@ -69,19 +69,31 @@ flutter test --no-pub test/garden_flow_test.dart --dart-define=API_BASE=http://1
 
 # 动效组件回归（12 个用例，不联网）
 flutter test --no-pub test/motion_widgets_test.dart
+
+# 悬浮底栏回归（5 个用例：角标 / 点击 / 拖动 / 减少动态效果 / 选中语义）
+flutter test --no-pub test/app_nav_bar_test.dart
+
+# 七套主题的对比度回归（42 条：字压在各种底上是否读得清）
+flutter test --no-pub test/palette_contrast_test.dart
 ```
 
 加 `--no-pub` 是因为 `flutter test` 默认会先跑一次 `pub get`，离线环境会卡在那里。
+
+手机视口（390×844）下的实拍验证流程（iframe 取景框 + CDP 截图 + 一键切角色/主题）
+见 [tool/webharness/README.md](tool/webharness/README.md)。
 
 已经做过的验证：
 
 - `flutter analyze` 零 error（15 条 info，都是 `prefer_initializing_formals` /
   `unnecessary_brace_in_string_interps` 这类既有提示）
-- 上面五个测试文件全部通过（21 个用例）
+- 上面七个测试文件全部通过（70 个用例，其中 9 个要对本地后端跑）
 - Chrome 里逐个跑通 8 个页面：身份门 / 女儿版首页 / 家长版首页 / 家庭账本 / 花园 / 通知 / 周计划 / 设置
 - 390×844 手机视口下 7 个主页面实拍留证（`docs/shots/`：
   04 妈妈版首页 / 06 妹妹版首页 / 10 家庭账本 / 11 花园 / 12 设置 /
   13 周计划 / 14 通知；身份门那屏没留）
+- **对比度与日期重叠修复后的复拍**（`docs/shots/diag/`，浅色+深色各页）：
+  妈妈版首页 x 轴只画 5 个标签（`10/4 10/7 10/10 10/13 10/16`，不再糊成一片）、
+  三级文字明显变深、深色主题未读通知卡上的副文案可读、悬浮底栏在 5 个页面都正常浮起
 - **动效中间态抓到实拍**：`docs/shots/21-page-transition-b.png` 一帧里同时有
   「路由 shared axis 转场中 + 错峰进场未完成 + 数字滚动到一半 + 导航指示器正在滑动」。
   抓法见 [docs/motion-kit.md](docs/motion-kit.md) 第六节（`--dart-define=SLOW_MO=N` 放慢时间轴）。
@@ -142,16 +154,38 @@ docs/                    接口契约与移植说明（见下）
 - **动效组件**：`lib/ui/widgets/motion/` —— `EnterBox`（入场/错峰）、
   `PressInkWell`/`PressScale`（按压反馈）、`AnimatedCount`（数字滚动）、
   `AnimatedProgressBar`/`PulseDot`、`SkeletonBox/Line/Card/List`（骨架屏，壁钟对齐相位）、
-  `SlideFadeSwitcher`/`SlidingHighlight`（内容与选项切换）、`SuccessBurst`/`showBurst`（成功那一下）。
+  `SlideFadeSwitcher`/`SlidingHighlight`（内容与选项切换）、`SuccessBurst`/`showBurst`（成功那一下）、
+  `SpringDriver`（保留速度的物理弹簧，`AnimationController` 做不到连点不打断手感）。
+- **文字对比度**：色板新增 `palette.onColor(底色)` / `onColorSoft(底色)` ——
+  **凡是字/图标落在有色底（主色、`primarySoft`、渐变、`colorScheme.*Container`）上都必须用它**，
+  不能直接取 `text`。原因：`original` 主题的主色 `#1A1A2E` 与正文色是同一个值，
+  `midnight` 的亮蓝主色同理，深底放深字会直接糊掉；`ColorScheme.fromSeed` 也只会按种子色
+  自己推一套容器色。`AppTheme.build` 已把 Chip / SegmentedButton / NavigationBar /
+  BottomSheet / Button / ListTile 等组件主题按 palette 显式收口，页面里剩下的用 `onColor`。
+  取色不是拍脑袋：先按底色亮度判亮字还是暗字，再挑最柔但对比度仍达标的那个
+  （`onColor` ≥ 4.5:1、`onColorSoft` ≥ 3.5:1），七套主题逐组由
+  `flutter test --no-pub test/palette_contrast_test.dart`（42 条）自动守着。
+  同理 **`textTertiary` 也校准过**：出厂值在白卡上只有 2.54:1（用户反馈「字和底看不清」
+  的主因），现在七套主题都压在卡片底 ≥ 4.5:1、页面底 ≥ 4.0:1。
+- **底部导航**：`lib/ui/shell/app_nav_bar.dart` —— FlClash 的弹簧透镜底栏移植版：
+  栏级 `Listener` 统一处理按下/拖动/松手，三枚 `SpringDriver` 分别驱动「透镜位置 / 按压膨胀 /
+  果冻拉伸」，透镜按速度拉长压扁（`_rubberBand` 橡皮筋），松手落位并 `HapticFeedback`。
+  与 FlClash 的差异：不做 hover 磁吸、不做透镜放大镜与 gapless shader（Web 上 blur 太贵、
+  Android 没有 hover），也不自持导航状态（只回吐 index，由 go_router 决定去向）。
 - **页面转场**：全平台统一 **shared axis（水平）**（`AppMotion.pageTransitionsTheme`
   + `SharedAxisPageTransitionsBuilder`，用官方 `animations` 包的 `SharedAxisTransition`，
   `fillColor: Colors.transparent` 防过渡期铺底闪一下）。与 FlClash 同一选择。
 - **主题切换**：MaterialApp 内置 `AnimatedTheme`，色板与玻璃底一起 lerp 过去（520ms emphasized）。
 - **全局背景图**：`AppBackgroundLayer` 铺在所有页面之下（照片 + 一层薄纱 `palette.bgVeil`）；
   设了背景图时各页 Scaffold 背景透明、卡片转半透明玻璃底。
+- **启动动画**：Flutter Web 首帧前是一块空白 canvas，`web/index.html` 先铺一层纯 HTML/CSS
+  启动动画（🌱 呼吸 + 进度条扫光 + 「正在打开你的小世界…」，`prefers-reduced-motion` 时静止），
+  首帧画好后由 `lib/core/boot_splash.dart` → `window.__sekainookBootDone()` 淡出撤除；
+  HTML 侧另有 8 秒兜底（首帧前就崩了也不会一直挡着）。非 Web 平台走空实现 stub。
 - **无障碍**：所有动效组件都读 `MediaQuery.disableAnimations`，系统关掉动画时直接落终点态。
 - **怎么验收动效**：静态截图证明不了动画 —— 组件回归跑
-  `flutter test --no-pub test/motion_widgets_test.dart`（12 个用例）；
+  `flutter test --no-pub test/motion_widgets_test.dart`（12 个用例）与
+  `flutter test --no-pub test/app_nav_bar_test.dart`（底栏 5 个用例）；
   要看/要抓中间态就加 `--dart-define=SLOW_MO=60` 构建（把 `timeDilation` 放慢 60 倍，
   默认 1 倍完全不生效），实拍见 `docs/shots/`。
 

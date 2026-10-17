@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../../../config/family_rules.dart';
 import '../../../core/api_client.dart';
@@ -10,6 +11,7 @@ import '../../../core/api_exception.dart';
 import '../../../core/week.dart';
 import '../../../data/api/plans_api.dart';
 import '../../../data/models/weekly_plan.dart';
+import '../../../state/theme_state.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
@@ -193,18 +195,20 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
       return ErrorView(message: _error!, onRetry: () => unawaited(_init()));
     }
     if (_loading) {
-      // 首屏加载改骨架屏；原来的加载文案保留在旁边
-      return Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
+      // 首屏加载改骨架屏：形状照着「周标签 / 总进度卡 + 科目卡」铺；
+      // 原来的加载文案保留在下面（只换「加载中」的视觉，判定逻辑不动）
+      return SafeArea(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            const SkeletonList(count: 3),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              '正在翻开这周的学习计划…',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+            const Expanded(child: _WeeklySkeleton()),
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+              child: Text(
+                '正在翻开这周的学习计划…',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+              ),
             ),
           ],
         ),
@@ -420,10 +424,25 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
     return widgets;
   }
 
+  /// AppCard 当前的实色卡底（「有没有设背景图」决定）—— 淡色块要合到它上面算字色
+  Color get _cardBase => context.palette.cardColor(
+        hasBackground: context.select<ThemeState, bool>(
+          (state) => state.background.isNotEmpty,
+        ),
+      );
+
+  /// 把「语义色 + 透明度」的淡色块合到它铺着的那层底上 —— 得到的是眼睛看到的背景色，
+  /// 再交给 [AppPalette.onColor] 取字色。淡色块 alpha 只有 12%，合成底基本等于卡片底。
+  static Color _tinted(Color color, Color base, [double alpha = 0.12]) =>
+      Color.alphaBlend(color.withValues(alpha: alpha), base);
+
   Widget _buildRow(AppPalette palette, WeeklyPlanTemplate tpl, WeeklyPlan? plan) {
     final current = plan?.current ?? 0;
     final target = tpl.target;
     final done = plan != null && target > 0 && current >= target;
+    // 「已完成」标签的底 = 12% 的 success 合到卡片底上（有色底），字色按这层实际颜色取：
+    // 原来把 success 本色写在自己的淡底上，浅色主题下只有约 3:1，xs 号字偏糊
+    final Color doneChipFill = _tinted(palette.success, _cardBase);
     final percent =
         plan == null || target <= 0 ? 0 : math.min(100, (current / target * 100).round());
     final accent = done ? palette.success : palette.primary;
@@ -521,7 +540,10 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
                   ),
                   child: Text(
                     '已完成',
-                    style: TextStyle(fontSize: AppFontSize.xs, color: palette.success),
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.onColor(doneChipFill),
+                    ),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -537,16 +559,21 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
                   onPressed: submitting ? null : () => _handleAdd(plan),
                   style: FilledButton.styleFrom(
                     backgroundColor: accent,
-                    foregroundColor: Colors.white,
+                    // 实色底上的字 / 图标：按这层底色取（原来写死 Colors.white）
+                    foregroundColor: palette.onColor(accent),
                     minimumSize: const Size(0, 34),
                     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: submitting
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 14,
                           height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          // 转圈也按底色取色，默认的 primary 写在实色底上会跟底撞
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: palette.onColor(accent),
+                          ),
                         )
                       : const Row(
                           mainAxisSize: MainAxisSize.min,
@@ -646,4 +673,87 @@ class _PlanInputState extends State<_PlanInput> {
       ),
     );
   }
+}
+
+/// 周计划页的骨架屏：一张「周标签 / 总进度」卡 + 三张科目卡
+/// （科目名 + 每行「任务名 / 目标」+ 右侧增加按钮），
+/// 形状照着周标签卡与科目卡摆 —— 加载完换成真内容时不会「跳」一下。
+class _WeeklySkeleton extends StatelessWidget {
+  const _WeeklySkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      children: <Widget>[
+        EnterBox(
+          index: 0,
+          child: _skeletonCard(palette, <Widget>[
+            const SkeletonLine(widthFactor: 0.3, height: 20),
+            const SizedBox(height: AppSpacing.sm),
+            const SkeletonLine(widthFactor: 0.42),
+            const SizedBox(height: AppSpacing.md),
+            const SkeletonLine(widthFactor: 0.25, height: 12),
+            const SizedBox(height: AppSpacing.sm),
+            const SkeletonLine(widthFactor: 0.55, height: 18),
+          ]),
+        ),
+        for (int card = 0; card < 3; card++)
+          EnterBox(
+            index: card + 1,
+            child: Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.md),
+              child: _skeletonCard(palette, <Widget>[
+                const Row(
+                  children: <Widget>[
+                    SkeletonBox(width: 18, height: 18, radius: AppRadius.sm),
+                    SizedBox(width: AppSpacing.xs),
+                    Expanded(child: SkeletonLine(widthFactor: 0.3)),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                for (int row = 0; row < 3; row++) ...<Widget>[
+                  if (row > 0) const SizedBox(height: AppSpacing.md),
+                  const Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            SkeletonLine(widthFactor: 0.5),
+                            SizedBox(height: AppSpacing.sm),
+                            SkeletonLine(widthFactor: 0.28, height: 12),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: AppSpacing.sm),
+                      SkeletonBox(width: 72, height: 34, radius: AppRadius.sm),
+                    ],
+                  ),
+                ],
+              ]),
+            ),
+          ),
+        const SizedBox(height: AppSpacing.xl),
+      ],
+    );
+  }
+}
+
+/// 骨架屏的卡壳（与 AppCard 同形：实色卡底 + 描边 + lg 圆角）
+Widget _skeletonCard(AppPalette palette, List<Widget> children) {
+  return Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: palette.surface,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      border: Border.all(color: palette.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    ),
+  );
 }

@@ -54,6 +54,12 @@ class AppPalette extends ThemeExtension<AppPalette> {
 
   final Color text;
   final Color textSecondary;
+
+  /// 三级文字：标签、单位、时间戳、空态提示。
+  ///
+  /// **七套主题的值都按对比度校准过**（`test/palette_contrast_test.dart` 会拦）：
+  /// 卡片底 ≥ 4.5:1、页面底 ≥ 4.0:1。改色板时别再凭手感调淡 —— 出厂主题最初
+  /// 给的 `#9CA3AF` 在白卡上只有 2.54:1，用户反馈的「字和底撞一起看不清」多半是它。
   final Color textTertiary;
   final Color border;
 
@@ -82,6 +88,87 @@ class AppPalette extends ThemeExtension<AppPalette> {
   /// 按「有没有设背景图」取次级底色。
   Color softColor({required bool hasBackground}) =>
       hasBackground ? surfaceSoftGlass : surfaceSoft;
+
+  /// 在一层「有色底」（主色块、深底、渐变、软色块）上取读得清的文字色。
+  ///
+  /// 底色亮 → 同色系近黑；底色暗 → 近白。凡是「彩色底 + 文字」的地方都必须走它，
+  /// 不要直接拿 [text] / [textSecondary] 往上放：原始主题的主色 #1A1A2E 和正文色
+  /// 是同一个值，深底上放深字会直接糊成一片（午夜蓝主题的亮蓝底同理）。
+  ///
+  /// 取色不是拍脑袋定的：先按底色亮度判该用亮字还是暗字（阈值 0.18 来自
+  /// 「纯黑字在 L≥0.175 时就能到 4.5:1、纯白字在 L≤0.183 时能到 4.5:1」这两条），
+  /// 再在候选里挑**最柔但对比度仍 ≥ 4.5:1** 的那个 —— 中间调底色（森林绿、暖阳橙、
+  /// 暗夜红）如果只把白色淡一点是压不住的（实测只有 2.3~3.9:1）。
+  Color onColor(Color background) {
+    final bool lightText = background.computeLuminance() < 0.18;
+    final List<Color> candidates = lightText
+        ? <Color>[
+            Color.lerp(background, Colors.white, 0.9) ?? Colors.white,
+            Color.lerp(background, Colors.white, 0.96) ?? Colors.white,
+            Colors.white,
+          ]
+        : <Color>[
+            Color.lerp(background, Colors.black, 0.82) ?? Colors.black,
+            Color.lerp(background, Colors.black, 0.92) ?? Colors.black,
+            Colors.black,
+          ];
+    for (final Color candidate in candidates) {
+      if (_contrastRatio(candidate, background) >= 4.5) return candidate;
+    }
+    return lightText ? Colors.white : Colors.black;
+  }
+
+  /// 同 [onColor]，但弱一档 —— 副标题、说明文字用（仍有 3.5:1 以上）。
+  ///
+  /// 用「向底色混一点」而不是降低 alpha：视觉一样，但不会在渐变/背景图/玻璃卡上
+  /// 透出后面的东西。
+  Color onColorSoft(Color background) {
+    final Color strong = onColor(background);
+    for (final double t in <double>[0.78, 0.86, 0.93, 1]) {
+      final Color candidate = Color.lerp(background, strong, t) ?? strong;
+      if (_contrastRatio(candidate, background) >= 3.5) return candidate;
+    }
+    return strong;
+  }
+
+  static double _contrastRatio(Color a, Color b) {
+    final double la = a.computeLuminance();
+    final double lb = b.computeLuminance();
+    final double hi = la > lb ? la : lb;
+    final double lo = la > lb ? lb : la;
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  /// 把语义色（success / danger / warning / primary）当**文字色**用在某层底上：
+  /// 保持色相，只往黑（浅底）或白（深底）压到对比度 ≥ 4.5:1。
+  ///
+  /// 与 [onColor] 的分工：[onColor] 用在「彩色块」上（丢掉色相换可读性），
+  /// 这个用在「中性卡片底上的彩色字」——比如「+10 阳光」「-20 积分」这类数字，
+  /// 既要不糊，也要保住红涨绿跌的颜色含义。
+  /// 直接拿语义色当字色是不行的：出厂主题的 warning `#F5A623` 落在白卡上只有
+  /// 1.7:1（实测），基本读不出来。
+  Color ink(Color color, [Color? background]) {
+    final Color base = background ?? surface;
+    final bool darken = base.computeLuminance() > 0.5;
+    for (final double t in <double>[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]) {
+      final Color candidate =
+          (darken ? Color.lerp(color, Colors.black, t) : Color.lerp(color, Colors.white, t)) ??
+              color;
+      if (_contrastRatio(candidate, base) >= 4.5) return candidate;
+    }
+    return onColor(base);
+  }
+
+  Color get primaryInk => ink(primary);
+  Color get successInk => ink(success);
+  Color get dangerInk => ink(danger);
+  Color get warningInk => ink(warning);
+
+  /// 主色块上的文字色。
+  Color get onPrimary => onColor(primary);
+
+  /// 次级色块 / 选中底色上的文字色。
+  Color get onSoft => onColor(primarySoft);
 
   @override
   AppPalette copyWith({
@@ -208,7 +295,7 @@ abstract final class AppTheme {
         surfaceSoft: Color(0xFFF9FAFB),
         text: Color(0xFF1A1A2E),
         textSecondary: Color(0xFF6B7280),
-        textTertiary: Color(0xFF9CA3AF),
+        textTertiary: Color(0xFF727780),
         border: Color(0xFFE5E7EB),
         sider: Color(0xFF1A1A2E),
         siderSelected: Color(0xFF2A2A4A),
@@ -234,7 +321,7 @@ abstract final class AppTheme {
         surfaceSoft: Color(0xFF132241),
         text: Color(0xFFE8F1FF),
         textSecondary: Color(0xFF92A8C9),
-        textTertiary: Color(0xFF6C82A5),
+        textTertiary: Color(0xFF7B8FAE),
         border: Color(0xFF22355A),
         sider: Color(0xFF04091A),
         siderSelected: Color(0xFF152A52),
@@ -260,7 +347,7 @@ abstract final class AppTheme {
         surfaceSoft: Color(0xFFFDF1F5),
         text: Color(0xFF3B2430),
         textSecondary: Color(0xFF8B6B78),
-        textTertiary: Color(0xFFB39AA4),
+        textTertiary: Color(0xFF847279),
         border: Color(0xFFF6DBE5),
         sider: Color(0xFFE8628F),
         siderSelected: Color(0xFFC9426E),
@@ -286,7 +373,7 @@ abstract final class AppTheme {
         surfaceSoft: Color(0xFFEEF7F1),
         text: Color(0xFF1E3B2F),
         textSecondary: Color(0xFF5F7D6F),
-        textTertiary: Color(0xFF93AB9F),
+        textTertiary: Color(0xFF677A70),
         border: Color(0xFFDCEBE2),
         sider: Color(0xFF1F6F4D),
         siderSelected: Color(0xFF2F9E6E),
@@ -312,7 +399,7 @@ abstract final class AppTheme {
         surfaceSoft: Color(0xFFFDF3E9),
         text: Color(0xFF3F2A1B),
         textSecondary: Color(0xFF8A6C55),
-        textTertiary: Color(0xFFB39B86),
+        textTertiary: Color(0xFF837262),
         border: Color(0xFFF4E0CC),
         sider: Color(0xFFC25F22),
         siderSelected: Color(0xFFE07B39),
@@ -338,7 +425,7 @@ abstract final class AppTheme {
         surfaceSoft: Color(0xFF2A1218),
         text: Color(0xFFF8ECEF),
         textSecondary: Color(0xFFC99AA5),
-        textTertiary: Color(0xFF9C7079),
+        textTertiary: Color(0xFFA67E86),
         border: Color(0xFF3D2027),
         sider: Color(0xFF0D0406),
         siderSelected: Color(0xFF3A1620),
@@ -364,7 +451,7 @@ abstract final class AppTheme {
         surfaceSoft: Color(0xFF242424),
         text: Color(0xFFFFFFFF),
         textSecondary: Color(0xFFB4B4B4),
-        textTertiary: Color(0xFF808080),
+        textTertiary: Color(0xFF8D8D8D),
         border: Color(0xFF383838),
         sider: Color(0xFF0D0D0D),
         siderSelected: Color(0xFF2A2A2A),
@@ -403,12 +490,41 @@ abstract final class AppTheme {
       seedColor: p.primary,
       brightness: themePreset.dark ? Brightness.dark : Brightness.light,
     ).copyWith(
+      // ColorScheme.fromSeed 只会按种子色推出整套容器色，与 palette 里的色值、
+      // 尤其是「哪个字配哪个底」无关。这里把容器色与 on* 全部按 palette 收口，
+      // 否则 Chip / SegmentedButton / NavigationBar 指示器等组件会拿到一套
+      // 和页面底色打架的配色（就是「字和背景糊在一起」的来源）。
       primary: p.primary,
-      secondary: p.primarySoft,
+      onPrimary: p.onPrimary,
+      primaryContainer: p.primarySoft,
+      onPrimaryContainer: p.onSoft,
+      secondary: p.primary,
+      onSecondary: p.onPrimary,
+      secondaryContainer: p.primarySoft,
+      onSecondaryContainer: p.onSoft,
+      tertiary: p.success,
+      onTertiary: p.onColor(p.success),
+      tertiaryContainer: p.softColor(hasBackground: hasBackground),
+      onTertiaryContainer: p.text,
       error: p.danger,
+      onError: p.onColor(p.danger),
+      errorContainer: p.softColor(hasBackground: hasBackground),
+      onErrorContainer: p.danger,
       surface: p.cardColor(hasBackground: hasBackground),
       onSurface: p.text,
+      surfaceContainerLowest: p.cardColor(hasBackground: hasBackground),
+      surfaceContainerLow: p.cardColor(hasBackground: hasBackground),
+      surfaceContainer: p.cardColor(hasBackground: hasBackground),
+      surfaceContainerHigh: p.softColor(hasBackground: hasBackground),
+      surfaceContainerHighest: p.segmentedSelected,
+      onSurfaceVariant: p.textSecondary,
       outline: p.border,
+      outlineVariant: p.border,
+      shadow: Colors.black,
+      scrim: Colors.black,
+      inverseSurface: p.text,
+      onInverseSurface: p.bg,
+      inversePrimary: p.primarySoft,
     );
 
     final base = ThemeData(
@@ -488,7 +604,72 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
       ),
-      progressIndicatorTheme: ProgressIndicatorThemeData(color: p.primary),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: p.primary,
+        linearTrackColor: p.softColor(hasBackground: hasBackground),
+        circularTrackColor: p.softColor(hasBackground: hasBackground),
+      ),
+      // 下面这些组件的默认配色来自 ColorScheme.fromSeed，会和 palette 撞色；
+      // 一律显式收口到 palette + onColor。
+      chipTheme: ChipThemeData(
+        backgroundColor: p.softColor(hasBackground: hasBackground),
+        selectedColor: p.primarySoft,
+        secondarySelectedColor: p.primarySoft,
+        labelStyle: TextStyle(color: p.text, fontSize: AppFontSize.sm),
+        secondaryLabelStyle: TextStyle(color: p.onSoft, fontSize: AppFontSize.sm),
+        side: BorderSide(color: p.border),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) =>
+                states.contains(WidgetState.selected) ? p.onSoft : p.textSecondary,
+          ),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) =>
+                states.contains(WidgetState.selected) ? p.primarySoft : Colors.transparent,
+          ),
+          side: WidgetStatePropertyAll(BorderSide(color: p.border)),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: p.primary,
+          foregroundColor: p.onPrimary,
+          disabledBackgroundColor: p.softColor(hasBackground: hasBackground),
+          disabledForegroundColor: p.textTertiary,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: p.primary,
+          side: BorderSide(color: p.border),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: p.primary),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: p.primary,
+        foregroundColor: p.onPrimary,
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: p.cardColor(hasBackground: hasBackground),
+        textStyle: TextStyle(color: p.text, fontSize: AppFontSize.sm),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: p.text,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
+        textStyle: TextStyle(color: p.bg, fontSize: AppFontSize.xs),
+      ),
+      listTileTheme: ListTileThemeData(textColor: p.text, iconColor: p.textSecondary),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: p.cardColor(hasBackground: hasBackground),
+        indicatorColor: p.primarySoft,
+        surfaceTintColor: Colors.transparent,
+      ),
       tabBarTheme: TabBarThemeData(
         labelColor: p.primary,
         unselectedLabelColor: p.textSecondary,

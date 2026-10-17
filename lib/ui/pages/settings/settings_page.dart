@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,6 +27,27 @@ import '../../widgets/motion_widgets.dart';
 /// 家长口令长度（与 Web 版一致：4-8 位）。
 const int _pinMinLength = 4;
 const int _pinMaxLength = 8;
+
+/// [fg] 压在 [bg] 上的对比度（WCAG 口径，1~21）。
+double _contrastRatio(Color fg, Color bg) {
+  final double a = fg.computeLuminance();
+  final double b = bg.computeLuminance();
+  return (math.max(a, b) + 0.05) / (math.min(a, b) + 0.05);
+}
+
+/// warning / danger 这类强调色当正文或图标色用时的可读版本：衬不住卡片底就朝
+/// 「底色的对色」方向压一档（金色 → 深金），色相留着 —— 只动前景色，不动底色。
+Color _readableAccent(AppPalette palette, Color accent, {double minRatio = 4.5}) {
+  final Color surface = palette.surface;
+  if (_contrastRatio(accent, surface) >= minRatio) return accent;
+  final Color target = palette.onColor(surface);
+  Color best = accent;
+  for (double t = 0.25; t <= 1.0001; t += 0.25) {
+    best = Color.lerp(accent, target, t)!;
+    if (_contrastRatio(best, surface) >= minRatio) return best;
+  }
+  return best;
+}
 
 /// 设置页（对应 Web 版 `src/views/settings/SettingsPage.tsx`）。
 ///
@@ -161,10 +183,17 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _toast(String message, {bool error = false}) {
     final palette = context.palette;
+    // 出错时 SnackBar 的底是 danger：字色按这层底取，别吃主题默认字色
+    final Color? background = error ? palette.danger : null;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: error ? palette.danger : null,
+        content: Text(
+          message,
+          style: background == null
+              ? null
+              : TextStyle(color: palette.onColor(background)),
+        ),
+        backgroundColor: background,
       ),
     );
   }
@@ -701,56 +730,65 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: AppSpacing.md),
         const SectionHeader(title: '关于', subtitle: '这是什么版本、改过什么'),
-        AppCard(
-          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        EnterBox(
+          index: 4,
+          child: AppCard(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        AppConstants.appName,
+                        style: TextStyle(
+                          fontSize: AppFontSize.md,
+                          fontWeight: FontWeight.w600,
+                          color: palette.text,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        '家庭财务与行为管理',
+                        style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: <Widget>[
                     Text(
-                      AppConstants.appName,
-                      style: TextStyle(
-                        fontSize: AppFontSize.md,
-                        fontWeight: FontWeight.w600,
-                        color: palette.text,
-                      ),
+                      '当前版本',
+                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
                     ),
                     const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      '家庭财务与行为管理',
-                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
-                    ),
+                    _Tag(text: 'v$appVersion'),
                   ],
                 ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  Text(
-                    '当前版本',
-                    style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  _Tag(text: 'v$appVersion'),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-        AppCard(
-          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: _buildChangelog(palette),
+        EnterBox(
+          index: 5,
+          child: AppCard(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: _buildChangelog(palette),
+          ),
         ),
-        AppCard(
-          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-          onTap: _signOut,
-          child: const _EntryRow(
-            icon: Icons.logout,
-            title: '退出当前身份',
-            description: '清掉本机记的身份，下次打开重新选（妈妈 / 女儿）',
-            danger: true,
+        EnterBox(
+          index: 6,
+          child: AppCard(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            onTap: _signOut,
+            child: const _EntryRow(
+              icon: Icons.logout,
+              title: '退出当前身份',
+              description: '清掉本机记的身份，下次打开重新选（妈妈 / 女儿）',
+              danger: true,
+            ),
           ),
         ),
       ],
@@ -941,10 +979,8 @@ class _SettingsPageState extends State<SettingsPage> {
               const _CardHead(title: '全局背景图', description: '换一张全家福当底色，两台手机会同步'),
               const SizedBox(height: AppSpacing.sm),
               if (!theme.backgroundReady)
-                Text(
-                  '正在读取服务端背景图…',
-                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
-                )
+                // 正在读服务端背景图：先用骨架占位，别让这一块空着不动
+                const SkeletonBox(width: double.infinity, height: 140)
               else ...<Widget>[
                 // 设了图 / 换了图时淡入，高度也一起平滑（不会把下面的按钮顶一下）
                 AnimatedSize(
@@ -1097,7 +1133,8 @@ class _SettingsPageState extends State<SettingsPage> {
                             style: TextStyle(
                               fontSize: AppFontSize.sm,
                               fontWeight: FontWeight.w600,
-                              color: selected ? palette.primary : palette.text,
+                              // 选中的色卡底是 primarySoft：名字跟着这层底走
+                              color: selected ? palette.onSoft : palette.text,
                             ),
                           ),
                           const SizedBox(height: AppSpacing.xs),
@@ -1105,7 +1142,9 @@ class _SettingsPageState extends State<SettingsPage> {
                             preset.description,
                             style: TextStyle(
                               fontSize: AppFontSize.xs,
-                              color: palette.textSecondary,
+                              color: selected
+                                  ? palette.onColorSoft(palette.primarySoft)
+                                  : palette.textSecondary,
                               height: 1.4,
                             ),
                           ),
@@ -1114,7 +1153,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                     if (selected) ...<Widget>[
                       const SizedBox(width: AppSpacing.xs),
-                      Icon(Icons.check_circle, size: 18, color: palette.primary),
+                      Icon(Icons.check_circle, size: 18, color: palette.onSoft),
                     ],
                   ],
                 ),
@@ -1222,7 +1261,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   padding: const EdgeInsets.only(top: AppSpacing.xs),
                   child: Text(
                     '有改动还没保存：先帮你留在这台手机上，切走再回来还能接着改',
-                    style: TextStyle(fontSize: AppFontSize.xs, color: palette.warning),
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: _readableAccent(palette, palette.warning),
+                    ),
                   ),
                 ),
               if (!settings.ready)
@@ -1269,7 +1311,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     '口令锁定中，请等 $lockLeft 秒再试',
                     style: TextStyle(
                       fontSize: AppFontSize.xs,
-                      color: palette.danger,
+                      color: _readableAccent(palette, palette.danger),
                       fontFeatures: kTabularNumbers,
                     ),
                   ),
@@ -1319,7 +1361,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     const SizedBox(width: AppSpacing.sm),
                     FilledButton(
                       onPressed: _cleaning ? null : _cleanOrphans,
-                      style: FilledButton.styleFrom(backgroundColor: palette.danger),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: palette.danger,
+                        // 底被换成了 danger：字色跟着这层底走（主题的 onPrimary 是按主色算的）
+                        foregroundColor: palette.onColor(palette.danger),
+                      ),
                       child: _cleaning
                           ? const SizedBox(
                               width: 16,
@@ -1442,9 +1488,16 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: AppSpacing.sm),
               if (_loadingAdjustments && entries.isEmpty)
-                Text(
-                  '正在读取…',
-                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                // 正在读调整记录：先铺三行骨架，别让卡片里空着一行「正在读取…」
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    for (int index = 0; index < 3; index++)
+                      Padding(
+                        padding: EdgeInsets.only(top: index == 0 ? 0 : AppSpacing.sm),
+                        child: const SkeletonLine(height: 14, widthFactor: 0.55),
+                      ),
+                  ],
                 )
               else if (entries.isEmpty)
                 Text(
@@ -1703,6 +1756,8 @@ Future<bool> _confirmDialog(
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: danger ? palette.danger : palette.primary,
+              // danger 底的按钮：字色按这层底取
+              foregroundColor: palette.onColor(danger ? palette.danger : palette.primary),
             ),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(okText),
@@ -1730,7 +1785,9 @@ class _EntryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final accent = danger ? palette.danger : palette.primary;
+    // 退出这类破坏性入口：图标坐在自己的 12% 淡色块上、标题压在卡片底上，
+    // 都按底色算过对比度再上前景色（红线在浅色主题里只有 ~3.5:1）
+    final Color accent = _readableAccent(palette, danger ? palette.danger : palette.primary);
     return Row(
       children: <Widget>[
         Container(
@@ -1753,7 +1810,7 @@ class _EntryRow extends StatelessWidget {
                 style: TextStyle(
                   fontSize: AppFontSize.sm,
                   fontWeight: FontWeight.w600,
-                  color: danger ? palette.danger : palette.text,
+                  color: danger ? accent : palette.text,
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -1877,7 +1934,10 @@ class _ChoiceRow extends StatelessWidget {
                           style: TextStyle(
                             fontSize: AppFontSize.sm,
                             fontWeight: index == selectedIndex ? FontWeight.w600 : FontWeight.w400,
-                            color: index == selectedIndex ? palette.primary : palette.textSecondary,
+                            color: index == selectedIndex
+                                // 选中段的底是 segmentedSelected：字色按这层底取
+                                ? palette.onColor(palette.segmentedSelected)
+                                : palette.textSecondary,
                           ),
                         ),
                       ),
@@ -1911,7 +1971,8 @@ class _Tag extends StatelessWidget {
         style: TextStyle(
           fontSize: AppFontSize.xs,
           fontWeight: FontWeight.w600,
-          color: palette.primary,
+          // 版本号胶囊的底是 primarySoft：字色按这层底取
+          color: palette.onSoft,
           fontFeatures: kTabularNumbers,
         ),
       ),

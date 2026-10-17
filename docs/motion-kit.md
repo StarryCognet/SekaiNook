@@ -129,6 +129,79 @@ StatBlock(label: '余额', number: family.balance, formatter: (v) => v.toStringA
 
 `StatBlock` 传 `number` 会滚动；传 `value`（String）则原样显示。
 
+### 10. 文字对比度铁律：`palette.onColor` / `onColorSoft`
+
+**只要文字或图标落在一层「有色底」上，字色就不许直接取 `text` / `textSecondary` /
+`textTertiary`。** 有色底指：`primary`、`primarySoft`、`sider`、`siderSelected`、
+`success`、`danger`、`warning`、`colorScheme.*Container`，以及任何 `LinearGradient`
+或 `Color.alphaBlend` 的结果。
+
+```dart
+final bg = palette.primary; // 或 primarySoft / sider / success / danger / 渐变插值结果
+Text('标题', style: TextStyle(color: palette.onColor(bg)));      // 同色系近黑 / 近白
+Text('说明', style: TextStyle(color: palette.onColorSoft(bg)));  // 弱一档，仍有对比度
+```
+
+两个常用捷径：`palette.onPrimary`（主色块上的字）、`palette.onSoft`（`primarySoft`
+选中底上的字）。反过来说，**普通卡片底（`surface` / `softColor(...)`）上照旧用
+`text` / `textSecondary` / `textTertiary`**，不要一律改成 `onColor`。
+
+为什么必须有这条：`original` 主题的主色 `#1A1A2E` 和正文色 `text` 是同一个值，
+`midnight` 的亮蓝主色同理 —— 深底上放深字会直接糊掉；而 `ColorScheme.fromSeed`
+只会按种子色自己推一套容器色，与 palette 的「哪个字配哪个底」无关（Chip /
+SegmentedButton / NavigationBar / FilledButton 这些已在 `AppTheme.build` 里显式
+收口，页面里剩下的必须自己用 `onColor`）。
+
+`onColor` 保证 **≥ 4.5:1**、`onColorSoft` 保证 **≥ 3.5:1**（WCAG 正文/次要文字），
+七套主题逐组由 `test/palette_contrast_test.dart` 自动守着（42 条），
+改色板跑一下就知道有没有踩线。
+
+另外：**`textTertiary` 是校准过的**（标签、单位、时间戳、空态提示都用它）。出厂值
+`#9CA3AF` 在白卡上只有 2.54:1，是「字和底撞一起看不清」的头号来源；现在七套主题
+都压在卡片底 ≥ 4.5:1、页面底 ≥ 4.0:1（浅色主题的 `textTertiary` 因此明显变深，
+这是有意的）。加新主题时别凭手感挑一个浅灰 —— 直接跑那个测试。
+
+### 11. `SpringDriver` —— 保留速度的弹簧（进阶）
+
+`AppMotion.springTrack` / `springPress` / `springSettle` / `springHover` 是
+`SpringDescription`（不是 `Curve`），喂给 `SpringDriver`：
+
+```dart
+final driver = SpringDriver(this /* TickerProvider */, 0); // 记得 dispose
+driver.springTo(1, AppMotion.springSettle);                 // 连点/拖动不打断手感
+driver.jumpTo(0);                                           // 减少动态效果时直接落位
+```
+
+与 `AnimationController.animateWith` 的区别：后者的 ticker 每次重定向都要重启，
+首帧读不到已流逝时间，手指每帧都在动时值会被钉住不动。底部导航
+（`lib/ui/shell/app_nav_bar.dart`）的「透镜跟手 + 果冻拉伸 + 松手落位」就是靠它。
+
+### 12. 悬浮底栏 `AppNavBar`（Shell 独占，页面不用碰）
+
+底部 Tab 栏是 FlClash 那套悬浮 dock：`lib/ui/shell/app_nav_bar.dart`，只在
+`main_shell.dart` 里挂一次，**页面不要自己再加底栏**。
+
+```dart
+AppNavBar(
+  selectedIndex: index,
+  hasBackground: hasBackground,          // 有背景图时走玻璃底
+  onSelected: (i) => context.go(_locations[i]),
+  destinations: [AppNavDestination(icon: ..., selectedIcon: ..., label: '首页', badge: 3)],
+)
+```
+
+行为（与 FlClash `navigation_dock.dart` 对齐，参数同名同值）：
+- **按下**：透镜（lens）移到按下的格子并放大（`springPress` 280ms bounce 0.2），整条 dock 轻微「膨胀」（`_pressGrowth = 1/8`，上限 16px）。
+- **拖动**：过 `kTouchSlop` 才进入拖拽；透镜跟手（`springTrack` 120ms bounce 0，**保留速度**，不被打断）；越过两端时果冻阻尼 `_rubberBand(overshoot, limit) = limit × (1 − 1/(|o|×0.55/limit + 1))`，横向拉伸上限 `_pullLimit = 7/32` 屏宽；**每换一格 `HapticFeedback.selectionClick()`**。
+- **松手**：透镜落到最近格子（`springSettle` 500ms bounce 0.32）、拉伸归零、`HapticFeedback.lightImpact()`、`onSelected(index)`（与当前页相同时不回调）。
+- **减少动态效果**（`MediaQuery.disableAnimations`）时全部 `jumpTo`，不做位移。
+
+刻意没抄的：hover 磁吸与透镜放大镜着色（Android 没有 hover，Web 上 blur 着色开销高）。
+格子本身**不挂 `GestureDetector`** —— 整条 dock 只有一个 `Listener` 提交选中，
+避免「格子 tap + dock drag」双份提交；无障碍语义靠每个格子的 `Semantics(button/selected/label)`。
+
+回归：`test/app_nav_bar_test.dart`（5 条：角标、点击、拖动、减少动态效果、选中语义）。
+
 ## 四、页面改造清单（每页都该有的东西）
 
 1. **首屏内容错峰进场**：主要卡片 / 列表项包 `EnterBox(index:)`。

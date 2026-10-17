@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
 import 'core/api_client.dart';
 import 'core/app_error.dart';
+import 'core/boot_splash.dart';
 import 'core/pin_guard.dart';
 import 'data/api/ledger_api.dart';
 import 'data/api/notification_api.dart';
@@ -63,4 +64,8 @@ Future<void> main() async {
       garden: GardenState(prefs: prefs, ledgerApi: ledgerApi),
     ),
   );
+
+  // 第一帧画好了就撤掉 index.html 里的 HTML 启动动画（Web 专有；其它平台是空实现）。
+  // 不撤的话它会在页面上多盖 8 秒 —— index.html 里只有 8 秒兜底。
+  WidgetsBinding.instance.addPostFrameCallback((_) => removeHtmlBootSplash());
 }

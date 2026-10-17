@@ -163,15 +163,21 @@ class _GardenPageState extends State<GardenPage> {
     final AppPalette palette = context.palette;
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
+    // 有颜色的底（成功绿 / 失败红）上写字，字色得跟着底色算：默认字色是给
+    // 深灰底配的，压在浅色主题的绿/红上就糊了
+    final Color? background = error
+        ? palette.danger
+        : success
+            ? palette.success
+            : null;
     messenger.showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Text(
+          message,
+          style: background == null ? null : TextStyle(color: palette.onColor(background)),
+        ),
         duration: const Duration(seconds: 2),
-        backgroundColor: error
-            ? palette.danger
-            : success
-                ? palette.success
-                : null,
+        backgroundColor: background,
       ),
     );
   }
@@ -296,7 +302,7 @@ class _GardenPageState extends State<GardenPage> {
           onTap: () => garden.flushPending(),
           child: Row(
             children: <Widget>[
-              Icon(Icons.cloud_upload_outlined, color: palette.primary),
+              Icon(Icons.cloud_upload_outlined, color: palette.onSoft),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
@@ -305,7 +311,11 @@ class _GardenPageState extends State<GardenPage> {
                     Row(
                       children: <Widget>[
                         // 还有东西躺在离线队列里：让这颗小点自己「呼吸」提醒
-                        PulseDot(color: palette.warning, size: 6),
+                        // （小点也压在这张强调卡的淡主色底上，颜色要跟着底走）
+                        PulseDot(
+                          color: _tintForeground(palette, palette.warning, base: palette.primarySoft),
+                          size: 6,
+                        ),
                         const SizedBox(width: AppSpacing.xs),
                         Flexible(
                           child: Text(
@@ -313,7 +323,7 @@ class _GardenPageState extends State<GardenPage> {
                             style: TextStyle(
                               fontSize: AppFontSize.sm,
                               fontWeight: FontWeight.w600,
-                              color: palette.text,
+                              color: palette.onSoft,
                               fontFeatures: kTabularNumbers,
                             ),
                           ),
@@ -322,7 +332,10 @@ class _GardenPageState extends State<GardenPage> {
                     ),
                     Text(
                       '点一下马上重试$deltaText',
-                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+                      style: TextStyle(
+                        fontSize: AppFontSize.xs,
+                        color: palette.onColorSoft(palette.primarySoft),
+                      ),
                     ),
                   ],
                 ),
@@ -332,7 +345,7 @@ class _GardenPageState extends State<GardenPage> {
                 style: TextStyle(
                   fontSize: AppFontSize.sm,
                   fontWeight: FontWeight.w700,
-                  color: palette.primary,
+                  color: palette.onSoft,
                 ),
               ),
             ],
@@ -364,7 +377,7 @@ class _GardenPageState extends State<GardenPage> {
                     label: '阳光余额',
                     number: garden.balance,
                     unit: '阳光',
-                    color: palette.warning,
+                    color: _readableAccent(palette, palette.warning),
                     icon: Icons.wb_sunny_outlined,
                   ),
                 ),
@@ -373,7 +386,7 @@ class _GardenPageState extends State<GardenPage> {
                     label: '连续学习',
                     number: garden.streakDays,
                     unit: '天',
-                    color: palette.danger,
+                    color: _readableAccent(palette, palette.danger),
                     icon: Icons.local_fire_department_outlined,
                   ),
                 ),
@@ -384,7 +397,7 @@ class _GardenPageState extends State<GardenPage> {
                     // 分母不参与滚动，只让分子滚（文案与原来一字不差）
                     formatter: (num value) => '${value.round()}/${garden.tasks.length}',
                     unit: '个',
-                    color: palette.primary,
+                    color: _readableAccent(palette, palette.primary),
                     icon: Icons.check_circle_outline,
                   ),
                 ),
@@ -595,7 +608,11 @@ class _GardenPageState extends State<GardenPage> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        Icon(_gardenIcon(item.icon), size: 18, color: palette.success),
+                        Icon(
+                          _gardenIcon(item.icon),
+                          size: 18,
+                          color: _readableAccent(palette, palette.success),
+                        ),
                         const SizedBox(width: AppSpacing.xs),
                         Text(
                           item.shortName,
@@ -631,7 +648,7 @@ class _GardenPageState extends State<GardenPage> {
                     text: '${GardenConfig.dailyTaskReward}',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: palette.warning,
+                      color: _readableAccent(palette, palette.warning),
                       fontFeatures: kTabularNumbers,
                     ),
                   ),
@@ -655,6 +672,11 @@ class _GardenPageState extends State<GardenPage> {
     required IconData icon,
     required Color color,
   }) {
+    final AppPalette palette = context.palette;
+    // 强调色当数字色用：衬不住卡片底就沿色相压一档（金色 → 深金）
+    final Color accent = _readableAccent(palette, color);
+    // 图标坐在自己的 14% 淡色块上：按「块合到底色」的真实对比度选前景色
+    final Color iconColor = _tintForeground(palette, accent);
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
       child: Column(
@@ -668,10 +690,10 @@ class _GardenPageState extends State<GardenPage> {
               color: color.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: Icon(icon, size: 18, color: color),
+            child: Icon(icon, size: 18, color: iconColor),
           ),
           const SizedBox(height: AppSpacing.sm),
-          StatBlock(label: label, number: number, formatter: formatter, unit: unit, color: color),
+          StatBlock(label: label, number: number, formatter: formatter, unit: unit, color: accent),
         ],
       ),
     );
@@ -727,7 +749,9 @@ class _GardenPageState extends State<GardenPage> {
 
   Widget _taskCard(GardenTask task, AppPalette palette) {
     final bool done = task.done;
-    final Color accent = done ? palette.success : palette.primary;
+    final Color accent = _readableAccent(palette, done ? palette.success : palette.primary);
+    // 奖励标签（+10 阳光）也落在这张卡的白底上：金色同样要压到看得清
+    final Color rewardColor = _readableAccent(palette, palette.warning);
     return AppCard(
       child: Row(
         children: <Widget>[
@@ -741,7 +765,11 @@ class _GardenPageState extends State<GardenPage> {
               color: accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: Icon(_gardenIcon(task.icon), size: 20, color: accent),
+            child: Icon(
+              _gardenIcon(task.icon),
+              size: 20,
+              color: _tintForeground(palette, accent, alpha: 0.12),
+            ),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
@@ -787,7 +815,7 @@ class _GardenPageState extends State<GardenPage> {
                   Icon(
                     Icons.wb_sunny_outlined,
                     size: 14,
-                    color: done ? palette.textTertiary : palette.warning,
+                    color: done ? palette.textTertiary : rewardColor,
                   ),
                   const SizedBox(width: AppSpacing.xs),
                   Text(
@@ -795,7 +823,7 @@ class _GardenPageState extends State<GardenPage> {
                     style: TextStyle(
                       fontSize: AppFontSize.md,
                       fontWeight: FontWeight.w700,
-                      color: done ? palette.textTertiary : palette.warning,
+                      color: done ? palette.textTertiary : rewardColor,
                       fontFeatures: kTabularNumbers,
                     ),
                   ),
@@ -840,7 +868,7 @@ class _GardenPageState extends State<GardenPage> {
                       style: TextStyle(
                         fontSize: AppFontSize.md,
                         fontWeight: FontWeight.w700,
-                        color: palette.primary,
+                        color: _readableAccent(palette, palette.primary),
                         fontFeatures: kTabularNumbers,
                       ),
                       pulse: false,
@@ -959,7 +987,8 @@ class _GardenPageState extends State<GardenPage> {
     final int percent = practice.timesPerDay > 0
         ? math.min(100, (current / practice.timesPerDay * 100).round())
         : 0;
-    final Color accent = done ? palette.success : palette.primary;
+    final Color accent = _readableAccent(palette, done ? palette.success : palette.primary);
+    final Color rewardColor = _readableAccent(palette, palette.warning);
 
     return AppCard(
       child: Column(
@@ -979,7 +1008,7 @@ class _GardenPageState extends State<GardenPage> {
                   ),
                 ),
               ),
-              if (done) Icon(Icons.check_circle, size: 20, color: palette.success),
+              if (done) Icon(Icons.check_circle, size: 20, color: accent),
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -1010,7 +1039,7 @@ class _GardenPageState extends State<GardenPage> {
                 '每次 +${practice.reward} 阳光',
                 style: TextStyle(
                   fontSize: AppFontSize.xs,
-                  color: palette.warning,
+                  color: rewardColor,
                   fontFeatures: kTabularNumbers,
                 ),
               ),
@@ -1061,7 +1090,10 @@ class _GardenPageState extends State<GardenPage> {
                     color: palette.warning.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(AppRadius.full),
                   ),
-                  child: Icon(Icons.wb_sunny_outlined, color: palette.warning),
+                  child: Icon(
+                    Icons.wb_sunny_outlined,
+                    color: _tintForeground(palette, palette.warning),
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
@@ -1089,7 +1121,7 @@ class _GardenPageState extends State<GardenPage> {
                   style: TextStyle(
                     fontSize: AppFontSize.lg,
                     fontWeight: FontWeight.w700,
-                    color: palette.success,
+                    color: _readableAccent(palette, palette.success),
                     fontFeatures: kTabularNumbers,
                   ),
                 ),
@@ -1120,7 +1152,10 @@ class _GardenPageState extends State<GardenPage> {
                     color: palette.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(AppRadius.full),
                   ),
-                  child: Icon(Icons.park_outlined, color: palette.primary),
+                  child: Icon(
+                    Icons.park_outlined,
+                    color: _tintForeground(palette, palette.primary, alpha: 0.12),
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
@@ -1198,7 +1233,11 @@ class _GardenPageState extends State<GardenPage> {
                 color: palette.success.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(AppRadius.full),
               ),
-              child: Icon(plant.icon, size: 22, color: palette.success),
+              child: Icon(
+                plant.icon,
+                size: 22,
+                color: _tintForeground(palette, palette.success, alpha: 0.12),
+              ),
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
@@ -1258,7 +1297,10 @@ class _GardenPageState extends State<GardenPage> {
                 color: palette.warning.withValues(alpha: 0.14),
                 borderRadius: BorderRadius.circular(AppRadius.full),
               ),
-              child: Icon(Icons.wb_sunny_outlined, color: palette.warning),
+              child: Icon(
+                Icons.wb_sunny_outlined,
+                color: _tintForeground(palette, palette.warning),
+              ),
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
@@ -1272,7 +1314,7 @@ class _GardenPageState extends State<GardenPage> {
               style: TextStyle(
                 fontSize: AppFontSize.xl,
                 fontWeight: FontWeight.w700,
-                color: palette.warning,
+                color: _readableAccent(palette, palette.warning),
                 fontFeatures: kTabularNumbers,
               ),
             ),
@@ -1404,6 +1446,18 @@ class _GardenPageState extends State<GardenPage> {
     final bool owned = garden.ownedItems.contains(item.id);
     final bool affordable = garden.balance >= item.cost;
     final bool inUse = _isInUse(garden, item);
+    // inUse 的这一张是 highlight 卡（淡主色底）：卡里的字与图标得按这层底重算，
+    // 否则深色主题里深色文字压在深色主色底上（1.2:1）直接看不见
+    final Color cardBase = inUse ? palette.primarySoft : palette.surface;
+    final Color titleColor = inUse ? palette.onSoft : palette.text;
+    final Color descColor =
+        inUse ? palette.onColorSoft(palette.primarySoft) : palette.textTertiary;
+    // 价格：只有 inUse 那张落在有色底上才按底色重算；普通卡上仍是原来的金色
+    final Color priceColor = !affordable
+        ? descColor
+        : inUse
+            ? _tintForeground(palette, palette.warning, base: cardBase, minRatio: 4.5)
+            : _readableAccent(palette, palette.warning);
     final Color statusColor =
         inUse || owned ? palette.success : (affordable ? palette.primary : palette.textTertiary);
     final String statusText = inUse
@@ -1426,7 +1480,11 @@ class _GardenPageState extends State<GardenPage> {
               color: palette.primary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: Icon(_gardenIcon(item.icon), size: 22, color: palette.primary),
+            child: Icon(
+              _gardenIcon(item.icon),
+              size: 22,
+              color: _tintForeground(palette, palette.primary, alpha: 0.12, base: cardBase),
+            ),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
@@ -1438,13 +1496,13 @@ class _GardenPageState extends State<GardenPage> {
                   style: TextStyle(
                     fontSize: AppFontSize.md,
                     fontWeight: FontWeight.w600,
-                    color: palette.text,
+                    color: titleColor,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   item.desc,
-                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                  style: TextStyle(fontSize: AppFontSize.xs, color: descColor),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Wrap(
@@ -1455,29 +1513,25 @@ class _GardenPageState extends State<GardenPage> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        Icon(
-                          Icons.wb_sunny_outlined,
-                          size: 14,
-                          color: affordable ? palette.warning : palette.textTertiary,
-                        ),
+                        Icon(Icons.wb_sunny_outlined, size: 14, color: priceColor),
                         const SizedBox(width: AppSpacing.xs),
                         Text(
                           '${item.cost}',
                           style: TextStyle(
                             fontSize: AppFontSize.sm,
                             fontWeight: FontWeight.w700,
-                            color: affordable ? palette.warning : palette.textTertiary,
+                            color: priceColor,
                             fontFeatures: kTabularNumbers,
                           ),
                         ),
                         const SizedBox(width: AppSpacing.xs),
                         Text(
                           '阳光',
-                          style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                          style: TextStyle(fontSize: AppFontSize.xs, color: descColor),
                         ),
                       ],
                     ),
-                    _StatusChip(label: statusText, color: statusColor),
+                    _StatusChip(label: statusText, color: statusColor, background: cardBase),
                   ],
                 ),
               ],
@@ -1488,7 +1542,8 @@ class _GardenPageState extends State<GardenPage> {
             OutlinedButton(
               onPressed: () => _handleToggle(garden, item),
               style: OutlinedButton.styleFrom(
-                foregroundColor: inUse ? palette.textSecondary : palette.primary,
+                foregroundColor:
+                    inUse ? palette.onColorSoft(palette.primarySoft) : palette.primary,
                 side: BorderSide(color: inUse ? palette.border : palette.primary),
               ),
               child: Text(inUse ? '取下' : _equipLabel(item.category)),
@@ -1583,6 +1638,21 @@ class _GardenPageState extends State<GardenPage> {
     final int totalCount = garden.badges.length;
     final int percent = totalCount > 0 ? (earnedCount / totalCount * 100).round() : 0;
 
+    // 顶上那张是 highlight 卡（淡主色底）：卡里的字与数字都得按这层底重算前景色，
+    // 否则深色主色底 + 深色文字 = 一片糊
+    final Color badgeNumColor = _tintForeground(
+      palette,
+      palette.warning,
+      base: palette.primarySoft,
+      minRatio: 4.5,
+    );
+    final Color progressNumColor = _tintForeground(
+      palette,
+      palette.primary,
+      base: palette.primarySoft,
+      minRatio: 4.5,
+    );
+
     return _pageList(<Widget>[
       AppCard(
         highlight: true,
@@ -1608,7 +1678,7 @@ class _GardenPageState extends State<GardenPage> {
                     style: TextStyle(
                       fontSize: AppFontSize.md,
                       fontWeight: FontWeight.w700,
-                      color: palette.text,
+                      color: palette.onSoft,
                     ),
                   ),
                   Text.rich(
@@ -1622,7 +1692,7 @@ class _GardenPageState extends State<GardenPage> {
                             value: earnedCount,
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: palette.warning,
+                              color: badgeNumColor,
                               fontFeatures: kTabularNumbers,
                             ),
                             pulse: false,
@@ -1631,7 +1701,10 @@ class _GardenPageState extends State<GardenPage> {
                         const TextSpan(text: ' 枚勋章'),
                       ],
                     ),
-                    style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.onColorSoft(palette.primarySoft),
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   AnimatedProgressBar(
@@ -1653,7 +1726,7 @@ class _GardenPageState extends State<GardenPage> {
                             formatter: (num value) => '${value.round()}%',
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: palette.primary,
+                              color: progressNumColor,
                               fontFeatures: kTabularNumbers,
                             ),
                             pulse: false,
@@ -1661,7 +1734,10 @@ class _GardenPageState extends State<GardenPage> {
                         ),
                       ],
                     ),
-                    style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.onColorSoft(palette.primarySoft),
+                    ),
                   ),
                 ],
               ),
@@ -1698,6 +1774,9 @@ class _GardenPageState extends State<GardenPage> {
         ? math.min(100, (current / target * 100).round())
         : 0;
     final Color accent = badge.earned ? palette.success : palette.textTertiary;
+    // 进度文字压在卡片底上：绿/金同样按底色压一档，别糊在底上
+    final Color progressTextColor =
+        badge.earned ? _readableAccent(palette, palette.success) : palette.textTertiary;
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
@@ -1714,7 +1793,11 @@ class _GardenPageState extends State<GardenPage> {
                   color: accent.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
-                child: Icon(_gardenIcon(badge.icon), size: 20, color: accent),
+                child: Icon(
+                  _gardenIcon(badge.icon),
+                  size: 20,
+                  color: _tintForeground(palette, accent),
+                ),
               ),
               const Spacer(),
               _StatusChip(
@@ -1758,7 +1841,7 @@ class _GardenPageState extends State<GardenPage> {
                       formatter: (num value) => '${value.round()}/$target',
                       style: TextStyle(
                         fontSize: AppFontSize.xs,
-                        color: badge.earned ? palette.success : palette.textTertiary,
+                        color: progressTextColor,
                         fontFeatures: kTabularNumbers,
                       ),
                       pulse: false,
@@ -1857,6 +1940,7 @@ class _GardenPageState extends State<GardenPage> {
   /// （对应 Web 版 RecordsPage 的 `List.Item`）
   Widget _doneTaskRow(GardenTask task, AppPalette palette) {
     final DateTime? at = task.completedAt;
+    final Color rewardColor = _readableAccent(palette, palette.warning);
     final String timeText = at == null
         ? ''
         : '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
@@ -1889,7 +1973,7 @@ class _GardenPageState extends State<GardenPage> {
             ],
           ),
         ),
-        Icon(Icons.wb_sunny_outlined, size: AppFontSize.sm, color: palette.warning),
+        Icon(Icons.wb_sunny_outlined, size: AppFontSize.sm, color: rewardColor),
         const SizedBox(width: AppSpacing.xs),
         AnimatedCount(
           value: task.reward,
@@ -1897,7 +1981,7 @@ class _GardenPageState extends State<GardenPage> {
           style: TextStyle(
             fontSize: AppFontSize.sm,
             fontWeight: FontWeight.w700,
-            color: palette.warning,
+            color: rewardColor,
             fontFeatures: kTabularNumbers,
           ),
         ),
@@ -1920,6 +2004,11 @@ class _GardenPageState extends State<GardenPage> {
             : palette.success;
     final String? statusLabel = record.status?.label;
     final String timeText = _timeLabel(record.createdAt);
+    // 金额也是卡片底上的强调色：正绿 / 负红都按底色压一档
+    final Color amountColor = _readableAccent(
+      palette,
+      record.amount >= 0 ? palette.success : palette.danger,
+    );
 
     return Row(
       children: <Widget>[
@@ -1955,13 +2044,58 @@ class _GardenPageState extends State<GardenPage> {
           style: TextStyle(
             fontSize: AppFontSize.md,
             fontWeight: FontWeight.w700,
-            color: record.amount >= 0 ? palette.success : palette.danger,
+            color: amountColor,
             fontFeatures: kTabularNumbers,
           ),
         ),
       ],
     );
   }
+}
+
+// ---- 对比度小工具 ----
+
+/// [fg] 压在 [bg] 上的对比度（WCAG 口径，1~21）
+double _contrastRatio(Color fg, Color bg) {
+  final double a = fg.computeLuminance();
+  final double b = bg.computeLuminance();
+  return (math.max(a, b) + 0.05) / (math.min(a, b) + 0.05);
+}
+
+/// 强调色铺在自己的半透明色块上时（块里的图标、胶囊里的字），该用的前景色。
+///
+/// 浅色主题里「金色 icon 坐在淡金色块上」这类同色系撞色只有 ~1.8:1，整块糊成一片；
+/// 这里按「色块合到底色之后」的真实颜色算对比度：衬不住就换 [AppPalette.onColor]
+/// （同色系近黑 / 近白），衬得住就原样保留强调色 —— 不动原有的视觉语言。
+Color _tintForeground(
+  AppPalette palette,
+  Color accent, {
+  double alpha = 0.14,
+  Color? base,
+  double minRatio = 3,
+}) {
+  final Color blended = Color.alphaBlend(accent.withValues(alpha: alpha), base ?? palette.surface);
+  return _contrastRatio(accent, blended) >= minRatio ? accent : palette.onColor(blended);
+}
+
+/// 强调色当正文 / 图标色用时的前景色（数字、奖励标签、勋章进度这类）。
+///
+/// 金色数字压在卡片白底上只有 ~2:1，跟底色糊在一起；衬不住就朝「底色的对色」
+/// 方向压一档，压到够 [minRatio] 为止 —— 色相留着（金 → 深金），只动字色。
+Color _readableAccent(
+  AppPalette palette,
+  Color accent, {
+  Color? base,
+  double minRatio = 4.5,
+}) {
+  final Color surface = base ?? palette.surface;
+  if (_contrastRatio(accent, surface) >= minRatio) return accent;
+  final Color target = palette.onColor(surface);
+  for (double t = 0.1; t <= 1.0001; t += 0.1) {
+    final Color mixed = Color.lerp(accent, target, t) ?? target;
+    if (_contrastRatio(mixed, surface) >= minRatio) return mixed;
+  }
+  return target;
 }
 
 // ---- 复用的小组件 ----
@@ -1984,7 +2118,9 @@ class _GardenLoading extends StatelessWidget {
           style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
         ),
         const SizedBox(height: AppSpacing.md),
-        const Expanded(child: SkeletonList(count: 3)),
+        // 铺 4 张带左侧圆钮的卡片，形状跟真实的「今日任务」卡一致（loading 一结束
+        // 就是同一排卡片，不会先看见一种形状再跳成另一种）
+        const Expanded(child: SkeletonList(count: 4, lines: 2, showLeading: true)),
       ],
     );
   }
@@ -2082,7 +2218,8 @@ class _MenuChip extends StatelessWidget {
           Icon(
             _gardenIcon(menu.icon),
             size: 18,
-            color: selected ? palette.primary : palette.textTertiary,
+            // 选中态整颗胶囊是 highlight（淡主色底），字与图标都跟着这层底走
+            color: selected ? palette.onSoft : palette.textTertiary,
           ),
           const SizedBox(width: AppSpacing.xs),
           Text(
@@ -2090,7 +2227,7 @@ class _MenuChip extends StatelessWidget {
             style: TextStyle(
               fontSize: AppFontSize.sm,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? palette.primary : palette.textSecondary,
+              color: selected ? palette.onSoft : palette.textSecondary,
             ),
           ),
         ],
@@ -2122,7 +2259,8 @@ class _CheckButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.full),
           border: Border.all(color: done ? palette.success : palette.border, width: 2),
         ),
-        child: done ? Icon(Icons.check, size: 22, color: palette.surface) : null,
+        // 勾压在实心 success 底上：字色跟底色算，别拿卡片底色（surface）当字色
+        child: done ? Icon(Icons.check, size: 22, color: palette.onColor(palette.success)) : null,
       ),
     );
   }
@@ -2130,13 +2268,17 @@ class _CheckButton extends StatelessWidget {
 
 /// 状态小胶囊（正在用 / 已拥有 / 可以兑换 / 阳光不够 / 已获得…）
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label, required this.color});
+  const _StatusChip({required this.label, required this.color, this.background});
 
   final String label;
   final Color color;
 
+  /// 胶囊实际压在哪层底上：卡片默认 [AppPalette.surface]，highlight 卡要显式传淡主色底
+  final Color? background;
+
   @override
   Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
       decoration: BoxDecoration(
@@ -2145,7 +2287,19 @@ class _StatusChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(fontSize: AppFontSize.xs, fontWeight: FontWeight.w600, color: color),
+        // 小字压在自己的淡色块上：按「块合到底色」的真实对比度挑字色（浅色主题里
+        // 金色小字坐在淡金块上只有 ~1.8:1，整块糊成一片）
+        style: TextStyle(
+          fontSize: AppFontSize.xs,
+          fontWeight: FontWeight.w600,
+          color: _tintForeground(
+            palette,
+            color,
+            alpha: 0.14,
+            base: background ?? palette.surface,
+            minRatio: 4.5,
+          ),
+        ),
       ),
     );
   }

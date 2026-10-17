@@ -156,6 +156,10 @@ class _RoleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    // 选中时底色是「强调色 12% 合到卡片底上」：里面的字/图标一律按这层底取色，
+    // 不能再指望 palette.text（强调色淡底上压深字在部分主题里会糊）
+    final Color selectedBase =
+        Color.alphaBlend(color.withValues(alpha: 0.12), palette.surface);
     return SizedBox(
       width: 320,
       child: AnimatedScale(
@@ -170,7 +174,9 @@ class _RoleCard extends StatelessWidget {
             curve: AppMotion.standard,
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              color: selected ? color.withValues(alpha: 0.12) : palette.surface,
+              // 选中底用「算好的实色」而不是半透明色：设了背景图时半透明会透出照片，
+              // 卡片和上面的字都跟着糊；这层实色 = 12% 强调色合到 surface 上，观感一致、对比度可算
+              color: selected ? selectedBase : palette.surface,
               borderRadius: BorderRadius.circular(AppRadius.lg),
               border: Border.all(
                 color: selected ? color : palette.border,
@@ -199,18 +205,26 @@ class _RoleCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: AppFontSize.md,
                           fontWeight: FontWeight.w600,
-                          color: palette.text,
+                          color: selected ? palette.onColor(selectedBase) : palette.text,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
-                        style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+                        style: TextStyle(
+                          fontSize: AppFontSize.xs,
+                          color: selected
+                              ? palette.onColorSoft(selectedBase)
+                              : palette.textSecondary,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right, color: palette.textTertiary),
+                Icon(
+                  Icons.chevron_right,
+                  color: selected ? palette.onColorSoft(selectedBase) : palette.textTertiary,
+                ),
               ],
             ),
           ),

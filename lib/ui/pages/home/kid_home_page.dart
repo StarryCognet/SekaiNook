@@ -174,6 +174,20 @@ String _familyPath(String tab) => '/family?$_familyTabParam=$tab';
 /// 主题色的浅底（妹妹版的「发光」= 主色浅底 + 柔和阴影，不用硬编码色值）
 Color _accentTint(Color color) => Color.alphaBlend(color.withValues(alpha: 0.14), Colors.transparent);
 
+/// 「14% 有色浅底」（[_accentTint] 那种图标盒）上该用的图标 / 文字色。
+///
+/// [_accentTint] 给的是半透明色、实际合成在卡片底上，所以这里拿卡片底当合成基色
+/// 判断明暗 —— 深底配亮字、浅底配深字（见 [AppPalette.onColor]）。直接把主色当字色，
+/// 在午夜蓝这类深色主题里会和深底糊在一起。
+Color _onAccentTint(AppPalette palette, Color color) => palette.onColor(
+  Color.alphaBlend(color.withValues(alpha: 0.14), palette.cardColor(hasBackground: false)),
+);
+
+/// 「14% 有色浅底」上的次要文字色（说明、备注这种）
+Color _onAccentTintSoft(AppPalette palette, Color color) => palette.onColorSoft(
+  Color.alphaBlend(color.withValues(alpha: 0.14), palette.cardColor(hasBackground: false)),
+);
+
 /// 妹妹版首页：一眼看到「今天要做什么、我赚了多少、妈妈说了什么」。
 ///
 /// 对应 Web 版 `src/views/home/KidHome.tsx`。数据来自 [FamilyState]（家庭账本）、
@@ -560,7 +574,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     final String momName = settings.momName;
     if (kidName.isEmpty && momName.isEmpty) {
       // 首屏还没拿到称呼：铺骨架屏，不要整页转圈（LoadingView 留给局部）
-      return const SafeArea(child: SkeletonList(count: 4, lines: 2));
+      return const SafeArea(child: _HomeSkeleton());
     }
 
     // 花园进度（分子分母同口径，都来自 garden.tasks）
@@ -701,7 +715,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
               EnterBox(index: 10, child: _noticeCard(palette, now, momName, latestNotice)),
             ],
             _gapSm,
-            EnterBox(index: 11, child: _grid(palette, momName, notices.unreadCount)),
+            EnterBox(index: 10, child: _grid(palette, momName, notices.unreadCount)),
           ],
         ),
       ),
@@ -732,13 +746,21 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     final garden_models.GardenShopItem? avatarItem = _shopItem(garden.equippedAvatar);
     final garden_models.GardenShopItem? titleItem = _shopItem(garden.equippedTitle);
     final TextStyle chipStyle = _chipStyle(palette);
+    // hero 是一整块「有色底」：这里的字 / 图标一律取 onSoft / onColorSoft 派生色，不取 text*。
+    // 原来的渐变是 `primarySoft → 卡片底`，跨了「深半 / 浅半」两段（原始主题 #2A2A4A → 白），
+    // 任何单一字色都会在其中一半上糊掉；收成同族的 `主色 → 主色浅调` 后整块底才是一个色系。
+    final Color heroText = palette.onSoft;
+    final Color heroSoft = palette.onColorSoft(palette.primarySoft);
+    // 称号小药丸：原来「16% 警告色盖在渐变上」，合成结果随位置变、算不出前景色；
+    // 换成实色警告底，底色确定，字色就能确定地取 onColor。
+    final Color titleChipText = palette.onColor(palette.warning);
 
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[palette.primarySoft, palette.cardColor(hasBackground: false)],
+          colors: <Color>[palette.primary, palette.primarySoft],
         ),
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: palette.primary),
@@ -763,7 +785,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                             style: TextStyle(
                               fontSize: AppFontSize.lg,
                               fontWeight: FontWeight.w700,
-                              color: palette.text,
+                              color: heroText,
                             ),
                           ),
                         ),
@@ -775,7 +797,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                               vertical: AppSpacing.xs,
                             ),
                             decoration: BoxDecoration(
-                              color: palette.warning.withValues(alpha: 0.16),
+                              color: palette.warning,
                               borderRadius: BorderRadius.circular(AppRadius.full),
                               border: Border.all(color: palette.warning),
                             ),
@@ -784,7 +806,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                               style: TextStyle(
                                 fontSize: AppFontSize.xs,
                                 fontWeight: FontWeight.w600,
-                                color: palette.warning,
+                                color: titleChipText,
                               ),
                             ),
                           ),
@@ -794,7 +816,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                     _gapXs,
                     Text(
                       _dateText(now),
-                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+                      style: TextStyle(fontSize: AppFontSize.xs, color: heroSoft),
                     ),
                   ],
                 ),
@@ -848,14 +870,14 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: <Widget>[
-              Icon(Icons.wb_sunny_outlined, size: AppFontSize.lg, color: palette.warning),
+              Icon(Icons.wb_sunny_outlined, size: AppFontSize.lg, color: heroText),
               const SizedBox(width: AppSpacing.xs),
               AnimatedCount(
                 value: garden.balance,
                 style: TextStyle(
                   fontSize: AppFontSize.num,
                   fontWeight: FontWeight.w800,
-                  color: palette.warning,
+                  color: heroText,
                   fontFeatures: kTabularNumbers,
                   shadows: <Shadow>[
                     Shadow(color: palette.warning.withValues(alpha: 0.35), blurRadius: AppSpacing.md),
@@ -868,14 +890,14 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                 style: TextStyle(
                   fontSize: AppFontSize.sm,
                   fontWeight: FontWeight.w600,
-                  color: palette.textSecondary,
+                  color: heroSoft,
                 ),
               ),
             ],
           ),
           Text(
             '花园里的阳光，会存进家里的账本，换手机也在',
-            style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+            style: TextStyle(fontSize: AppFontSize.xs, color: heroSoft),
           ),
           _gapSm,
           Wrap(
@@ -1260,7 +1282,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                 child: Icon(
                   _gardenIcon(task.icon),
                   size: AppFontSize.md,
-                  color: palette.primary,
+                  color: _onAccentTint(palette, palette.primary),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -1471,7 +1493,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                 style: TextStyle(
                   fontSize: AppFontSize.xs,
                   fontWeight: FontWeight.w600,
-                  color: done ? palette.textTertiary : palette.text,
+                  color: done ? palette.textTertiary : _onAccentTint(palette, palette.primary),
                 ),
               ),
               _gapXs,
@@ -1480,7 +1502,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                 style: TextStyle(
                   fontSize: AppFontSize.md,
                   fontWeight: FontWeight.w700,
-                  color: done ? palette.success : palette.primary,
+                  color: done ? palette.success : _onAccentTint(palette, palette.primary),
                   fontFeatures: kTabularNumbers,
                 ),
               ),
@@ -1766,7 +1788,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                   child: Icon(
                     entry.icon,
                     size: AppFontSize.md,
-                    color: palette.primary,
+                    color: _onAccentTint(palette, palette.primary),
                   ),
                 ),
                 if (entry.badge > 0)
@@ -1786,7 +1808,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                         style: TextStyle(
                           fontSize: AppFontSize.xs,
                           fontWeight: FontWeight.w700,
-                          color: palette.surface,
+                          color: palette.onColor(palette.danger),
                           fontFeatures: kTabularNumbers,
                         ),
                       ),
@@ -2123,6 +2145,12 @@ class _CheckInSheetState extends State<_CheckInSheet> {
     final AppPalette palette = context.palette;
     final TaskConfig task = widget.task;
     final String unit = task.unit;
+    // 摘要盒是一层「有色浅底」：底色和它上面的字色都由同一个值派生，才不会各算各的
+    final Color summaryColor = _isDeduct ? palette.danger : palette.success;
+    final Color summaryTint = Color.alphaBlend(
+      summaryColor.withValues(alpha: 0.14),
+      palette.cardColor(hasBackground: false),
+    );
 
     return Dialog(
       insetPadding: const EdgeInsets.all(AppSpacing.md),
@@ -2151,7 +2179,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 decoration: BoxDecoration(
-                  color: _accentTint(_isDeduct ? palette.danger : palette.success),
+                  color: summaryTint,
                   borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: Column(
@@ -2162,7 +2190,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                       style: TextStyle(
                         fontSize: AppFontSize.sm,
                         fontWeight: FontWeight.w700,
-                        color: _isDeduct ? palette.danger : palette.success,
+                        color: palette.onColor(summaryTint),
                         fontFeatures: kTabularNumbers,
                       ),
                     ),
@@ -2170,7 +2198,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                       _gapXs,
                       Text(
                         task.description!,
-                        style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+                        style: TextStyle(fontSize: AppFontSize.xs, color: _onAccentTintSoft(palette, summaryColor)),
                       ),
                     ],
                   ],
@@ -2286,6 +2314,64 @@ class _CheckInSheetState extends State<_CheckInSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 首屏骨架屏：形状贴着真实内容铺（顶部 hero + 中间几张卡 + 底部宫格），
+/// 与加载完成后逐块浮入的 [EnterBox] 一脉相承（对应 `docs/motion-kit.md` 第五节）。
+class _HomeSkeleton extends StatelessWidget {
+  const _HomeSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.xl,
+      ),
+      children: const <Widget>[
+        // 顶部 hero：问候 + 日期 + 大数字 + 一行说明
+        EnterBox(
+          index: 0,
+          child: AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                SkeletonLine(widthFactor: 0.5, height: AppFontSize.lg),
+                SizedBox(height: AppSpacing.sm),
+                SkeletonLine(widthFactor: 0.26, height: AppFontSize.xs),
+                SizedBox(height: AppSpacing.xl),
+                SkeletonBox(width: AppSpacing.xl * 4, height: AppFontSize.xl),
+                SizedBox(height: AppSpacing.sm),
+                SkeletonLine(widthFactor: 0.78, height: AppFontSize.xs),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(height: AppSpacing.sm),
+        // 中间几张卡：图标 + 两行文字
+        SkeletonList(
+          count: 3,
+          lines: 2,
+          padding: EdgeInsets.only(top: AppSpacing.sm),
+        ),
+        SizedBox(height: AppSpacing.sm),
+        // 底部宫格：四列入口
+        Row(
+          children: <Widget>[
+            Expanded(child: SkeletonBox(height: AppSpacing.xl + AppSpacing.md)),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(child: SkeletonBox(height: AppSpacing.xl + AppSpacing.md)),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(child: SkeletonBox(height: AppSpacing.xl + AppSpacing.md)),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(child: SkeletonBox(height: AppSpacing.xl + AppSpacing.md)),
+          ],
+        ),
+      ],
     );
   }
 }

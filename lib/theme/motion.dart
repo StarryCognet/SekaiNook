@@ -68,6 +68,35 @@ abstract final class AppMotion {
   /// 软弹簧：大幅位移用（弹层、抽屉）
   static final Curve springSoft = SpringCurve(stiffness: 340, damping: 26);
 
+  // ------------------------------------------------------------------
+  // 弹簧（喂给 SpringDriver —— 需要「保留速度」的原生模拟）
+  // ------------------------------------------------------------------
+  //
+  // 参数取自 FlClash（`widgets/navigation_dock.dart:62-79`），用「时长 + 回弹」
+  // 描述弹簧，比手调 mass/stiffness/damping 直观。
+
+  /// 跟手：追指针，不回弹（不能有回弹，否则跟手会抖）
+  static final SpringDescription springTrack =
+      SpringDescription.withDurationAndBounce(duration: const Duration(milliseconds: 120));
+
+  /// 按下：轻微回弹，Q 感的来源之一
+  static final SpringDescription springPress = SpringDescription.withDurationAndBounce(
+    duration: const Duration(milliseconds: 280),
+    bounce: 0.2,
+  );
+
+  /// 落位：明显回弹一下 —— 底部 Tab 透镜滑动「Q 弹」主要靠它
+  static final SpringDescription springSettle = SpringDescription.withDurationAndBounce(
+    duration: const Duration(milliseconds: 500),
+    bounce: 0.32,
+  );
+
+  /// 次级落位：比落位快一点、弹得少一点
+  static final SpringDescription springHover = SpringDescription.withDurationAndBounce(
+    duration: const Duration(milliseconds: 260),
+    bounce: 0.18,
+  );
+
   /// 硬弹簧：小控件用（按钮回弹、指示器）
   static final Curve springSnappy = SpringCurve(stiffness: 720, damping: 32);
 

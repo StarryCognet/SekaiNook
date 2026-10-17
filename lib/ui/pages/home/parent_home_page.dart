@@ -112,6 +112,15 @@ String _relativeTime(DateTime at, DateTime now) {
 /// 带符号金额（与 `LedgerRecord.signedAmount` 同口径）
 String _signed(int amount) => amount > 0 ? '+$amount' : '$amount';
 
+/// 「14% 有色浅底」上该用的图标 / 文字色。
+///
+/// 图标盒那种底色是半透明的（`alphaBlend(色 14%, transparent)`），实际合成在卡片底上，
+/// 所以这里拿卡片底当合成基色判断明暗 —— 深底配亮字、浅底配深字（见 [AppPalette.onColor]）。
+/// 直接拿 `palette.primary` / `palette.success` 当图标色，在午夜蓝这类深色主题里会糊在底上。
+Color _tintOn(AppPalette palette, Color color) => palette.onColor(
+  Color.alphaBlend(color.withValues(alpha: 0.14), palette.cardColor(hasBackground: false)),
+);
+
 /// 账本分页在路由里的查询参数名。
 ///
 /// 对应 Web 版 `goLedger(tab)` 的 `setViewState('family.activeTab', ...)` 搬到地址栏：
@@ -225,18 +234,24 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
   void _toast(String message, {bool success = false, bool error = false, bool warning = false}) {
     final AppPalette palette = context.palette;
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    // 有颜色的底（成功绿 / 失败红 / 警示橙）上写字，字色得跟着底色算：
+    // 主题默认字色是给深灰底配的，压在浅色主题的绿/橙上就糊了。
+    final Color? background = error
+        ? palette.danger
+        : success
+            ? palette.success
+            : warning
+                ? palette.warning
+                : null;
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Text(
+          message,
+          style: background == null ? null : TextStyle(color: palette.onColor(background)),
+        ),
         duration: const Duration(seconds: 2),
-        backgroundColor: error
-            ? palette.danger
-            : success
-                ? palette.success
-                : warning
-                    ? palette.warning
-                    : null,
+        backgroundColor: background,
       ),
     );
   }
@@ -357,7 +372,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
     final String kidName = settings.kidName;
     // 称呼还没到位时用骨架屏占住首屏（判定逻辑不变，只换「加载中」的样子）
     if (momName.isEmpty && kidName.isEmpty) {
-      return const SafeArea(child: SkeletonList(count: 3));
+      return const SafeArea(child: _HomeSkeleton());
     }
 
     final DateTime now = _now;
@@ -382,7 +397,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
     return Scaffold(
       body: SafeArea(
         child: family.loading && family.records.isEmpty && !_loadFailed
-            ? const SkeletonList(count: 4)
+            ? const _HomeSkeleton()
             : ListView(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.md,
@@ -524,7 +539,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                               style: TextStyle(
                                 fontSize: AppFontSize.xl,
                                 fontWeight: FontWeight.w800,
-                                color: family.pendingCount > 0 ? palette.warning : palette.text,
+                                color: family.pendingCount > 0 ? palette.warningInk : palette.text,
                                 fontFeatures: kTabularNumbers,
                               ),
                             ),
@@ -705,7 +720,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                   ),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
-                child: Icon(icon, size: AppFontSize.md, color: palette.primary),
+                child: Icon(icon, size: AppFontSize.md, color: _tintOn(palette, palette.primary)),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -908,12 +923,14 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                 palette,
                 '收入',
                 week.income,
-                palette.success,
+                palette.successInk,
                 formatter: (num value) => '+${value.round()}',
               ),
-              _statCell(palette, '支出', week.expense, palette.danger),
-              _statCell(palette, '净额', week.net, palette.primary),
-              _statCell(palette, '打卡次数', week.checkins, palette.warning),
+              // 这几格是「中性卡片底上的彩色数字」：得用 ink 家族（保住涨红跌绿的含义，
+              // 同时压到 4.5:1）。直接拿 warning #F5A623 当字色在白卡上只有 1.7:1。
+              _statCell(palette, '支出', week.expense, palette.dangerInk),
+              _statCell(palette, '净额', week.net, palette.primaryInk),
+              _statCell(palette, '打卡次数', week.checkins, palette.warningInk),
             ],
           ),
           _gapMd,
@@ -1149,7 +1166,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                   child: Icon(
                     Icons.savings_outlined,
                     size: AppFontSize.md,
-                    color: palette.success,
+                    color: _tintOn(palette, palette.success),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -1240,7 +1257,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                         style: TextStyle(
                           fontSize: AppFontSize.xs,
                           fontWeight: FontWeight.w700,
-                          color: palette.surface,
+                          color: palette.onColor(palette.danger),
                           fontFeatures: kTabularNumbers,
                         ),
                       ),
@@ -1328,7 +1345,7 @@ class _BalanceTrend extends StatelessWidget {
                   BarTooltipItem(
                 '${_label(group.x)}  ${_signed(rod.toY.round())}',
                 TextStyle(
-                  color: palette.surface,
+                  color: palette.onColor(palette.text),
                   fontSize: AppFontSize.xs,
                   fontFeatures: kTabularNumbers,
                 ),
@@ -1342,16 +1359,23 @@ class _BalanceTrend extends StatelessWidget {
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
+                // 14 根柱子全画标签会糊成一片：每 3 天留一个（0/3/6/9/12 共 5 个），
+                // 写法与 `family_dashboard_page.dart` 里的同类图一致。
                 reservedSize: AppSpacing.lg,
                 interval: 1,
                 getTitlesWidget: (double value, TitleMeta meta) {
                   final int index = value.round();
                   if (index < 0 || index >= _trendDays) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                  if (index % 3 != 0) return const SizedBox.shrink();
+                  return SideTitleWidget(
+                    meta: meta,
                     child: Text(
                       _label(index),
-                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                      style: TextStyle(
+                        fontSize: AppFontSize.xs,
+                        color: palette.textSecondary,
+                        fontFeatures: kTabularNumbers,
+                      ),
                     ),
                   );
                 },
@@ -1488,6 +1512,55 @@ class _ConfirmDialog extends StatelessWidget {
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
           child: Text(okText),
+        ),
+      ],
+    );
+  }
+}
+
+/// 首屏骨架屏：形状贴着真实内容铺（顶部 hero 卡 + 下面几张卡片），
+/// 与加载完成后逐块浮入的 [EnterBox] 一脉相承（对应 `docs/motion-kit.md` 第五节）。
+class _HomeSkeleton extends StatelessWidget {
+  const _HomeSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.xl,
+      ),
+      children: const <Widget>[
+        // 顶部那张：问候 + 日期 + 左右两格统计
+        EnterBox(
+          index: 0,
+          child: AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                SkeletonLine(widthFactor: 0.44, height: AppFontSize.lg),
+                SizedBox(height: AppSpacing.sm),
+                SkeletonLine(widthFactor: 0.28, height: AppFontSize.xs),
+                SizedBox(height: AppSpacing.md),
+                Row(
+                  children: <Widget>[
+                    Expanded(child: SkeletonBox(height: AppFontSize.xl)),
+                    SizedBox(width: AppSpacing.md),
+                    Expanded(child: SkeletonBox(height: AppFontSize.xl)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(height: AppSpacing.sm),
+        // 下面几张：图标 + 两行文字的卡片
+        SkeletonList(
+          count: 3,
+          lines: 2,
+          padding: EdgeInsets.only(top: AppSpacing.sm),
         ),
       ],
     );

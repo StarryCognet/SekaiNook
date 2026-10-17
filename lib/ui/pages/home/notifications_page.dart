@@ -225,7 +225,19 @@ class _NotificationsPageState extends State<NotificationsPage> {
     );
   }
 
+  /// 把「语义色 + 透明度」的淡色块合到它实际铺着的那层底上 —— 得到的就是眼睛看到的
+  /// 背景色，再交给 [AppPalette.onColor] / [AppPalette.onColorSoft] 取字色。
+  ///
+  /// 淡色块的 alpha 只有 10%～12%，所以合成底基本等于它下面那层（页面底 / 卡片底）；
+  /// 设了背景图时底下是照片 + 薄纱，拿 palette.bg 当近似值，量级上足够判断亮暗。
+  static Color _tinted(Color color, Color base, [double alpha = 0.12]) =>
+      Color.alphaBlend(color.withValues(alpha: alpha), base);
+
   Widget _buildNotice(AppPalette palette, String message) {
+    // 12% 的警示色盖在页面底上 —— 这层淡色块本身就是「有色底」：
+    // 字和图标都要取它合成后的实际颜色的 onColor（原始主题下 amber 色写在 amber 淡底
+    // 上只有 1.7:1，图标和说明都会看不清）。
+    final Color noticeFill = _tinted(palette.warning, palette.bg);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.sm),
@@ -237,12 +249,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(Icons.info_outline, size: 16, color: palette.warning),
+          Icon(Icons.info_outline, size: 16, color: palette.onColor(noticeFill)),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               message,
-              style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+              style: TextStyle(
+                fontSize: AppFontSize.xs,
+                color: palette.onColorSoft(noticeFill),
+              ),
             ),
           ),
         ],
@@ -251,6 +266,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   Widget _buildRefreshFailedBar(AppPalette palette) {
+    // 同样的道理：10% 的危险色淡底上，文字取合成底的 onColorSoft
+    final Color barFill = _tinted(palette.danger, palette.bg, 0.1);
     return Container(
       margin: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -273,7 +290,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
           Expanded(
             child: Text(
               '通知没刷新成功，下面是上次看到的内容',
-              style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+              style: TextStyle(
+                fontSize: AppFontSize.xs,
+                color: palette.onColorSoft(barFill),
+              ),
             ),
           ),
           TextButton(
@@ -354,7 +374,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
               style: TextStyle(
                 fontSize: AppFontSize.xs,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: selected ? palette.primary : palette.textSecondary,
+                // 选中态的底是实色的 palette.segmentedSelected（有色底），
+                // 字色按它算：午夜蓝 / 石墨黑下 primary 写在这个底上会发闷
+                color: selected
+                    ? palette.onColor(palette.segmentedSelected)
+                    : palette.textSecondary,
                 fontFeatures: kTabularNumbers,
               ),
             ),
@@ -371,8 +395,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
     bool unreadOnly,
   ) {
     if (state.loading && state.items.isEmpty) {
-      // 首屏骨架屏，别只留一句「正在读取」
-      return const SkeletonList(count: 3);
+      // 首屏骨架屏：形状照着通知卡摆（图标块 + 标题 / 正文 / 时间三行）
+      return const _NotifySkeleton();
     }
     if (state.error != null && state.items.isEmpty) {
       return ErrorView(message: state.error!, onRetry: _reload);
@@ -422,6 +446,17 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   Widget _buildItem(AppPalette palette, NotificationRecord item) {
     final color = _colorFor(palette, item.type);
+    // 未读卡的底是 AppCard.highlight 的填充色 palette.primarySoft —— 那是有色底：
+    // 正文 / 副文字必须走 onColor / onColorSoft，否则原始主题（深 navy 底写深 navy 字，
+    // primary 和 text 是同一个 #1A1A2E）与午夜蓝都会糊成一片。
+    // 已读卡是中性卡底，沿用 text / textSecondary / textTertiary。
+    final Color? unreadFill = item.isUnread ? palette.primarySoft : null;
+    final Color titleColor =
+        unreadFill == null ? palette.text : palette.onColor(unreadFill);
+    final Color bodyColor =
+        unreadFill == null ? palette.textSecondary : palette.onColorSoft(unreadFill);
+    final Color metaColor =
+        unreadFill == null ? palette.textTertiary : palette.onColorSoft(unreadFill);
     return AppCard(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       highlight: item.isUnread,
@@ -449,14 +484,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   style: TextStyle(
                     fontSize: AppFontSize.sm,
                     fontWeight: item.isUnread ? FontWeight.w600 : FontWeight.w400,
-                    color: palette.text,
+                    color: titleColor,
                   ),
                 ),
                 if (item.body != null && item.body!.isNotEmpty) ...<Widget>[
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     item.body!,
-                    style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+                    style: TextStyle(fontSize: AppFontSize.xs, color: bodyColor),
                   ),
                 ],
                 const SizedBox(height: AppSpacing.xs),
@@ -464,7 +499,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   _relativeTime(item.createdAt),
                   style: TextStyle(
                     fontSize: AppFontSize.xs,
-                    color: palette.textTertiary,
+                    color: metaColor,
                     fontFeatures: kTabularNumbers,
                   ),
                 ),
@@ -531,5 +566,62 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
     return '$month-$day $hour:$minute';
+  }
+}
+
+/// 通知列表的骨架屏：一张卡 = 32×32 图标块 + 「标题 / 正文 / 时间」三行，
+/// 形状照着 [_NotificationsPageState._buildItem] 摆 —— 加载完不会「跳」一下。
+class _NotifySkeleton extends StatelessWidget {
+  const _NotifySkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.lg,
+      ),
+      children: <Widget>[
+        for (int i = 0; i < 4; i++)
+          EnterBox(
+            index: i,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  // 骨架屏只在加载的那一两秒出现，用实色卡底即可
+                  color: palette.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  border: Border.all(color: palette.border),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    SkeletonBox(width: 32, height: 32, radius: AppRadius.md),
+                    SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          SkeletonLine(widthFactor: 0.5),
+                          SizedBox(height: AppSpacing.sm),
+                          SkeletonLine(widthFactor: 0.86, height: 12),
+                          SizedBox(height: AppSpacing.sm),
+                          SkeletonLine(widthFactor: 0.26, height: 12),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }

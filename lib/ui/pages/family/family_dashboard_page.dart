@@ -563,9 +563,10 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       );
     }
 
-    // 首屏加载改骨架屏（加载 / 失败 / 空的判定逻辑不变，只换「加载中」的视觉）
+    // 首屏加载改骨架屏（加载 / 失败 / 空的判定逻辑不变，只换「加载中」的视觉）：
+    // 按账本页的形状铺 —— 余额大卡 + 今日卡 + 一张流水列表卡
     if (state.loading && state.records.isEmpty) {
-      return const SkeletonList(count: 3);
+      return const _LedgerSkeleton();
     }
 
     return RefreshIndicator(
@@ -808,7 +809,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             children: <Widget>[
               Expanded(
                 child: FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: palette.success),
+                  // 实色底上的字 / 图标要按这层底色取，不能沿用主题给「主色」配的 onPrimary
+                  style: FilledButton.styleFrom(
+                    backgroundColor: palette.success,
+                    foregroundColor: palette.onColor(palette.success),
+                  ),
                   onPressed: homeworkTask == null || _isDone(homeworkTask, records)
                       ? null
                       : () => _startCheckIn(homeworkTask, records: records),
@@ -887,10 +892,17 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   alignment: BarChartAlignment.spaceAround,
                   barTouchData: BarTouchData(
                     touchTooltipData: BarTouchTooltipData(
+                      // fl_chart 的 tooltip 底色默认是写死的深蓝灰（不是 palette 派生的），
+                      // 深色主题下 palette.surface 也是深色，字会埋进底里。这里按全站
+                      // tooltipTheme 的同一口径反着来：底 = 正文色，字 = 它的 onColor。
+                      getTooltipColor: (BarChartGroupData group) => palette.text,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) =>
                           BarTooltipItem(
                         '${labels[group.x]}\n${rod.toY.toInt()} 积分',
-                        TextStyle(color: palette.surface, fontSize: AppFontSize.xs),
+                        TextStyle(
+                          color: palette.onColor(palette.text),
+                          fontSize: AppFontSize.xs,
+                        ),
                       ),
                     ),
                   ),
@@ -1001,6 +1013,10 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         TabBar(
           controller: controller,
           onTap: (tapped) => _goTab(labels[tapped]),
+          // 选中项的底是实色的 segmentedSelected，字色必须按它算 ——
+          // 石墨黑下 primary 写在这个底上只有 2.5:1，几乎糊在一起
+          labelColor: palette.onColor(palette.segmentedSelected),
+          unselectedLabelColor: palette.textSecondary,
           // 高亮块在选项之间滑动 —— 仍由 URL 派生出来的 controller 驱动，没有自持状态
           indicator: BoxDecoration(
             color: palette.segmentedSelected,
@@ -1033,7 +1049,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                           '${state.pendingCount}',
                           style: TextStyle(
                             fontSize: AppFontSize.xs,
-                            color: palette.surface,
+                            // 实色红底上的数字：surface 在深色主题里也是深色，会看不见
+                            color: palette.onColor(palette.danger),
                             fontFeatures: kTabularNumbers,
                           ),
                         ),
@@ -1185,6 +1202,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         child: FilledButton(
           style: FilledButton.styleFrom(
             backgroundColor: color,
+            // 实色底上的字 / 图标：按这层底色取（success / danger 都不是主色）
+            foregroundColor: palette.onColor(color),
             disabledBackgroundColor: palette.softColor(
               hasBackground:
                   context.select<ThemeState, bool>((state) => state.background.isNotEmpty),
@@ -1385,7 +1404,13 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
               color: palette.primarySoft,
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: Icon(Icons.fact_check_outlined, size: 16, color: palette.primary),
+            // primarySoft 是实色有色底：原始主题里 primary 与它是同一族的深 navy
+            // （#1A1A2E 写 #2A2A4A 上），这个图标原来等于看不见（约 1.1:1）
+            child: Icon(
+              Icons.fact_check_outlined,
+              size: 16,
+              color: palette.onColor(palette.primarySoft),
+            ),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
@@ -1423,13 +1448,23 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
                         backgroundColor: positive ? palette.success : palette.danger,
+                        foregroundColor: palette.onColor(
+                          positive ? palette.success : palette.danger,
+                        ),
                       ),
                       onPressed: approving ? null : () => _approve(record.id),
                       icon: approving
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 14,
                               height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              // 转圈也算按钮上的「前景」：默认的 primary 写在
+                              // success / danger 实心底上会跟底色撞
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: palette.onColor(
+                                  positive ? palette.success : palette.danger,
+                                ),
+                              ),
                             )
                           : const Icon(Icons.check_circle_outline, size: 16),
                       label: const Text('通过'),
@@ -1713,6 +1748,10 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              // 实色红底上的字按这层底色取，而不是主题给主色配的 onPrimary
+              foregroundColor: dialogContext.palette.onColor(
+                Theme.of(dialogContext).colorScheme.error,
+              ),
             ),
             onPressed: () {
               Navigator.of(dialogContext).pop();
@@ -1726,7 +1765,21 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   }
 
   /// 小圆角标签（状态 / 身份）
+  ///
+  /// 底色是「语义色 12% 盖在卡片底上」的合成色 —— 它也是一层有色底，所以字和图标
+  /// 取这层实际颜色的 onColor。原来字色直接用语义色本身：原始主题下 warning 色写在自己
+  /// 的 12% 淡底上只有 1.9:1（状态标签基本读不出来），success/danger 也只有 3.1/3.3。
+  /// 底色与描边不动。
   Widget _pill({required String text, required Color color, IconData? icon}) {
+    final palette = context.palette;
+    final Color pillFill = Color.alphaBlend(
+      color.withValues(alpha: 0.12),
+      palette.cardColor(
+        hasBackground:
+            context.select<ThemeState, bool>((state) => state.background.isNotEmpty),
+      ),
+    );
+    final Color onPill = palette.onColor(pillFill);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
       decoration: BoxDecoration(
@@ -1738,10 +1791,10 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           if (icon != null) ...<Widget>[
-            Icon(icon, size: 12, color: color),
+            Icon(icon, size: 12, color: onPill),
             const SizedBox(width: AppSpacing.xs),
           ],
-          Text(text, style: TextStyle(fontSize: AppFontSize.xs, color: color)),
+          Text(text, style: TextStyle(fontSize: AppFontSize.xs, color: onPill)),
         ],
       ),
     );
@@ -1780,6 +1833,10 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: Theme.of(builderContext).colorScheme.error,
+                // 同上：实色红底上的字按这层底色取
+                foregroundColor: builderContext.palette.onColor(
+                  Theme.of(builderContext).colorScheme.error,
+                ),
               ),
               onPressed: _rejecting
                   ? null
@@ -1966,10 +2023,14 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                               }
                             },
                       child: uploading
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              // 主色实心按钮上的转圈：默认也是 primary，会跟底撞成一片
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: palette.onPrimary,
+                              ),
                             )
                           : Text(isParent ? '确认记账' : '提交申请'),
                     ),
@@ -2147,4 +2208,95 @@ class _RecordThumb extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 账本页的骨架屏：余额大卡 + 今日卡 + 一张流水列表卡（左图标块 / 两行文字 / 右侧数字），
+/// 形状照着余额卡、今日卡、流水行摆 —— 加载完换成真内容时不会「跳」一下。
+class _LedgerSkeleton extends StatelessWidget {
+  const _LedgerSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.xl,
+      ),
+      children: <Widget>[
+        EnterBox(
+          index: 0,
+          child: _skeletonCard(palette, <Widget>[
+            const SkeletonLine(widthFactor: 0.34),
+            const SizedBox(height: AppSpacing.md),
+            const SkeletonBox(width: 132, height: 40, radius: AppRadius.sm),
+            const SizedBox(height: AppSpacing.sm),
+            const SkeletonLine(widthFactor: 0.2, height: 12),
+          ]),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        EnterBox(
+          index: 1,
+          child: _skeletonCard(palette, <Widget>[
+            const SkeletonLine(widthFactor: 0.42),
+            const SizedBox(height: AppSpacing.md),
+            const SkeletonLine(widthFactor: 0.3, height: 24),
+            const SizedBox(height: AppSpacing.sm),
+            const SkeletonLine(widthFactor: 0.5, height: 12),
+            const SizedBox(height: AppSpacing.md),
+            const SkeletonLine(widthFactor: 1.0, height: 6),
+          ]),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        EnterBox(
+          index: 2,
+          child: _skeletonCard(palette, <Widget>[
+            const SkeletonLine(widthFactor: 0.3),
+            const SizedBox(height: AppSpacing.md),
+            for (int i = 0; i < 4; i++) ...<Widget>[
+              if (i > 0) const SizedBox(height: AppSpacing.md),
+              const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  SkeletonBox(width: 32, height: 32, radius: AppRadius.md),
+                  SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        SkeletonLine(widthFactor: 0.45),
+                        SizedBox(height: AppSpacing.sm),
+                        SkeletonLine(widthFactor: 0.7, height: 12),
+                      ],
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.sm),
+                  SkeletonBox(width: 44, height: 18, radius: AppRadius.sm),
+                ],
+              ),
+            ],
+          ]),
+        ),
+      ],
+    );
+  }
+}
+
+/// 骨架屏的卡壳（与 AppCard 同形：实色卡底 + 描边 + lg 圆角）
+Widget _skeletonCard(AppPalette palette, List<Widget> children) {
+  return Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: palette.surface,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      border: Border.all(color: palette.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    ),
+  );
 }

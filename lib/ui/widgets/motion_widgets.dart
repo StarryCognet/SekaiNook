@@ -13,4 +13,5 @@ export 'motion/celebrate.dart';
 export 'motion/enter_box.dart';
 export 'motion/press_scale.dart';
 export 'motion/skeleton.dart';
+export 'motion/spring_driver.dart';
 export 'motion/switcher.dart';
