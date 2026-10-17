@@ -23,7 +23,7 @@
 
 ```jsonc
 {
-  "version": 1,
+  "version": 2,
   "generatedAt": "2026-10-17T10:00:00.000Z",
   "groups": [
     {
@@ -88,7 +88,7 @@
   "durationMs": 1830,
   "env": { "db": "sekainook", "origin": "https://sekainook.pages.dev", "now": "…", "worker": "https://sekainook-reminder.3398377037.workers.dev" },
   "params": { "dryRun": true, "simulateDone": 2, "now": "…", "…": "…" },   // 本轮实际生效的参数（回显）
-  "summary": { "total": 70, "passed": 51, "failed": 0, "skipped": 19, "warned": 0 },
+  "summary": { "total": 71, "passed": 52, "failed": 0, "skipped": 19, "warned": 0 },
   "results": [
     {
       "id": "ledger.summary.reconcile",
@@ -117,7 +117,7 @@
 
 | 分组 | id | 覆盖 |
 | --- | --- | --- |
-| 环境与部署 | `env` | 绑定可查、关键表存在、迁移版本、CORS 预检、404 形态、`/sw.js` 有 push 监听、`/manifest.webmanifest` 可读 |
+| 环境与部署 | `env` | 绑定可查、关键表存在（含 `changelog`）、迁移版本、CORS 预检、404 形态、`/sw.js` 有 push 监听、`/manifest.webmanifest` 可读、**版本日志已上云**（`GET /api/changelog` 的条数/顺序/最新版本） |
 | 账本 | `ledger` | 列表结构、待审批过滤、**余额对账**、写入幂等、未知任务 403、日限拦截、审批/驳回/重新提交/删除全链路、结算幂等 |
 | 任务规则 | `rules` | 12 条任务规则与服务端逐条对账、睡觉卡时间窗、完成数口径（helper vs 独立 SQL）、客户端上报的表/周标签/罚款常量对账 |
 | 每周学习计划 | `plans` | 列表结构、非法周标签、进度夹取值并还原、幂等初始化 |

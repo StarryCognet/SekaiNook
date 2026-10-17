@@ -35,3 +35,6 @@ npm-debug.log*
 
 # 测试 / 覆盖率
 coverage/
+
+# 版本日志同步时生成的 SQL（内容来自 src/config/changelog.ts，别提交）
+migrations/.changelog-sync.sql

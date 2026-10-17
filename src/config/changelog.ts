@@ -1,20 +1,34 @@
 /**
- * 版本日志 —— 唯一数据源。
- * 每次迭代改动后，在此追加一条新版本记录（version 递增、date 更新、changes 描述本次改动）。
- * 设置页会按版本倒序展示。
+ * 版本日志 —— 内容的唯一编辑入口（真源在 D1 的 changelog 表，这里是播种 + 兜底）。
+ *
+ * 每次迭代改动后，在此追加一条新版本记录（version 递增、date 更新、changes 描述本次改动），
+ * 再执行 `npm run changelog:sync` 把它推上 D1 —— 网页版和 Flutter 版都从
+ * `GET /api/changelog` 读同一份，改一处两端都看得见，不用各自发版（以前正是这里疼）。
+ *
+ * 接口拿不到内容时（表没迁移 / 还没播种 / 断网），两端各自退回自己 bundle 里这一份兜底，
+ * 所以它必须一直保持完整可构建；设置页会按版本倒序展示。
+ * 详细口径见 docs/版本日志云端化.md。
  */
-export interface ChangelogEntry {
-  version: string;
-  date: string;
-  title: string;
-  changes: string[];
-}
+import type { ChangelogEntry } from '../types/changelog';
+
+export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '1.30.8';
+export const APP_VERSION = '1.31.0';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.31.0',
+    date: '2026-10-17 22:40:00',
+    title: '版本日志搬上云端：网页版和 App 从此看的是同一份',
+    changes: [
+      '版本日志以前在网页版和 App 里各存一份（存在代码里），改一边另一边不跟着变 —— 这次接上时 App 还停在 1.30.6，网页版已经到 1.30.8。现在两份都从云端数据库读同一份，以后加一条日志，两边同时就能看到，不用等对方发版',
+      '设置页「关于」里的版本日志卡底部多了一行小字，会说清现在这份是「已与云端同步」还是「暂时读不到云端，显示的是本机内置的那一份」—— 没网、或者云端还没布置好时，照旧能看完整的版本历史',
+      '管理员的「全站自检」里多了一条「版本日志已上云」：以前「数据库迁移跑了、但忘了把日志内容传上去」是看不出异常的（两端都会安静地退回各自内置的那份），现在这条检查会直接点出来',
+      '换设备、清缓存、重装都不用担心日志口径不一致：新版本发布时把日志同步到云端一次，之后网页版、安卓、iOS 看到的完全一样',
+    ],
+  },
   {
     version: '1.30.8',
     date: '2026-10-17 15:30:00',

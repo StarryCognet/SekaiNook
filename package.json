@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "deploy": "npm run build && wrangler pages deploy",
     "db:migrate:local": "wrangler d1 migrations apply sekainook --local",
-    "db:migrate:remote": "wrangler d1 migrations apply sekainook --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply sekainook --remote",
+    "changelog:sync": "node scripts/changelog-sync.mjs sync",
+    "changelog:sync:local": "node scripts/changelog-sync.mjs sync --local",
+    "changelog:fallback": "node scripts/changelog-sync.mjs fallback",
+    "changelog:fallback:check": "node scripts/changelog-sync.mjs fallback --check"
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.0",

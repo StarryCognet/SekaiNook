@@ -37,6 +37,7 @@ const EXPECTED_TABLES = [
   'notifications',
   'settings',
   'push_subscriptions',
+  'changelog',
   'd1_migrations',
 ];
 
@@ -60,7 +61,7 @@ async function checkTables(ctx: SelftestCtx): Promise<SelftestOutcome> {
       '按顺序跑 npx wrangler d1 migrations apply sekainook --local / --remote'
     );
   }
-  return ok(`6 张表齐全（共 ${names.size} 张）`);
+  return ok(`7 张表齐全（共 ${names.size} 张）`);
 }
 
 async function checkMigrations(ctx: SelftestCtx): Promise<SelftestOutcome> {
@@ -70,10 +71,64 @@ async function checkMigrations(ctx: SelftestCtx): Promise<SelftestOutcome> {
   const names = (result.results ?? []).map((row) => row.name);
   if (names.length === 0) return fail('d1_migrations 是空的', '数据库还没跑过任何迁移');
   const latest = names[names.length - 1] ?? '';
-  if (!latest.startsWith('0005')) {
-    return warn(`最新迁移是 ${latest}，期望 0005_push_subscriptions.sql`, { migrations: names });
+  if (!latest.startsWith('0006')) {
+    return warn(`最新迁移是 ${latest}，期望 0006_changelog.sql`, { migrations: names });
   }
   return ok(`${names.length} 条迁移，最新 ${latest}`, { migrations: names });
+}
+
+/**
+ * 版本日志（0006 之后上的云）。
+ *
+ * 为什么要专门查一条：上云之后「迁移跑了、但忘了同步内容」是个**静默失败** ——
+ * 接口会老老实实回 ready:false，两端也照常显示（各自退回 bundle 里那份兜底），
+ * 页面上一片祥和，只有日志停在旧版本。这条检查就是把这个坑照出来。
+ */
+interface ChangelogPayload {
+  version?: unknown;
+  entries?: unknown;
+  ready?: unknown;
+}
+
+async function checkChangelog(ctx: SelftestCtx): Promise<SelftestOutcome> {
+  const res = await ctx.api('/api/changelog');
+  if (!res.ok) return fail(`GET /api/changelog 返回 ${res.status}`);
+  const data = await readJson<ChangelogPayload>(res);
+  if (!data || !Array.isArray(data.entries)) return fail('返回里没有 entries 数组', undefined, data);
+
+  const rows = data.entries as Array<Record<string, unknown>>;
+  if (rows.length === 0 || data.ready !== true) {
+    return warn(
+      '云端还没有版本日志（两端会退回各自 bundle 里那份）',
+      '先跑 npm run db:migrate:remote，再跑 npm run changelog:sync'
+    );
+  }
+
+  const broken = rows.filter(
+    (row) =>
+      typeof row.version !== 'string' ||
+      typeof row.date !== 'string' ||
+      typeof row.title !== 'string' ||
+      !Array.isArray(row.changes)
+  );
+  if (broken.length > 0) {
+    return fail(`${broken.length} 条日志字段不全`, 'version/date/title/changes 缺一不可', head(broken));
+  }
+
+  const versions = rows.map((row) => String(row.version));
+  if (new Set(versions).size !== versions.length) {
+    return fail('版本号有重复', 'version 是主键，重复说明同步把表写坏了');
+  }
+  if (data.version !== versions[0]) {
+    return fail(`返回的 version（${String(data.version)}）不是第一条（${versions[0]}）`);
+  }
+
+  const empty = rows.filter((row) => (row.changes as unknown[]).length === 0);
+  if (empty.length > 0) {
+    return warn(`${empty.length} 条日志没有改动条目`, { versions: empty.map((row) => String(row.version)) });
+  }
+
+  return ok(`${rows.length} 条版本日志，最新 v${versions[0]}`, { latest: versions[0] });
 }
 
 async function checkCors(ctx: SelftestCtx): Promise<SelftestOutcome> {
@@ -395,8 +450,9 @@ async function checkClientCompletion(ctx: SelftestCtx): Promise<SelftestOutcome>
 
 export const CORE_ITEMS: SelftestItem[] = [
   { id: 'env.bindings', name: '绑定可查询', desc: 'DB / R2 / 提醒 Worker 配置', group: 'env', side: 'server', estMs: 30, run: checkBindings },
-  { id: 'env.tables', name: '关键表齐全', desc: '6 张表的建表状态', group: 'env', side: 'server', estMs: 30, run: checkTables },
-  { id: 'env.migrations', name: '迁移版本', desc: 'd1_migrations 最新一条是否为 0005', group: 'env', side: 'server', estMs: 30, run: checkMigrations },
+  { id: 'env.tables', name: '关键表齐全', desc: '7 张表的建表状态', group: 'env', side: 'server', estMs: 30, run: checkTables },
+  { id: 'env.migrations', name: '迁移版本', desc: 'd1_migrations 最新一条是否为 0006', group: 'env', side: 'server', estMs: 30, run: checkMigrations },
+  { id: 'env.changelog', name: '版本日志已上云', desc: 'GET /api/changelog 的条数、顺序与最新版本', group: 'env', side: 'server', estMs: 80, run: checkChangelog },
   { id: 'env.cors', name: 'CORS 预检', desc: 'OPTIONS /api/ledger 的响应头', group: 'env', side: 'server', estMs: 60, run: checkCors },
   { id: 'env.notfound', name: '未知路径 404', desc: '不存在的 /api 路径的形态', group: 'env', side: 'server', estMs: 60, run: checkNotFound },
   { id: 'env.sw', name: 'Service Worker', desc: '/sw.js 是否带 push / notificationclick', group: 'env', side: 'server', estMs: 80, run: checkServiceWorker },

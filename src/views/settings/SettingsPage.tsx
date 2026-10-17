@@ -45,7 +45,9 @@ import {
   displayName,
   validateName,
 } from "../../types/settings";
+import type { ChangelogEntry } from "../../types/changelog";
 import { scanOrphanImages, deleteOrphanImages } from "../../api/maintenance";
+import { fetchChangelog } from "../../api/changelog";
 import {
   adjustLedgerPoints,
   changeAdminPassword,
@@ -334,6 +336,13 @@ export default function SettingsPage() {
 
   // 版本日志折叠：默认收起
   const [logExpanded, setLogExpanded] = useState(false);
+  /**
+   * 要展示的版本日志：先摆上 bundle 里那份（立刻有内容，不用等网络），
+   * 云端那份读到了再整体替换 —— 真源在 D1，网页版和 Flutter 版看的才是同一份。
+   */
+  const [logEntries, setLogEntries] = useState<readonly ChangelogEntry[]>(CHANGELOG);
+  /** 上面那份是不是云端来的；false = 正在用 bundle 兜底 */
+  const [logFromCloud, setLogFromCloud] = useState(false);
 
   // 切家长口令验证弹窗
   const [pinModalOpen, setPinModalOpen] = useState(false);
@@ -448,9 +457,9 @@ export default function SettingsPage() {
   ];
 
   const visibleLog = logExpanded
-    ? CHANGELOG
-    : CHANGELOG.slice(0, RECENT_LOG_COUNT);
-  const hiddenLogCount = Math.max(0, CHANGELOG.length - RECENT_LOG_COUNT);
+    ? logEntries
+    : logEntries.slice(0, RECENT_LOG_COUNT);
+  const hiddenLogCount = Math.max(0, logEntries.length - RECENT_LOG_COUNT);
 
   /** 进第二层：顺手把滚动拉回顶部，否则会落在上一层停留的位置 */
   const openSection = (id: SectionId) => {
@@ -497,6 +506,26 @@ export default function SettingsPage() {
     if (!namesReady || !namesDirty) return;
     writeNameDraft(nameTarget, { call: callInput, nickname: nicknameInput });
   }, [namesReady, namesDirty, nameTarget, callInput, nicknameInput]);
+  // 版本日志以云端为准（D1 那张表是两个客户端共用的）；读不到就继续用 bundle 里那份兜底。
+  // 不设 loading：本地那份立刻就在，云端到了再换，中途不会有空窗。
+  useEffect(() => {
+    let alive = true;
+    fetchChangelog()
+      .then((data) => {
+        if (!alive || !data.ready || !Array.isArray(data.entries) || data.entries.length === 0) {
+          return;
+        }
+        setLogEntries(data.entries);
+        setLogFromCloud(true);
+      })
+      .catch(() => {
+        // 表没迁移 / 还没同步 / 断网都会走到这儿。日志是次要信息，不弹提示打扰用户，
+        // 页面继续显示本机内置的那份（角标会说明「暂时读不到云端」）。
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
   // 弹窗 / 第二层打开时接管安卓返回键：返回键先退一层，而不是退出设置页
   useBackButton(section !== null, closeSection);
   useBackButton(pinModalOpen, () => setPinModalOpen(false));
@@ -1534,13 +1563,19 @@ export default function SettingsPage() {
                   icon={<DownOutlined />}
                   onClick={() => setLogExpanded(true)}
                 >
-                  展开全部（共 {CHANGELOG.length} 个版本）
+                  展开全部（共 {logEntries.length} 个版本）
                 </Button>
                 <div className={styles.logHint}>
                   收起时只显示最近 {RECENT_LOG_COUNT} 个版本，还有 {hiddenLogCount} 个更早的在里面
                 </div>
               </>
             )}
+            {/* 数据来源说明：日志存在云端 D1 里，网页版和 Flutter 版读的是同一份 */}
+            <div className={styles.logHint}>
+              {logFromCloud
+                ? "已与云端同步：网页版和 Flutter 版看的是同一份日志"
+                : "暂时读不到云端，显示的是本机内置的那一份"}
+            </div>
           </div>
         </Card>
       </section>

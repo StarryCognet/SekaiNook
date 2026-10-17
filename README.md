@@ -49,7 +49,7 @@
 - **打卡规则在服务端**：分数、任务名、每天次数上限与可打卡时间段由 `functions/_lib/rules.ts` 唯一维护；`POST /api/ledger` 一律忽略客户端报上来的分数与审批状态，按规则改写（花园类任务即时到账、家庭任务一律 pending 交家长审批），每次打卡自带唯一 id，重试或离线补发只入账一次，越出时间窗或超过每天次数返回 409 并给出「今天已经打过卡啦」「每天最多 N 次」
 - **称呼可改、跨设备同步**：视角以自己的角度出发 —— 妈妈的手机上看到的是「女儿」，女儿的手机上看到的是「妈妈」。设置页「称呼设置」里，女儿改妈妈那半（称呼 + 昵称），妈妈改女儿那半；昵称优先，没填昵称才用称呼；存在云端 `settings` 表，换设备打开是同一套名字（站内通知文案也跟着改口）
 - **主题与背景**：设置页「外观」里可切换**七套主题** —— 原始（浅色深蓝主色，出厂默认）、樱花粉、森林绿、暖阳橙（四套浅色）、午夜蓝、暗夜红、石墨黑（三套深色，晚上看不刺眼；石墨黑照那份《Mobile App UI》规范做的：近黑底 + 白墨 + 发丝线 + 玻璃胶囊）；每套主题都带完整配色（卡片、描边、阴影、底部毛玻璃导航、提示色块、手机地址栏颜色一起换），切完整站一起变（首页的女儿版 / 妈妈版、账本、学习计划、花园、设置全都跟着换）；顶栏**右上角那颗太阳 / 月亮按钮**可一键在浅色与深色之间来回，回的是你上次各用的那一套（比如白天樱花粉、晚上暗夜红）；主题记在本机（各设备各选），背景图存在云端（各设备一致）。也能选一张照片上传当全局背景图，卡片自动半透明、文字保持清晰；正在使用的背景图不会被「闲置照片清理」误删
-- **设置页 `/settings`**：两层结构 —— 外层只列大类入口（外观 / 家庭 / 家长管理，每个入口带一句现状概述，比如「现在是『午夜蓝』主题 · 已设背景图」），点进去在第二层改具体项、顶部「‹ 设置」返回，此时外层的「关于」与版本日志一起让位、只看这一组设置；退回入口列表它们再回来。应用信息与版本日志不分层，版本日志默认收起（只显示最近 3 个版本）可展开全部 / 收起。各层内容：外观（主题、全局背景图）、家庭（切换身份、设置对方称呼）、家长管理（修改家长口令、扫描并清理云端闲置打卡照片），当前 v1.29.0
+- **设置页 `/settings`**：两层结构 —— 外层只列大类入口（外观 / 家庭 / 家长管理，每个入口带一句现状概述，比如「现在是『午夜蓝』主题 · 已设背景图」），点进去在第二层改具体项、顶部「‹ 设置」返回，此时外层的「关于」与版本日志一起让位、只看这一组设置；退回入口列表它们再回来。应用信息与版本日志不分层，版本日志默认收起（只显示最近 3 个版本）可展开全部 / 收起，内容优先读云端 `/api/changelog` —— **改版本只改 `src/config/changelog.ts` 一处，再 `npm run changelog:sync`**，网页版与 Flutter 版读到的就是同一份；云端够不着时自动退回本机 bundle 里那份。各层内容：外观（主题、全局背景图）、家庭（切换身份、设置对方称呼）、家长管理（修改家长口令、扫描并清理云端闲置打卡照片），当前 v1.31.0
 - **多端导航**：PC 固定侧边栏 + 面包屑（菜单选中项是圆角胶囊），顶栏右侧是「积分小胶囊（点进家庭账本）+ 通知铃铛（未读挂角标）+ 日/月两段式深浅开关」；手机端为一对悬浮毛玻璃胶囊 —— 顶部是「当前页图标 + 页面名」加右侧的铃铛与深浅开关，底部是 Tab 栏（首页 / 家庭 / 计划 / 花园 / 设置，选中项的高光是一块会走的**毛玻璃片**（顶部高光 + 发丝边 + 内外两层落影）：短按换标签时它沿一条真弹簧滑到位（跨 1~3 格是同一套单弹簧手感：过冲 18% / 17% / 16%，所以跨一格只甩出去十几像素、越短越轻，时长 0.55 ~ 0.70 秒；跨 4 格刻意换成一快一慢两条弹簧叠加 —— 首峰加大到 23%（约 64px），之后尾巴慢慢收，还能再摆两三次（7.4% → 2.0% → 0.5%），时长 1.15 秒；这一档是故意牺牲一点物理一致性换灵动）；**长按 0.17 秒就能把它「拿起来」** —— 那一项跟着放大、玻璃按手指速度被横向拉长、身后还拖着一道模糊水痕，松手落到哪一项就弹到哪一项；图标转实心、再点当前标签回顶部、切换标签保留各页位置与筛选）；**手机端往下滑看内容时顶栏向上、Tab 栏向下各自滑走让出屏幕，往上滑或回到顶部原路滑回来（0.3 秒过渡）**；七套主题共用同一套导航结构，颜色全走主题变量（换主题时导航栏一起换）
 - **PWA**：可「添加到主屏幕」当 App 用（manifest + Service Worker 缓存静态资源；接口数据仍然实时请求、永不缓存）
 
@@ -106,6 +106,9 @@ npm run deploy
 
 # 线上数据库迁移
 npm run db:migrate:remote
+
+# 把版本日志同步到线上 D1（改完 src/config/changelog.ts 后跑；本地库用 changelog:sync:local）
+npm run changelog:sync
 ```
 
 ### 环境变量与绑定
@@ -119,7 +122,7 @@ npm run db:migrate:remote
 
 ### 数据分层
 
-- **D1 云端（跨设备共享）**：`family_ledger`（积分流水）、`weekly_plans`（每周学习计划）、`notifications`（站内通知收件箱）、`settings`（家庭称呼 + 全局背景图等跨设备设置）；图片存 R2
+- **D1 云端（跨设备共享）**：`family_ledger`（积分流水）、`weekly_plans`（每周学习计划）、`notifications`（站内通知收件箱）、`settings`（家庭称呼 + 全局背景图等跨设备设置）、`changelog`（版本日志，网页版与 Flutter 版读同一份）；图片存 R2
 - **localStorage 本地（各设备独立）**：当前身份角色、家长口令摘要与失败锁定计数、花园的装备与本机界面状态（阳光本身已进云端账本）、导航与筛选等界面状态（`sessionStorage`）
 
 ### 装到手机桌面（PWA）
@@ -144,6 +147,7 @@ functions/api/            # 后端接口（文件路径即 URL 路径）
 ├── notifications/[id].ts     # PATCH /api/notifications/:id（标记已读 / 未读）
 ├── notifications/read-all.ts # POST  /api/notifications/read-all（整格信箱一键已读）
 ├── settings/index.ts     #   GET/PATCH    /api/settings（家庭称呼 + 全局背景图，跨设备同步）
+├── changelog/index.ts    #   GET          /api/changelog（版本日志，网页版与 App 共用一份）
 ├── push/key.ts           #   GET          /api/push/key（Web Push 的 VAPID 公钥）
 ├── push/subscribe.ts     #   POST/DELETE  /api/push/subscribe（浏览器推送订阅落库 / 退订）
 ├── push/test.ts          #   POST         /api/push/test（设置页「发一条测试通知」：Pages 用令牌转发 Worker）
@@ -152,7 +156,7 @@ functions/api/            # 后端接口（文件路径即 URL 路径）
 └── maintenance/orphans.ts #  GET/POST     /api/maintenance/orphans（闲置照片扫描 / 清理）
 functions/_lib/           # 后端共用模块（不下划线开头会被当成路由，所以放 _lib）
 functions/_lib/selftest/  # 自检清单与执行器（types / helpers / checks-core / checks-rules / checks-rest）
-migrations/               # D1 建表 SQL（编号递增，必须幂等；0002 给流水加 member 列，0003 建通知表，0004 建 settings 键值表，0005 建推送订阅表）
+migrations/               # D1 建表 SQL（编号递增，必须幂等；0002 给流水加 member 列，0003 建通知表，0004 建 settings 键值表，0005 建推送订阅表，0006 建版本日志表）
 public/_routes.json       # 声明 Functions 只接管 /api/*
 public/_redirects         # SPA 路由回退 /* → /index.html 200
 public/sw.js              # Service Worker（静态资源缓存 + Web Push 的 push / notificationclick 处理）
@@ -162,7 +166,7 @@ workers/reminder/         # 独立 cron Worker：每天 21:30 提醒还差几个
 src/
 ├── api/            # 数据访问层（http.ts 统一 REST 客户端 + familyLedger/familyTasks/upload/notifications）
 ├── components/     # 通用组件（加载/空/错误态、身份选择门、打卡弹窗、花园图标）
-├── config/         # 业务规则唯一数据源（任务、学习计划、花园配置、版本日志）
+├── config/         # 业务规则唯一数据源（任务、学习计划、花园配置、版本日志的编辑入口）
 ├── layouts/        # 主布局（PC 侧边栏 + 移动端底部导航）、花园布局
 ├── store/          # zustand 全局状态（积分流水/审批/身份/口令、花园）
 ├── theme/          # 设计令牌（颜色/间距/圆角）
@@ -209,6 +213,7 @@ src/
 | POST | `/api/notifications/read-all` | 整格信箱一键已读（请求体 `{"audience":"parent"\|"child"}`） |
 | GET | `/api/settings` | 读取家庭称呼与全局背景图（`{ names: { momCall, momNickname, kidCall, kidNickname }, background, ready }`，`ready=false` = settings 表还没迁移） |
 | PATCH | `/api/settings` | 部分更新称呼或背景图（只传要改的字段，称呼最多 12 字，留空回默认「妈妈 / 女儿」；`background` 只能是本站 `/api/images/` 地址，传空串 = 移除背景图） |
+| GET | `/api/changelog` | 版本日志（最新在前，`{ version, entries, ready }`；`ready=false` = 版本日志表还没迁移或还没同步，客户端用自己那份兜底） |
 | GET | `/api/push/key` | 手机提醒的 VAPID 公钥（`{ publicKey, subject, ready }`，`ready=false` = 订阅表还没迁移） |
 | POST | `/api/push/subscribe` | 保存浏览器推送订阅（`{ endpoint, keys: { p256dh, auth }, audience?: "parent"\|"child" }`，`audience` 缺省 `child`；按 endpoint 幂等 upsert） |
 | DELETE | `/api/push/subscribe` | 退订（请求体 `{ endpoint }`，取不到时回退 `?endpoint=`） |
@@ -242,7 +247,7 @@ src/
 
 「设置 → 管理员」里有一块自检面板（Web 与 Flutter 两端都有，**清单只有一份**，由服务端下发）：
 把绑定/迁移/CORS、流水读写幂等、任务规则、周计划、通知、称呼、图片、推送、管理员口令与节流、
-时间戳等 **70 个检查项**跑一遍，可勾选、可改参数（`dryRun` / `dayKey` / `taskId` / 通道 / 自定义推送文案…）、
+时间戳、版本日志是否已上云等 **71 个检查项**跑一遍，可勾选、可改参数（`dryRun` / `dayKey` / `taskId` / 通道 / 自定义推送文案…）、
 可套用预设、可导出 JSON 与 Markdown。写操作的检查项在 `dryRun` 下只「预演」不落库，真跑时自己清理。
 契约（清单结构、参数表、客户端检查项、导出格式）见 [`docs/selftest-console.md`](docs/selftest-console.md)。
 

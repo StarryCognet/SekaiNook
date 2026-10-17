@@ -11,8 +11,8 @@ import { REST_ITEMS } from './checks-rest';
 import { skip } from './helpers';
 import type { SelftestGroup, SelftestItem, SelftestPreset } from './types';
 
-/** 清单版本：客户端会把它显示出来，改动检查项集合时 +1 */
-export const SELFTEST_VERSION = 1;
+/** 清单版本：客户端会把它显示出来，改动检查项集合时 +1（0006 起多了 env.changelog） */
+export const SELFTEST_VERSION = 2;
 
 export const SELFTEST_GROUPS: SelftestGroup[] = [
   { id: 'env', name: '环境与部署', desc: '绑定、数据表、迁移、CORS、静态资源' },
