@@ -11,10 +11,19 @@ export interface ChangelogEntry {
 }
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '1.30.7';
+export const APP_VERSION = '1.30.8';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.30.8',
+    date: '2026-10-17 15:30:00',
+    title: '修好手机端账本被裁的问题：卡片不再横向溢出',
+    changes: [
+      '手机上（≤768px）账本页会把两列摊平成一个网格，网格项默认「不许比内容更窄」，结果整列被顶到 505px —— 余额卡右侧、每条流水的金额 / 状态 / 删除按钮全被推到屏幕外；现在按 375px 实测逐一压回可收缩，一屏之内全都看得见',
+      '右列补上 min-width:0，PC 端也不会再被内容顶宽',
+    ],
+  },
   {
     version: '1.30.7',
     date: '2026-10-17 14:48:00',

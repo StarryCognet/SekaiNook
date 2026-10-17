@@ -16,6 +16,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 }
 
 /* ===== 余额卡片 ===== */
@@ -476,6 +477,15 @@
   /* 已完成折叠区在手机上单列，和上面的任务按钮一致 */
   .doneList {
     grid-template-columns: 1fr;
+  }
+
+  /* 手机端 .leftCol/.rightCol 被 display:contents 摊平后，它们的子元素直接成为
+     网格项，而网格项默认 min-width:auto 会被内容顶宽 —— 实测 375 视口下整列被撑到
+     505px，余额卡与记录行右侧（金额 / 状态 / 按钮）全被推到屏幕外裁掉。这里压回可收缩。 */
+  .balanceCard,
+  .todayCard,
+  .tabs {
+    min-width: 0;
   }
 
   /* 余额数字缩小，适配窄屏 */
