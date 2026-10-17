@@ -1306,3 +1306,34 @@ delta !== 0 → INSERT 一条 approved 流水：
 - [ ] 设了全局背景图后，该图**不会**被判为闲置。
 - [ ] `POST /api/maintenance/orphans {}` → 400 `危险操作：请在请求体中传入 {"confirm": true} 以确认清理闲置照片`。
 - [ ] `POST {"confirm":true}` → 200 `{deleted,failed,keys}`；再扫描 `orphans` 归零。
+
+## 21. 手机提醒（`/api/push/*`）与全站自检（`/api/admin/selftest`）
+
+> 这两组接口是 Web Push 提醒与「设置 → 管理员 → 全站自检」用的。**完整契约在 Web 仓库**：
+> [`docs/selftest-console.md`](../../SekaiNook/docs/selftest-console.md)（自检）、
+> [`workers/reminder/README.md`](../../SekaiNook/workers/reminder/README.md)（提醒 Worker）。
+> 下面是 Flutter 端要用到的要点。
+
+### 21.1 推送订阅
+
+- `GET /api/push/key` → `{publicKey, subject, ready}`；`ready:false` = 订阅表还没迁移（VAPID 公钥没配）。
+- `POST /api/push/subscribe` body `{endpoint, keys:{p256dh,auth}, audience?}`（`audience` 缺省 `child`）→ 200 `{ok:true,endpoint}`；
+  `endpoint` 必须 `https://` 开头、`keys.p256dh`/`keys.auth` 非空，否则 400；写库失败 503 `推送订阅表尚未就绪…`。
+- `DELETE /api/push/subscribe` body `{endpoint}`（**取不到时回退 `?endpoint=`** —— Flutter 的 `ApiClient.deleteJson` 不带 body，用查询参数即可）。
+- 表：`push_subscriptions(endpoint PK, audience, p256dh, auth, ua, created_at, updated_at)`。
+
+### 21.2 自检
+
+- `GET /api/admin/selftest` → **清单，不需要密码**：`{version, generatedAt, groups, params, presets, clientChecks}`。
+  - `groups[].items[]`：`{id, name, desc, side: "server"|"client", client: null|"web"|"flutter", mutates, danger, params: string[], estMs}`。
+  - `params[]`：`{name, label, type: "bool"|"string"|"int"|"enum", desc, default?, options?}` —— **按它动态渲染表单，不要硬编码**。
+  - `presets[]` 三种形态：`skipMutating:true` / `itemIds:[…]` / `params:{…}`。
+  - `clientChecks`：`{web:[…], flutter:[…]}`；Flutter 端要跑的是 `flutter.routes`、`flutter.theme`、
+    `flutter.notify.permission`、`flutter.notify.schedule`、`flutter.notify.cancel`、`flutter.storage`、`flutter.image`。
+- `POST /api/admin/selftest` body `{password, items?, groups?, params?, clientResults?, includeClient?}` → 管理员口令（与 `POST /api/admin` 同一套，含节流）。
+  响应 `{ranAt, durationMs, env, params, summary, results, clientMissing, notes}`；
+  `results[]`：`{id, group, name, side, mutates, ms, status: "pass"|"fail"|"warn"|"skip", detail, data?}`。
+- 当前清单 **70 项 / 11 组**；`clientMissing` 是「这轮选了但没回传结果的客户端项」，前端要提示出来。
+- 写库类检查（`mutates:true`）在 `params.dryRun=true` 时只预演；真跑时会自清理，`keep:true` 才保留。
+- `flutter.notify.*` 三项**依赖 `flutter_local_notifications`，目前 App 未接入**，如实返回 `skip`（不要为自检加依赖）。
+

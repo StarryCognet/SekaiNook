@@ -203,6 +203,7 @@ docs/                    接口契约与移植说明（见下）
 | [docs/design-ref-flclash.md](docs/design-ref-flclash.md) | FlClash 设计/动效源码调研：圆角与层级体系、时长与弹簧参数、最值得移植的 5 条手法、明确不移植的部分 |
 | [docs/motion-kit.md](docs/motion-kit.md) | 动效工具包契约：`AppMotion` 令牌表、全部动效组件的用法、页面改造清单、硬约束 |
 | [docs/reusable/floating-dock/README.md](docs/reusable/floating-dock/README.md) | **可复用配方**：悬浮弹簧底栏（FlClash 风格）—— 零依赖的两个 dart 文件 + 8 条回归测试 + 接入/参数/坑速查，供其他项目直接抄 |
+| [../SekaiNook/docs/selftest-console.md](../SekaiNook/docs/selftest-console.md) | 全站自检控制台契约（在 Web 仓库里，两端共用）：接口、清单结构、参数表、客户端检查项、导出格式、UI 要求 |
 
 ## 与 Web 版的差异（有意为之）
 

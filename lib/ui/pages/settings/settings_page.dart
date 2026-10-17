@@ -23,6 +23,7 @@ import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
+import 'selftest_panel.dart';
 
 /// 家长口令长度（与 Web 版一致：4-8 位）。
 const int _pinMinLength = 4;
@@ -106,6 +107,9 @@ class _SettingsPageState extends State<SettingsPage> {
   List<AdminAdjustment> _adjustments = const <AdminAdjustment>[];
   bool _loadingAdjustments = false;
   String? _revokingId;
+
+  /// 管理员分区里又钻了一层「全站自检」；返回时只关这一层，不动 [_section]
+  bool _selftestOpen = false;
 
   // 关于：版本日志展开 / 收起
   bool _logExpanded = false;
@@ -433,7 +437,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _openAdmin() async {
     if (_adminUnlocked) {
-      setState(() => _section = _SettingsSection.admin);
+      setState(() {
+        _section = _SettingsSection.admin;
+        _selftestOpen = false;
+      });
       unawaited(_refreshAdjustments());
       return;
     }
@@ -447,6 +454,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _adminPassword = password;
       _adminUnlocked = true;
       _section = _SettingsSection.admin;
+      _selftestOpen = false;
     });
     showBurst(context);
     _toast('已进入管理员');
@@ -1397,6 +1405,14 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildAdmin(AppPalette palette) {
+    // 「全站自检」是管理员分区里的一层子页：密码沿用上面解锁时输入的那一份
+    if (_selftestOpen) {
+      return SelftestPanel(
+        password: _adminPassword ?? '',
+        onBack: () => setState(() => _selftestOpen = false),
+      );
+    }
+
     final family = context.watch<FamilyState>();
     final entries = _adjustments.take(_adjustmentLogLimit).toList(growable: false);
 
@@ -1405,6 +1421,15 @@ class _SettingsPageState extends State<SettingsPage> {
       children: <Widget>[
         _subPageHeader(palette, '管理员'),
         const SectionHeader(title: '管理员', subtitle: '直接校准积分数，改完立刻生效'),
+        AppCard(
+          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+          onTap: () => setState(() => _selftestOpen = true),
+          child: const _EntryRow(
+            icon: Icons.fact_check_outlined,
+            title: '全站自检',
+            description: '把后端整条链路逐项跑一遍 · 按组勾选、套预设、导出 JSON / Markdown',
+          ),
+        ),
         AppCard(
           margin: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: Column(
