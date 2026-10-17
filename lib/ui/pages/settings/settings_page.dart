@@ -23,6 +23,7 @@ import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
+import 'push_section.dart';
 import 'selftest_panel.dart';
 
 /// 家长口令长度（与 Web 版一致：4-8 位）。
@@ -61,7 +62,7 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-enum _SettingsSection { appearance, family, parent, admin }
+enum _SettingsSection { appearance, family, push, parent, admin }
 
 class _SettingsPageState extends State<SettingsPage> {
   /// 版本日志收起时只留最近几条
@@ -711,9 +712,21 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
         ),
+        EnterBox(
+          index: 2,
+          child: AppCard(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            onTap: () => setState(() => _section = _SettingsSection.push),
+            child: const _EntryRow(
+              icon: Icons.notifications_active_outlined,
+              title: '手机提醒',
+              description: '任务快到期时手机收提醒 · 可以发一条测试通知',
+            ),
+          ),
+        ),
         if (isParent)
           EnterBox(
-            index: 2,
+            index: 3,
             child: AppCard(
               margin: const EdgeInsets.only(bottom: AppSpacing.sm),
               onTap: () => setState(() => _section = _SettingsSection.parent),
@@ -725,7 +738,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
         EnterBox(
-          index: 3,
+          index: 4,
           child: AppCard(
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             onTap: _openAdmin,
@@ -739,7 +752,7 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: AppSpacing.md),
         const SectionHeader(title: '关于', subtitle: '这是什么版本、改过什么'),
         EnterBox(
-          index: 4,
+          index: 5,
           child: AppCard(
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: Row(
@@ -780,14 +793,14 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         EnterBox(
-          index: 5,
+          index: 6,
           child: AppCard(
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: _buildChangelog(palette),
           ),
         ),
         EnterBox(
-          index: 6,
+          index: 7,
           child: AppCard(
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             onTap: _signOut,
@@ -937,6 +950,8 @@ class _SettingsPageState extends State<SettingsPage> {
         return _buildAppearance(palette);
       case _SettingsSection.family:
         return _buildFamily(palette);
+      case _SettingsSection.push:
+        return _buildPush(palette);
       case _SettingsSection.parent:
         return _buildParentTools(palette);
       case _SettingsSection.admin:
@@ -1285,6 +1300,19 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
             ],
           ),
+        ),
+      ],
+    );
+  }
+
+  /// 手机提醒：整块 UI 在 `push_section.dart`，这里只给子页外壳和提示方式。
+  Widget _buildPush(AppPalette palette) {
+    return ListView(
+      padding: _pagePadding,
+      children: <Widget>[
+        _subPageHeader(palette, '手机提醒'),
+        PushSection(
+          onToast: (String message, bool error) => _toast(message, error: error),
         ),
       ],
     );
