@@ -13,11 +13,15 @@ abstract final class AppSpacing {
 }
 
 abstract final class AppRadius {
-  static const double sm = 6;
-  static const double md = 10;
+  static const double xs = 4;
+  static const double sm = 8;
+  static const double md = 12;
   static const double lg = 16;
 
-  /// 胶囊（导航选中项、标签）。用 `BorderRadius.circular(AppRadius.full)` 时
+  /// 弹层：对话框、底部弹层的顶部圆角（M3 里弹层比卡片更圆）
+  static const double xxl = 28;
+
+  /// 胶囊（导航选中项、标签、按钮）。用 `BorderRadius.circular(AppRadius.full)` 时
   /// 半径超过高度一半会自动退化成胶囊，所以给一个足够大的数即可。
   static const double full = 999;
 }

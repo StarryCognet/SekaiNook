@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'motion.dart';
 import 'tokens.dart';
 
 /// 主题预设 —— 全局生效（对应 Web 版 `src/theme/themes.ts` 的 THEMES）。
@@ -73,6 +74,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
 
   /// 按「有没有设背景图」取卡片底色 —— 页面一律走它，不要直接读 surface。
   Color cardColor({required bool hasBackground}) => hasBackground ? surfaceGlass : surface;
+
+  /// 背景图之上盖的一层薄纱（对应 Web 版 `--app-bg-veil`）：
+  /// 浅色主题白纱 0.34、深色主题暗纱 0.32 —— 照片再花也能看清文字。
+  Color get bgVeil => bg.withValues(alpha: bg.computeLuminance() < 0.35 ? 0.32 : 0.35);
 
   /// 按「有没有设背景图」取次级底色。
   Color softColor({required bool hasBackground}) =>
@@ -448,14 +453,14 @@ abstract final class AppTheme {
         backgroundColor: p.cardColor(hasBackground: hasBackground),
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
         ),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: p.cardColor(hasBackground: hasBackground),
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(AppRadius.xxl),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -490,6 +495,8 @@ abstract final class AppTheme {
         indicatorColor: p.primary,
         dividerColor: p.border,
       ),
+      // 页面转场统一走动效令牌（全平台 FadeForwards），见 theme/motion.dart
+      pageTransitionsTheme: AppMotion.pageTransitionsTheme,
     );
   }
 }

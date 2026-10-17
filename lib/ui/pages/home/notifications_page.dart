@@ -9,9 +9,11 @@ import '../../../state/family_state.dart';
 import '../../../state/notification_state.dart';
 import '../../../state/settings_state.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../shell/main_shell.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 
 /// 通知收件箱（对应 Web 版 `src/views/home/NotificationsPage.tsx`）。
@@ -80,6 +82,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     try {
       await notifications.markAllRead();
       if (!mounted) return;
+      showBurst(context);
       _toast('已全部标记为已读');
     } catch (_) {
       if (!mounted) return;
@@ -126,15 +129,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final who = audience == NotifyAudience.parent
         ? '${settings.kidName}的打卡动态'
         : '${settings.momName}说的话';
-    final suffix = state.unreadCount > 0 ? ' · ${state.unreadCount} 条未读' : ' · 都看过了';
 
     return Scaffold(
-      backgroundColor: palette.bg,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            _buildHeader(palette, who + suffix, state.unreadCount),
+            _buildHeader(palette, who, state.unreadCount),
             if (!state.ready && !state.loading)
               _buildNotice(
                 palette,
@@ -142,14 +143,25 @@ class _NotificationsPageState extends State<NotificationsPage> {
               ),
             if (state.error != null && items.isNotEmpty) _buildRefreshFailedBar(palette),
             if (items.isNotEmpty) _buildFilter(palette, state.unreadCount, unreadOnly),
-            Expanded(child: _buildBody(palette, state, visible, unreadOnly)),
+            Expanded(
+              // 筛选切换走 SlideFadeSwitcher：key 就是地址栏派生出来的 filter 值
+              child: SlideFadeSwitcher(
+                childKey: ValueKey<String>(filter),
+                child: _buildBody(palette, state, visible, unreadOnly),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader(AppPalette palette, String subtitle, int unreadCount) {
+  Widget _buildHeader(AppPalette palette, String who, int unreadCount) {
+    final TextStyle subtitleStyle = TextStyle(
+      fontSize: AppFontSize.xs,
+      color: palette.textSecondary,
+      fontFeatures: kTabularNumbers,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xs,
@@ -177,13 +189,23 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     color: palette.text,
                   ),
                 ),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: AppFontSize.xs,
-                    color: palette.textSecondary,
-                    fontFeatures: kTabularNumbers,
+                Text.rich(
+                  TextSpan(
+                    children: <InlineSpan>[
+                      TextSpan(text: who),
+                      if (unreadCount > 0) ...<InlineSpan>[
+                        const TextSpan(text: ' · '),
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.baseline,
+                          baseline: TextBaseline.alphabetic,
+                          child: AnimatedCount(value: unreadCount, style: subtitleStyle),
+                        ),
+                        const TextSpan(text: ' 条未读'),
+                      ] else
+                        const TextSpan(text: ' · 都看过了'),
+                    ],
                   ),
+                  style: subtitleStyle,
                 ),
               ],
             ),
@@ -308,28 +330,33 @@ class _NotificationsPageState extends State<NotificationsPage> {
     required bool selected,
     required VoidCallback onTap,
   }) {
-    return Material(
-      color: selected ? palette.segmentedSelected : palette.surfaceSoft,
-      borderRadius: BorderRadius.circular(AppRadius.full),
-      child: InkWell(
-        onTap: onTap,
+    return AnimatedContainer(
+      duration: AppMotion.fast,
+      curve: AppMotion.standard,
+      decoration: BoxDecoration(
+        color: selected ? palette.segmentedSelected : palette.surfaceSoft,
         borderRadius: BorderRadius.circular(AppRadius.full),
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.xs,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.full),
-            border: Border.all(color: selected ? palette.primary : palette.border),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: AppFontSize.xs,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected ? palette.primary : palette.textSecondary,
-              fontFeatures: kTabularNumbers,
+        border: Border.all(color: selected ? palette.primary : palette.border),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.full),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.full),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.xs,
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: AppFontSize.xs,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected ? palette.primary : palette.textSecondary,
+                fontFeatures: kTabularNumbers,
+              ),
             ),
           ),
         ),
@@ -344,7 +371,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
     bool unreadOnly,
   ) {
     if (state.loading && state.items.isEmpty) {
-      return const LoadingView(message: '正在读取通知…');
+      // 首屏骨架屏，别只留一句「正在读取」
+      return const SkeletonList(count: 3);
     }
     if (state.error != null && state.items.isEmpty) {
       return ErrorView(message: state.error!, onRetry: _reload);
@@ -371,7 +399,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
           AppSpacing.lg,
         ),
         itemCount: visible.length,
-        itemBuilder: (context, index) => _buildItem(palette, visible[index]),
+        // 每条错峰进场。这里刻意不加 key：靠位置复用，
+        // 10 秒轮询刷新时不会重播（新通知插队也不会让整表闪一遍）。
+        itemBuilder: (context, index) =>
+            EnterBox(index: index, child: _buildItem(palette, visible[index])),
       ),
     );
   }
@@ -441,12 +472,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
             ),
           ),
           if (item.isUnread) ...<Widget>[
-            const SizedBox(width: AppSpacing.sm),
-            Container(
-              width: 8,
-              height: 8,
-              margin: const EdgeInsets.only(top: AppSpacing.xs),
-              decoration: BoxDecoration(color: palette.danger, shape: BoxShape.circle),
+            const SizedBox(width: AppSpacing.xs),
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: PulseDot(color: palette.danger),
             ),
           ],
         ],

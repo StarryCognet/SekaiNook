@@ -22,8 +22,10 @@ import '../../../state/custom_tasks_state.dart';
 import '../../../state/family_state.dart';
 import '../../../state/theme_state.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 
 /// 历史记录每页条数（手机端长列表一次性渲染会卡，改为「加载更多」分页）
@@ -244,6 +246,15 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     );
   }
 
+  /// 成功那一下的整页反馈：光环 + 对勾，不挡点击、播完自动消失。
+  ///
+  /// 包一层 mounted 判断，异步回调里就不用直接碰 context。
+  /// **只在真正成功时调**（打卡入账、审批通过、兑换到账）。
+  void _burst() {
+    if (!mounted) return;
+    showBurst(context);
+  }
+
   /// 打卡成功提示：5 秒内可撤销（手机误触兜底）
   void _notifySuccess(TaskConfig task, String recordId, bool isParent) {
     final sign = task.value > 0 ? '+' : '';
@@ -352,6 +363,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         customTasks.markDone(custom.id);
       }
       _notifySuccess(task, recordId, isParent);
+      _burst();
     } catch (e) {
       await _handleWriteError(e, '操作失败，请重试');
     } finally {
@@ -382,6 +394,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     try {
       await context.read<FamilyState>().approve(id);
       _toast('已审批通过，积分已入账');
+      _burst();
     } catch (_) {
       _toast('操作失败，请重试', warning: true);
     } finally {
@@ -397,6 +410,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             pending.map((record) => record.id).toList(growable: false),
           );
       _toast('已通过 ${pending.length} 条');
+      _burst();
     } catch (e) {
       _toast(e is StateError ? e.message : '操作失败，请重试', warning: true);
     } finally {
@@ -475,6 +489,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       if (!mounted) return;
       setState(() => _exchangePoints = null);
       _toast('已兑换 $yuan 元，扣掉 $amount 积分');
+      _burst();
     } catch (e) {
       // 账记上了但自动审批失败：积分没扣掉，那笔在待审批里 —— 不能说「已兑换」
       if (e is LedgerApprovalException) {
@@ -548,8 +563,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       );
     }
 
+    // 首屏加载改骨架屏（加载 / 失败 / 空的判定逻辑不变，只换「加载中」的视觉）
     if (state.loading && state.records.isEmpty) {
-      return const LoadingView();
+      return const SkeletonList(count: 3);
     }
 
     return RefreshIndicator(
@@ -562,13 +578,14 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           AppSpacing.xl,
         ),
         children: <Widget>[
-          _buildBalanceCard(state, isParent),
+          // 首屏四块按序号错峰进场
+          EnterBox(index: 0, child: _buildBalanceCard(state, isParent)),
           const SizedBox(height: AppSpacing.md),
-          _buildTodayCard(state, isParent),
+          EnterBox(index: 1, child: _buildTodayCard(state, isParent)),
           const SizedBox(height: AppSpacing.md),
-          _buildTrendCard(state.records),
+          EnterBox(index: 2, child: _buildTrendCard(state.records)),
           const SizedBox(height: AppSpacing.md),
-          _buildTabs(state, isParent, area),
+          EnterBox(index: 3, child: _buildTabs(state, isParent, area)),
         ],
       ),
     );
@@ -605,8 +622,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(
-            '$balance',
+          AnimatedCount(
+            value: balance,
             style: TextStyle(
               fontSize: AppFontSize.num,
               fontWeight: FontWeight.w700,
@@ -625,7 +642,23 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                 Icon(Icons.fact_check_outlined, size: 14, color: palette.primary),
                 const SizedBox(width: AppSpacing.xs),
                 Text(
-                  '待审批 ${state.pendingCount} 项',
+                  '待审批 ',
+                  style: TextStyle(
+                    fontSize: AppFontSize.sm,
+                    color: palette.primary,
+                    fontFeatures: kTabularNumbers,
+                  ),
+                ),
+                AnimatedCount(
+                  value: state.pendingCount,
+                  style: TextStyle(
+                    fontSize: AppFontSize.sm,
+                    color: palette.primary,
+                    fontFeatures: kTabularNumbers,
+                  ),
+                ),
+                Text(
+                  ' 项',
                   style: TextStyle(
                     fontSize: AppFontSize.sm,
                     color: palette.primary,
@@ -719,6 +752,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final hh = _now.hour.toString().padLeft(2, '0');
     final mm = _now.minute.toString().padLeft(2, '0');
     final ss = _now.second.toString().padLeft(2, '0');
+    // 今日两项内置打卡（作业 / 睡觉）的完成度 —— 底部那条进度条
+    final todayTasks =
+        <TaskConfig?>[homeworkTask, sleepTask].whereType<TaskConfig>().toList(growable: false);
+    final todayDone = todayTasks.where((task) => _isDone(task, records)).length;
+    final todayProgress = todayTasks.isEmpty ? 0.0 : todayDone / todayTasks.length;
 
     return AppCard(
       child: Column(
@@ -790,6 +828,13 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AnimatedProgressBar(
+            value: todayProgress,
+            color: palette.success,
+            trackColor: palette.surfaceSoft,
+            height: 6,
           ),
         ],
       ),
@@ -921,6 +966,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                       ),
                   ],
                 ),
+                duration: AppMotion.slower,
+                curve: AppMotion.emphasized,
               ),
             ),
         ],
@@ -943,12 +990,26 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final labels = _tabsFor(isParent);
     // 内容分支跟着 URL 派生出来的分区走（不是 TabController.index）
     final index = math.max(0, labels.indexOf(area));
+    final areas = <Widget>[
+      _buildTasksArea(state, isParent),
+      if (isParent) _buildPendingArea(state),
+      _buildRecordsArea(state, isParent),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         TabBar(
           controller: controller,
           onTap: (tapped) => _goTab(labels[tapped]),
+          // 高亮块在选项之间滑动 —— 仍由 URL 派生出来的 controller 驱动，没有自持状态
+          indicator: BoxDecoration(
+            color: palette.segmentedSelected,
+            borderRadius: BorderRadius.circular(AppRadius.full),
+            border: Border.all(color: palette.primary.withValues(alpha: 0.35)),
+          ),
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
+          splashBorderRadius: BorderRadius.circular(AppRadius.full),
           tabs: <Widget>[
             Tab(text: '任务区'),
             if (isParent)
@@ -985,14 +1046,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        IndexedStack(
-          index: index,
-          sizing: StackFit.loose,
-          children: <Widget>[
-            _buildTasksArea(state, isParent),
-            if (isParent) _buildPendingArea(state),
-            _buildRecordsArea(state, isParent),
-          ],
+        // 内容切换：横向滑入淡出（childKey 就是地址栏的 tab 口径）
+        SlideFadeSwitcher(
+          childKey: ValueKey<String>(_tabParamFor(area)),
+          axis: Axis.horizontal,
+          child: areas[index],
         ),
       ],
     );
@@ -1027,28 +1085,32 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                 '赚钱任务',
               ),
               const SizedBox(height: AppSpacing.sm),
-              ...earningTasks.map(
-                (task) => _taskButton(
-                  task: task,
-                  earning: true,
-                  disabled: _isDone(task, records),
-                  onTap: () => _startCheckIn(task, records: records),
-                ),
-              ),
-              // 自定义任务：同样摆在快捷任务区，点开走打卡弹窗（可传照片 / 写备注）
-              ...customEarning.map(
-                (task) => _taskButton(
-                  task: _toExecTask(task),
-                  earning: true,
-                  disabled: isRecordedToday(task, records, now: _now) ||
-                      customTasks.isDoneToday(task.id),
-                  onTap: () => _startCheckIn(
-                    _toExecTask(task),
-                    custom: task,
-                    records: records,
+              for (final (i, task) in earningTasks.indexed)
+                EnterBox(
+                  index: i,
+                  child: _taskButton(
+                    task: task,
+                    earning: true,
+                    disabled: _isDone(task, records),
+                    onTap: () => _startCheckIn(task, records: records),
                   ),
                 ),
-              ),
+              // 自定义任务：同样摆在快捷任务区，点开走打卡弹窗（可传照片 / 写备注）
+              for (final (i, task) in customEarning.indexed)
+                EnterBox(
+                  index: i,
+                  child: _taskButton(
+                    task: _toExecTask(task),
+                    earning: true,
+                    disabled: isRecordedToday(task, records, now: _now) ||
+                        customTasks.isDoneToday(task.id),
+                    onTap: () => _startCheckIn(
+                      _toExecTask(task),
+                      custom: task,
+                      records: records,
+                    ),
+                  ),
+                ),
               const SizedBox(height: AppSpacing.md),
               _groupLabel(
                 palette.danger,
@@ -1056,27 +1118,31 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                 '消费 / 罚款',
               ),
               const SizedBox(height: AppSpacing.sm),
-              ...spendingTasks.map(
-                (task) => _taskButton(
-                  task: task,
-                  earning: false,
-                  disabled: _isDone(task, records),
-                  onTap: () => _startCheckIn(task, records: records),
-                ),
-              ),
-              ...customSpending.map(
-                (task) => _taskButton(
-                  task: _toExecTask(task),
-                  earning: false,
-                  disabled: isRecordedToday(task, records, now: _now) ||
-                      customTasks.isDoneToday(task.id),
-                  onTap: () => _startCheckIn(
-                    _toExecTask(task),
-                    custom: task,
-                    records: records,
+              for (final (i, task) in spendingTasks.indexed)
+                EnterBox(
+                  index: i,
+                  child: _taskButton(
+                    task: task,
+                    earning: false,
+                    disabled: _isDone(task, records),
+                    onTap: () => _startCheckIn(task, records: records),
                   ),
                 ),
-              ),
+              for (final (i, task) in customSpending.indexed)
+                EnterBox(
+                  index: i,
+                  child: _taskButton(
+                    task: _toExecTask(task),
+                    earning: false,
+                    disabled: isRecordedToday(task, records, now: _now) ||
+                        customTasks.isDoneToday(task.id),
+                    onTap: () => _startCheckIn(
+                      _toExecTask(task),
+                      custom: task,
+                      records: records,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -1272,7 +1338,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          ...pending.map((record) => _pendingRow(record)),
+          for (final (i, record) in pending.indexed)
+            EnterBox(index: i, child: _pendingRow(record)),
         ],
       ),
     );
@@ -1433,31 +1500,44 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          if (filtered.isEmpty)
-            EmptyView(
-              message: _recordFilter == _RecordFilter.all ? '暂无流水记录' : '该状态下暂无记录',
-              icon: Icons.history,
-            )
-          else ...<Widget>[
-            ...visible.map((record) => _recordRow(record, isParent)),
-            if (remaining > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.sm),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => setState(() => _visibleCount += _recordsPageSize),
-                    child: Text(
-                      '加载更多（还有 $remaining 条）',
-                      style: TextStyle(
-                        fontFeatures: kTabularNumbers,
-                        color: palette.textSecondary,
-                      ),
-                    ),
+          // 筛选切换：整块内容横向滑入淡出（childKey 就是筛选的口径）
+          SlideFadeSwitcher(
+            childKey: ValueKey<String>(_recordFilter.wire),
+            axis: Axis.horizontal,
+            child: filtered.isEmpty
+                ? EmptyView(
+                    message: _recordFilter == _RecordFilter.all ? '暂无流水记录' : '该状态下暂无记录',
+                    icon: Icons.history,
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      // index 取模：首屏 0..19 错峰，之后「加载更多」追加的条目也从头错峰
+                      for (final (i, record) in visible.indexed)
+                        EnterBox(
+                          index: i % _recordsPageSize,
+                          child: _recordRow(record, isParent),
+                        ),
+                      if (remaining > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.sm),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: () => setState(() => _visibleCount += _recordsPageSize),
+                              child: Text(
+                                '加载更多（还有 $remaining 条）',
+                                style: TextStyle(
+                                  fontFeatures: kTabularNumbers,
+                                  color: palette.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-              ),
-          ],
+          ),
         ],
       ),
     );
@@ -2027,7 +2107,8 @@ class _RecordThumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return GestureDetector(
+    return PressInkWell(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       onTap: () => showDialog<void>(
         context: context,
         builder: (dialogContext) => Dialog(

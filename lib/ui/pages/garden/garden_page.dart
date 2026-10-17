@@ -10,8 +10,10 @@ import '../../../data/models/garden.dart';
 import '../../../data/models/ledger_record.dart';
 import '../../../state/garden_state.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 
 /// 花园里养着的植物（照抄 Web 版 `src/views/garden/GardenPage.tsx` 的 `PLANTS`）
@@ -205,6 +207,8 @@ class _GardenPageState extends State<GardenPage> {
       return;
     }
     _toast('+${task.reward} 阳光！${task.name}完成啦', success: true);
+    // 走到这里才是真打卡成功（上面两条重复打卡分支都提前 return 了）
+    showBurst(context);
   }
 
   void _recite(GardenPoem poem) {
@@ -214,6 +218,7 @@ class _GardenPageState extends State<GardenPage> {
       return;
     }
     _toast('《${poem.title}》背诵成功！+${poem.reward} 阳光', success: true);
+    showBurst(context);
   }
 
   void _practice(GardenChinesePractice practice, int current) {
@@ -227,12 +232,16 @@ class _GardenPageState extends State<GardenPage> {
       isLast ? '${practice.title}完成啦！+${practice.reward} 阳光' : '打卡成功！+${practice.reward} 阳光',
       success: true,
     );
+    // completeChineseStep 返回 true 才算打卡成功（false 的分支上面已经 return）
+    showBurst(context);
   }
 
   void _care() {
     final GardenState garden = context.read<GardenState>();
     if (garden.careForGarden()) {
       _toast('照顾成功！植物们精神多啦', success: true);
+      // 浇水的「长大」：整页一下 + 植物卡片自己的收放（见 _GrowPulse）
+      showBurst(context);
       return;
     }
     _toast('今天的花园已经照顾过啦，明天再来吧');
@@ -251,16 +260,23 @@ class _GardenPageState extends State<GardenPage> {
     final String menu = GardenConfig.isMenuKey(raw) ? raw : GardenConfig.defaultMenu;
 
     return Scaffold(
-      backgroundColor: palette.bg,
       body: SafeArea(
         child: garden.tasks.isEmpty
-            ? const LoadingView(message: '正在打开花园…')
+            ? const _GardenLoading()
             : Column(
                 children: <Widget>[
                   if (garden.pending.isNotEmpty) _buildPendingBanner(garden, palette),
                   _buildHeader(garden, palette),
                   _buildMenuBar(menu),
-                  Expanded(child: _buildMenuContent(garden, palette, menu)),
+                  Expanded(
+                    // 菜单内容切换的转场：菜单 key 一换就上下滑入淡出（只换视觉，
+                    // 菜单仍由地址栏派生、_switchMenu 走 context.go 不变）
+                    child: SlideFadeSwitcher(
+                      childKey: ValueKey<String>(menu),
+                      axis: Axis.vertical,
+                      child: _buildMenuContent(garden, palette, menu),
+                    ),
+                  ),
                 ],
               ),
       ),
@@ -271,44 +287,56 @@ class _GardenPageState extends State<GardenPage> {
   Widget _buildPendingBanner(GardenState garden, AppPalette palette) {
     final int delta = garden.pendingDelta;
     final String deltaText = delta == 0 ? '' : '（未同步阳光 ${delta > 0 ? '+' : ''}$delta）';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
-      child: AppCard(
-        highlight: true,
-        onTap: () => garden.flushPending(),
-        child: Row(
-          children: <Widget>[
-            Icon(Icons.cloud_upload_outlined, color: palette.primary),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    '${garden.pending.length} 条记录待同步',
-                    style: TextStyle(
-                      fontSize: AppFontSize.sm,
-                      fontWeight: FontWeight.w600,
-                      color: palette.text,
-                      fontFeatures: kTabularNumbers,
+    return EnterBox(
+      index: 0,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
+        child: AppCard(
+          highlight: true,
+          onTap: () => garden.flushPending(),
+          child: Row(
+            children: <Widget>[
+              Icon(Icons.cloud_upload_outlined, color: palette.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        // 还有东西躺在离线队列里：让这颗小点自己「呼吸」提醒
+                        PulseDot(color: palette.warning, size: 6),
+                        const SizedBox(width: AppSpacing.xs),
+                        Flexible(
+                          child: Text(
+                            '${garden.pending.length} 条记录待同步',
+                            style: TextStyle(
+                              fontSize: AppFontSize.sm,
+                              fontWeight: FontWeight.w600,
+                              color: palette.text,
+                              fontFeatures: kTabularNumbers,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  Text(
-                    '点一下马上重试$deltaText',
-                    style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
-                  ),
-                ],
+                    Text(
+                      '点一下马上重试$deltaText',
+                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Text(
-              '重试',
-              style: TextStyle(
-                fontSize: AppFontSize.sm,
-                fontWeight: FontWeight.w700,
-                color: palette.primary,
+              Text(
+                '重试',
+                style: TextStyle(
+                  fontSize: AppFontSize.sm,
+                  fontWeight: FontWeight.w700,
+                  color: palette.primary,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -317,6 +345,12 @@ class _GardenPageState extends State<GardenPage> {
   /// 顶部常驻三件套：阳光余额 / 连续天数 / 今日进度（孩子第一眼要看到的）
   Widget _buildHeader(GardenState garden, AppPalette palette) {
     final int percent = _percent(garden);
+    // 小字说明里的数字：字号颜色与原来一致，只是等宽（滚动时不左右抖）
+    final TextStyle noteStyle = TextStyle(
+      fontSize: AppFontSize.xs,
+      color: palette.textSecondary,
+      fontFeatures: kTabularNumbers,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.sm),
       child: AppCard(
@@ -328,7 +362,7 @@ class _GardenPageState extends State<GardenPage> {
                 Expanded(
                   child: StatBlock(
                     label: '阳光余额',
-                    value: '${garden.balance}',
+                    number: garden.balance,
                     unit: '阳光',
                     color: palette.warning,
                     icon: Icons.wb_sunny_outlined,
@@ -337,7 +371,7 @@ class _GardenPageState extends State<GardenPage> {
                 Expanded(
                   child: StatBlock(
                     label: '连续学习',
-                    value: '${garden.streakDays}',
+                    number: garden.streakDays,
                     unit: '天',
                     color: palette.danger,
                     icon: Icons.local_fire_department_outlined,
@@ -346,7 +380,9 @@ class _GardenPageState extends State<GardenPage> {
                 Expanded(
                   child: StatBlock(
                     label: '今日任务',
-                    value: '${garden.completedCount}/${garden.tasks.length}',
+                    number: garden.completedCount,
+                    // 分母不参与滚动，只让分子滚（文案与原来一字不差）
+                    formatter: (num value) => '${value.round()}/${garden.tasks.length}',
                     unit: '个',
                     color: palette.primary,
                     icon: Icons.check_circle_outline,
@@ -355,15 +391,40 @@ class _GardenPageState extends State<GardenPage> {
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            _ProgressBar(value: percent / 100, color: palette.primary, track: palette.surfaceSoft),
+            AnimatedProgressBar(
+              value: percent / 100,
+              color: palette.primary,
+              trackColor: palette.surfaceSoft,
+              height: AppSpacing.sm,
+            ),
             const SizedBox(height: AppSpacing.sm),
-            Text(
-              '今天已经赚到 ${_earnedToday(garden)} 阳光，任务完成 $percent%',
-              style: TextStyle(
-                fontSize: AppFontSize.xs,
-                color: palette.textSecondary,
-                fontFeatures: kTabularNumbers,
+            Text.rich(
+              TextSpan(
+                children: <InlineSpan>[
+                  const TextSpan(text: '今天已经赚到 '),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.baseline,
+                    baseline: TextBaseline.alphabetic,
+                    child: AnimatedCount(
+                      value: _earnedToday(garden),
+                      style: noteStyle,
+                      pulse: false,
+                    ),
+                  ),
+                  const TextSpan(text: ' 阳光，任务完成 '),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.baseline,
+                    baseline: TextBaseline.alphabetic,
+                    child: AnimatedCount(
+                      value: percent,
+                      formatter: (num value) => '${value.round()}%',
+                      style: noteStyle,
+                      pulse: false,
+                    ),
+                  ),
+                ],
               ),
+              style: noteStyle,
             ),
           ],
         ),
@@ -379,11 +440,16 @@ class _GardenPageState extends State<GardenPage> {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       child: Row(
         children: <Widget>[
-          for (final GardenMenu menu in GardenConfig.menus)
-            _MenuChip(
-              menu: menu,
-              selected: menu.key == current,
-              onTap: () => _switchMenu(menu.key, current),
+          // 菜单胶囊按序号错峰滑入（像一排选项依次铺开）
+          for (final (int index, GardenMenu menu) in GardenConfig.menus.indexed)
+            EnterBox(
+              index: index,
+              axis: Axis.horizontal,
+              child: _MenuChip(
+                menu: menu,
+                selected: menu.key == current,
+                onTap: () => _switchMenu(menu.key, current),
+              ),
             ),
         ],
       ),
@@ -413,6 +479,8 @@ class _GardenPageState extends State<GardenPage> {
     }
   }
 
+  /// 菜单内容的统一列表壳：每个子项按序号错峰进场（首屏元素依次浮现），
+  /// 列表本身仍是普通 ListView，滚动行为不变。
   Widget _pageList(List<Widget> children) => ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.md,
@@ -420,7 +488,10 @@ class _GardenPageState extends State<GardenPage> {
           AppSpacing.md,
           AppSpacing.xl,
         ),
-        children: children,
+        children: <Widget>[
+          for (int index = 0; index < children.length; index++)
+            EnterBox(index: index, child: children[index]),
+        ],
       );
 
   // ---- 1. 学习总览（Web 版 OverviewPage.tsx）----
@@ -440,7 +511,7 @@ class _GardenPageState extends State<GardenPage> {
           Expanded(
             child: _statTile(
               label: '阳光余额',
-              value: '${garden.balance}',
+              number: garden.balance,
               unit: '阳光',
               icon: Icons.wb_sunny_outlined,
               color: palette.warning,
@@ -450,7 +521,7 @@ class _GardenPageState extends State<GardenPage> {
           Expanded(
             child: _statTile(
               label: '连续学习',
-              value: '${garden.streakDays}',
+              number: garden.streakDays,
               unit: '天',
               icon: Icons.local_fire_department_outlined,
               color: palette.danger,
@@ -460,7 +531,7 @@ class _GardenPageState extends State<GardenPage> {
           Expanded(
             child: _statTile(
               label: '已获勋章',
-              value: '$earnedBadges',
+              number: earnedBadges,
               unit: '枚',
               icon: Icons.emoji_events_outlined,
               color: palette.success,
@@ -482,7 +553,12 @@ class _GardenPageState extends State<GardenPage> {
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
-            _ProgressBar(value: percent / 100, color: palette.primary, track: palette.surfaceSoft),
+            AnimatedProgressBar(
+              value: percent / 100,
+              color: palette.primary,
+              trackColor: palette.surfaceSoft,
+              height: AppSpacing.sm,
+            ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               '${garden.completedCount}/${garden.tasks.length} 个任务',
@@ -570,11 +646,12 @@ class _GardenPageState extends State<GardenPage> {
     ]);
   }
 
-  /// 带图标的小统计卡（Row 里用 Expanded 包一层）
+  /// 带图标的小统计卡（Row 里用 Expanded 包一层）；数字会滚动
   Widget _statTile({
     required String label,
-    required String value,
+    required num number,
     String? unit,
+    String Function(num value)? formatter,
     required IconData icon,
     required Color color,
   }) {
@@ -594,7 +671,7 @@ class _GardenPageState extends State<GardenPage> {
             child: Icon(icon, size: 18, color: color),
           ),
           const SizedBox(height: AppSpacing.sm),
-          StatBlock(label: label, value: value, unit: unit, color: color),
+          StatBlock(label: label, number: number, formatter: formatter, unit: unit, color: color),
         ],
       ),
     );
@@ -611,7 +688,7 @@ class _GardenPageState extends State<GardenPage> {
           Expanded(
             child: _statTile(
               label: '今日完成',
-              value: '${garden.completedCount}',
+              number: garden.completedCount,
               unit: '个任务',
               icon: Icons.check_circle_outline,
               color: palette.success,
@@ -621,7 +698,8 @@ class _GardenPageState extends State<GardenPage> {
           Expanded(
             child: _statTile(
               label: '完成率',
-              value: '$percent%',
+              number: percent,
+              formatter: (num value) => '${value.round()}%',
               icon: Icons.trending_up_outlined,
               color: palette.primary,
             ),
@@ -630,7 +708,7 @@ class _GardenPageState extends State<GardenPage> {
           Expanded(
             child: _statTile(
               label: '连续学习',
-              value: '${garden.streakDays}',
+              number: garden.streakDays,
               unit: '天',
               icon: Icons.local_fire_department_outlined,
               color: palette.danger,
@@ -754,13 +832,18 @@ class _GardenPageState extends State<GardenPage> {
               TextSpan(
                 children: <InlineSpan>[
                   const TextSpan(text: '累计背会 '),
-                  TextSpan(
-                    text: '${garden.poemCount}',
-                    style: TextStyle(
-                      fontSize: AppFontSize.md,
-                      fontWeight: FontWeight.w700,
-                      color: palette.primary,
-                      fontFeatures: kTabularNumbers,
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.baseline,
+                    baseline: TextBaseline.alphabetic,
+                    child: AnimatedCount(
+                      value: garden.poemCount,
+                      style: TextStyle(
+                        fontSize: AppFontSize.md,
+                        fontWeight: FontWeight.w700,
+                        color: palette.primary,
+                        fontFeatures: kTabularNumbers,
+                      ),
+                      pulse: false,
                     ),
                   ),
                   TextSpan(
@@ -771,7 +854,12 @@ class _GardenPageState extends State<GardenPage> {
               style: TextStyle(fontSize: AppFontSize.sm, color: palette.text),
             ),
             const SizedBox(height: AppSpacing.sm),
-            _ProgressBar(value: percent / 100, color: palette.primary, track: palette.surfaceSoft),
+            AnimatedProgressBar(
+              value: percent / 100,
+              color: palette.primary,
+              trackColor: palette.surfaceSoft,
+              height: AppSpacing.sm,
+            ),
           ],
         ),
       ),
@@ -812,8 +900,9 @@ class _GardenPageState extends State<GardenPage> {
           ),
           const SizedBox(height: AppSpacing.xs),
           // 默认收一行，点一下看全文（孩子一屏能扫过 12 首）
-          GestureDetector(
+          PressInkWell(
             onTap: () => _togglePoem(poem.id),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             child: Text(
               poem.text,
               maxLines: expanded ? null : 1,
@@ -899,7 +988,12 @@ class _GardenPageState extends State<GardenPage> {
             style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
           ),
           const SizedBox(height: AppSpacing.sm),
-          _ProgressBar(value: percent / 100, color: accent, track: palette.surfaceSoft),
+          AnimatedProgressBar(
+            value: percent / 100,
+            color: accent,
+            trackColor: palette.surfaceSoft,
+            height: AppSpacing.sm,
+          ),
           const SizedBox(height: AppSpacing.xs),
           Row(
             children: <Widget>[
@@ -989,8 +1083,9 @@ class _GardenPageState extends State<GardenPage> {
                     ],
                   ),
                 ),
-                Text(
-                  '$growth%',
+                AnimatedCount(
+                  value: growth,
+                  formatter: (num value) => '${value.round()}%',
                   style: TextStyle(
                     fontSize: AppFontSize.lg,
                     fontWeight: FontWeight.w700,
@@ -1001,7 +1096,12 @@ class _GardenPageState extends State<GardenPage> {
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
-            _ProgressBar(value: growth / 100, color: palette.success, track: palette.surfaceSoft),
+            AnimatedProgressBar(
+              value: growth / 100,
+              color: palette.success,
+              trackColor: palette.surfaceSoft,
+              height: AppSpacing.sm,
+            ),
           ],
         ),
       ),
@@ -1049,7 +1149,12 @@ class _GardenPageState extends State<GardenPage> {
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
-            _ProgressBar(value: carePercent / 100, color: palette.primary, track: palette.surfaceSoft),
+            AnimatedProgressBar(
+              value: carePercent / 100,
+              color: palette.primary,
+              trackColor: palette.surfaceSoft,
+              height: AppSpacing.sm,
+            ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               caredToday
@@ -1082,15 +1187,19 @@ class _GardenPageState extends State<GardenPage> {
     return AppCard(
       child: Row(
         children: <Widget>[
-          Container(
-            width: 44,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: palette.success.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppRadius.full),
+          // 浇过水的那一下，植物轻轻「长大」再收回（见 _GrowPulse）
+          _GrowPulse(
+            cared: caredToday,
+            child: Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: palette.success.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppRadius.full),
+              ),
+              child: Icon(plant.icon, size: 22, color: palette.success),
             ),
-            child: Icon(plant.icon, size: 22, color: palette.success),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
@@ -1158,8 +1267,8 @@ class _GardenPageState extends State<GardenPage> {
                 style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
               ),
             ),
-            Text(
-              '${garden.balance}',
+            AnimatedCount(
+              value: garden.balance,
               style: TextStyle(
                 fontSize: AppFontSize.xl,
                 fontWeight: FontWeight.w700,
@@ -1433,6 +1542,9 @@ class _GardenPageState extends State<GardenPage> {
       success: result == ShopBuyResult.ok,
       error: result == ShopBuyResult.unknown,
     );
+    if (result == ShopBuyResult.ok) {
+      showBurst(context);
+    }
   }
 
   /// 「戴上 / 挂上」与「取下」共用一个按钮：正在用的再点一次就是取下来
@@ -1459,6 +1571,9 @@ class _GardenPageState extends State<GardenPage> {
       success: result == EquipResult.ok,
       error: result == EquipResult.unknown,
     );
+    if (result == EquipResult.ok) {
+      showBurst(context);
+    }
   }
 
   // ---- 7. 我的奖励（Web 版 RewardsPage.tsx）----
@@ -1500,12 +1615,17 @@ class _GardenPageState extends State<GardenPage> {
                     TextSpan(
                       children: <InlineSpan>[
                         const TextSpan(text: '已获得 '),
-                        TextSpan(
-                          text: '$earnedCount',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: palette.warning,
-                            fontFeatures: kTabularNumbers,
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.baseline,
+                          baseline: TextBaseline.alphabetic,
+                          child: AnimatedCount(
+                            value: earnedCount,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: palette.warning,
+                              fontFeatures: kTabularNumbers,
+                            ),
+                            pulse: false,
                           ),
                         ),
                         const TextSpan(text: ' 枚勋章'),
@@ -1514,22 +1634,29 @@ class _GardenPageState extends State<GardenPage> {
                     style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  _ProgressBar(
+                  AnimatedProgressBar(
                     value: percent / 100,
                     color: palette.primary,
-                    track: palette.surfaceSoft,
+                    trackColor: palette.surfaceSoft,
+                    height: AppSpacing.sm,
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text.rich(
                     TextSpan(
                       children: <InlineSpan>[
                         const TextSpan(text: '成就进度 '),
-                        TextSpan(
-                          text: '$percent%',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: palette.primary,
-                            fontFeatures: kTabularNumbers,
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.baseline,
+                          baseline: TextBaseline.alphabetic,
+                          child: AnimatedCount(
+                            value: percent,
+                            formatter: (num value) => '${value.round()}%',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: palette.primary,
+                              fontFeatures: kTabularNumbers,
+                            ),
+                            pulse: false,
                           ),
                         ),
                       ],
@@ -1551,8 +1678,12 @@ class _GardenPageState extends State<GardenPage> {
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
             children: <Widget>[
-              for (final Badge badge in garden.badges)
-                SizedBox(width: cardWidth, child: _badgeCard(garden, badge, palette)),
+              // 勋章格子按序号错峰进场（Wrap 里的项不在 _pageList 的列表上）
+              for (final (int index, Badge badge) in garden.badges.indexed)
+                EnterBox(
+                  index: index,
+                  child: SizedBox(width: cardWidth, child: _badgeCard(garden, badge, palette)),
+                ),
             ],
           );
         },
@@ -1608,16 +1739,34 @@ class _GardenPageState extends State<GardenPage> {
           // 「小诗人」「植物战士」是累计型：没解锁也让孩子看到还差多少
           if (target != null) ...<Widget>[
             const SizedBox(height: AppSpacing.sm),
-            _ProgressBar(
+            AnimatedProgressBar(
               value: progress / 100,
               color: badge.earned ? palette.success : palette.primary,
-              track: palette.surfaceSoft,
+              trackColor: palette.surfaceSoft,
+              height: AppSpacing.sm,
             ),
             const SizedBox(height: AppSpacing.xs),
-            Text(
-              badge.id == 'poet'
-                  ? '背诵 $current/$target 首'
-                  : '照顾花园 $current/$target 天',
+            Text.rich(
+              TextSpan(
+                children: <InlineSpan>[
+                  TextSpan(text: badge.id == 'poet' ? '背诵 ' : '照顾花园 '),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.baseline,
+                    baseline: TextBaseline.alphabetic,
+                    child: AnimatedCount(
+                      value: current,
+                      formatter: (num value) => '${value.round()}/$target',
+                      style: TextStyle(
+                        fontSize: AppFontSize.xs,
+                        color: badge.earned ? palette.success : palette.textTertiary,
+                        fontFeatures: kTabularNumbers,
+                      ),
+                      pulse: false,
+                    ),
+                  ),
+                  TextSpan(text: badge.id == 'poet' ? ' 首' : ' 天'),
+                ],
+              ),
               style: TextStyle(
                 fontSize: AppFontSize.xs,
                 color: badge.earned ? palette.success : palette.textTertiary,
@@ -1647,7 +1796,8 @@ class _GardenPageState extends State<GardenPage> {
             Expanded(
               child: StatBlock(
                 label: '今日完成',
-                value: '${garden.completedCount}/${garden.tasks.length}',
+                number: garden.completedCount,
+                formatter: (num value) => '${value.round()}/${garden.tasks.length}',
                 unit: '个任务',
                 color: palette.primary,
                 icon: Icons.check_circle_outline,
@@ -1656,7 +1806,7 @@ class _GardenPageState extends State<GardenPage> {
             Expanded(
               child: StatBlock(
                 label: '获得阳光',
-                value: '${_earnedToday(garden)}',
+                number: _earnedToday(garden),
                 unit: '阳光',
                 color: palette.warning,
                 icon: Icons.wb_sunny_outlined,
@@ -1741,8 +1891,9 @@ class _GardenPageState extends State<GardenPage> {
         ),
         Icon(Icons.wb_sunny_outlined, size: AppFontSize.sm, color: palette.warning),
         const SizedBox(width: AppSpacing.xs),
-        Text(
-          '+${task.reward}',
+        AnimatedCount(
+          value: task.reward,
+          formatter: (num value) => '+${value.round()}',
           style: TextStyle(
             fontSize: AppFontSize.sm,
             fontWeight: FontWeight.w700,
@@ -1797,8 +1948,10 @@ class _GardenPageState extends State<GardenPage> {
             ],
           ),
         ),
-        Text(
-          record.signedAmount,
+        AnimatedCount(
+          value: record.amount,
+          // 符号跟最终值走（滚动中途不会出现「+0」这种别扭的中间态）
+          formatter: (num value) => record.amount >= 0 ? '+${value.round()}' : '${value.round()}',
           style: TextStyle(
             fontSize: AppFontSize.md,
             fontWeight: FontWeight.w700,
@@ -1813,26 +1966,97 @@ class _GardenPageState extends State<GardenPage> {
 
 // ---- 复用的小组件 ----
 
-/// 圆润进度条（value 传 0~1）
-class _ProgressBar extends StatelessWidget {
-  const _ProgressBar({required this.value, required this.color, this.track});
-
-  final double value;
-  final Color color;
-  final Color? track;
+/// 首屏加载中的花园：骨架屏 + 原来那句提示。
+///
+/// 「什么时候算加载中」的判定仍在 [GardenPage] 的 build 里（`tasks.isEmpty`），
+/// 这里只把转圈的视觉换成骨架，文案保持原样。
+class _GardenLoading extends StatelessWidget {
+  const _GardenLoading();
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.full),
-      child: LinearProgressIndicator(
-        value: value.clamp(0, 1).toDouble(),
-        minHeight: AppSpacing.sm,
-        color: color,
-        backgroundColor: track ?? context.palette.surfaceSoft,
-      ),
+    final AppPalette palette = context.palette;
+    return Column(
+      children: <Widget>[
+        // 文案与原来一字不差，只是从「转圈」挪到骨架屏上方（Column 默认居中）
+        Text(
+          '正在打开花园…',
+          style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        const Expanded(child: SkeletonList(count: 3)),
+      ],
     );
   }
+}
+
+/// 浇水成功那一下：让植物轻轻「长大」再收回（一次收放，不循环）。
+///
+/// [cared] 从「今天还没浇」翻到「今天浇过了」时播一次；进页面时本来就已经浇过
+/// 水不会重播 —— 所以不用在页面里额外存触发标记。
+class _GrowPulse extends StatefulWidget {
+  const _GrowPulse({required this.cared, required this.child});
+
+  final bool cared;
+  final Widget child;
+
+  @override
+  State<_GrowPulse> createState() => _GrowPulseState();
+}
+
+class _GrowPulseState extends State<_GrowPulse> with SingleTickerProviderStateMixin {
+  /// 放大到的比例（比按压反馈明显一档，肉眼看得出「长大了」）
+  static const double _grow = 1.12;
+
+  late final AnimationController _controller =
+      AnimationController(vsync: this, duration: AppMotion.slower, value: 1);
+
+  bool _disableAnimations = false;
+
+  /// 1 → [_grow] → 1（回落带一点过冲，像「弹回来」）
+  late final Animation<double> _scale = TweenSequence<double>(<TweenSequenceItem<double>>[
+    TweenSequenceItem<double>(
+      tween: Tween<double>(begin: 1, end: _grow).chain(CurveTween(curve: AppMotion.decelerate)),
+      weight: 45,
+    ),
+    TweenSequenceItem<double>(
+      tween: Tween<double>(begin: _grow, end: 1).chain(CurveTween(curve: AppMotion.overshoot)),
+      weight: 55,
+    ),
+  ]).animate(_controller);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 无障碍里的「减少动态效果」：直接停在终态，不播
+    _disableAnimations = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+  }
+
+  @override
+  void didUpdateWidget(_GrowPulse oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.cared && widget.cared) {
+      if (_disableAnimations) {
+        _controller.value = 1;
+      } else {
+        _controller.forward(from: 0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _scale,
+        builder: (BuildContext context, Widget? child) =>
+            Transform.scale(scale: _scale.value, child: child),
+        child: widget.child,
+      );
 }
 
 /// 横向菜单胶囊（选中态用 AppCard 的 highlight）
@@ -1885,22 +2109,20 @@ class _CheckButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.full),
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: done ? palette.success : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadius.full),
-            border: Border.all(color: done ? palette.success : palette.border, width: 2),
-          ),
-          child: done ? Icon(Icons.check, size: 22, color: palette.surface) : null,
+    // 水波纹 + 按压缩放（onTap 为 null 时自带禁用态：不可点）
+    return PressInkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.full),
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: done ? palette.success : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.full),
+          border: Border.all(color: done ? palette.success : palette.border, width: 2),
         ),
+        child: done ? Icon(Icons.check, size: 22, color: palette.surface) : null,
       ),
     );
   }

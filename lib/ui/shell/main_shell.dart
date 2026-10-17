@@ -9,7 +9,9 @@ import '../../data/models/notification_record.dart';
 import '../../state/family_state.dart';
 import '../../state/garden_state.dart';
 import '../../state/notification_state.dart';
+import '../../state/theme_state.dart';
 import '../../theme/app_theme.dart';
+import '../widgets/motion_widgets.dart';
 
 /// 主壳：底部导航 + 通知轮询（对应 Web 版 `src/layouts/MainLayout.tsx`）。
 ///
@@ -93,13 +95,20 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final unread = context.select<NotificationState, int>((state) => state.unreadCount);
     final pending = context.select<FamilyState, int>((state) => state.pendingCount);
     final isParent = context.select<FamilyState, bool>((state) => state.role == FamilyRole.parent);
+    final hasBackground = context.select<ThemeState, bool>(
+      (ThemeState state) => state.background.isNotEmpty,
+    );
 
     return Scaffold(
-      backgroundColor: palette.bg,
-      body: widget.child,
+      // 换 Tab 时内容横向滑入淡出 —— 比硬切更容易看清「去了哪一格」
+      body: SlideFadeSwitcher(
+        childKey: ValueKey<String>(location),
+        offset: 16,
+        child: widget.child,
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: palette.surface,
+          color: palette.cardColor(hasBackground: hasBackground),
           border: Border(top: BorderSide(color: palette.border)),
         ),
         child: SafeArea(

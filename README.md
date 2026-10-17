@@ -63,15 +63,28 @@ flutter test --no-pub test/api_smoke_test.dart --dart-define=API_BASE=http://127
 # 端到端业务闭环：打卡 → 同 id 重发幂等 → 待审批 → 审批 → 余额 +10 → 删除 → 余额复原
 # 注意：会真实写库（跑完自己把那条删掉），别指向生产环境
 flutter test --no-pub test/e2e_flow_test.dart --dart-define=API_BASE=http://127.0.0.1:8788
+
+# 花园闭环：背古诗 → pending 出队 → 后端阳光 +10 → 清理本次新增后复原
+flutter test --no-pub test/garden_flow_test.dart --dart-define=API_BASE=http://127.0.0.1:8788
+
+# 动效组件回归（12 个用例，不联网）
+flutter test --no-pub test/motion_widgets_test.dart
 ```
 
 加 `--no-pub` 是因为 `flutter test` 默认会先跑一次 `pub get`，离线环境会卡在那里。
 
 已经做过的验证：
 
-- `flutter analyze` 零 error
-- 上面三个测试全部通过（对着本地后端 + 线上数据副本）
+- `flutter analyze` 零 error（15 条 info，都是 `prefer_initializing_formals` /
+  `unnecessary_brace_in_string_interps` 这类既有提示）
+- 上面五个测试文件全部通过（21 个用例）
 - Chrome 里逐个跑通 8 个页面：身份门 / 女儿版首页 / 家长版首页 / 家庭账本 / 花园 / 通知 / 周计划 / 设置
+- 390×844 手机视口下 7 个主页面实拍留证（`docs/shots/`：
+  04 妈妈版首页 / 06 妹妹版首页 / 10 家庭账本 / 11 花园 / 12 设置 /
+  13 周计划 / 14 通知；身份门那屏没留）
+- **动效中间态抓到实拍**：`docs/shots/21-page-transition-b.png` 一帧里同时有
+  「路由 shared axis 转场中 + 错峰进场未完成 + 数字滚动到一半 + 导航指示器正在滑动」。
+  抓法见 [docs/motion-kit.md](docs/motion-kit.md) 第六节（`--dart-define=SLOW_MO=N` 放慢时间轴）。
 - 后端写路径实测：`POST /api/ledger` 回 201 `{id, status:"pending"}`；同 id 重发回 200 + `duplicate:true`；
   `PATCH` 通过后余额才 +10；`DELETE` 后余额复原
 
@@ -109,12 +122,38 @@ lib/
   data/api/              接口层：ledger / plans / notifications / settings / admin / upload / maintenance
   data/models/           数据模型
   state/                 全局状态（ChangeNotifier）：family / theme / settings / notification / customTasks / garden
-  theme/                 tokens（间距圆角字号）+ app_theme（7 套主题色板）
+  theme/                 tokens（间距圆角字号）+ app_theme（7 套主题色板）+ motion（动效令牌）
   ui/shell/              底部导航骨架 MainShell（含 15 秒通知轮询）
   ui/pages/              页面：home(妹妹版/妈妈版/通知) / family(工作台/周计划) / garden / settings / role_gate
-  ui/widgets/            通用卡片、状态视图
+  ui/widgets/            通用卡片、状态视图、全局背景图层、motion/（动效组件）
 docs/                    接口契约与移植说明（见下）
 ```
+
+## 动效与视觉
+
+设计语言参考 [FlClash](https://github.com/chen08209/FlClash) 的 Material 3 做法：
+圆角更大、层级靠底色与描边而非阴影、动效统一由一套令牌驱动。
+调研记录（含真实源码片段与参数）见 [docs/design-ref-flclash.md](docs/design-ref-flclash.md)，
+页面改造的 API 契约见 [docs/motion-kit.md](docs/motion-kit.md)。
+
+- **令牌**：`lib/theme/motion.dart` 的 `AppMotion` —— 时长 90/160/240/360/520/900ms 六档、
+  四条曲线（standard / decelerate / accelerate / emphasized）、三档弹簧（`SpringCurve`，
+  把物理弹簧塞进只吃 `Curve` 的 API）、列表错峰 42ms 步长（第 10 项封顶）。
+- **动效组件**：`lib/ui/widgets/motion/` —— `EnterBox`（入场/错峰）、
+  `PressInkWell`/`PressScale`（按压反馈）、`AnimatedCount`（数字滚动）、
+  `AnimatedProgressBar`/`PulseDot`、`SkeletonBox/Line/Card/List`（骨架屏，壁钟对齐相位）、
+  `SlideFadeSwitcher`/`SlidingHighlight`（内容与选项切换）、`SuccessBurst`/`showBurst`（成功那一下）。
+- **页面转场**：全平台统一 **shared axis（水平）**（`AppMotion.pageTransitionsTheme`
+  + `SharedAxisPageTransitionsBuilder`，用官方 `animations` 包的 `SharedAxisTransition`，
+  `fillColor: Colors.transparent` 防过渡期铺底闪一下）。与 FlClash 同一选择。
+- **主题切换**：MaterialApp 内置 `AnimatedTheme`，色板与玻璃底一起 lerp 过去（520ms emphasized）。
+- **全局背景图**：`AppBackgroundLayer` 铺在所有页面之下（照片 + 一层薄纱 `palette.bgVeil`）；
+  设了背景图时各页 Scaffold 背景透明、卡片转半透明玻璃底。
+- **无障碍**：所有动效组件都读 `MediaQuery.disableAnimations`，系统关掉动画时直接落终点态。
+- **怎么验收动效**：静态截图证明不了动画 —— 组件回归跑
+  `flutter test --no-pub test/motion_widgets_test.dart`（12 个用例）；
+  要看/要抓中间态就加 `--dart-define=SLOW_MO=60` 构建（把 `timeDilation` 放慢 60 倍，
+  默认 1 倍完全不生效），实拍见 `docs/shots/`。
 
 ## 契约文档（写代码前先查这里）
 
@@ -125,6 +164,8 @@ docs/                    接口契约与移植说明（见下）
 | [docs/contract-other-stores.md](docs/contract-other-stores.md) | 通知 / 主题 / 设置 / 自定义任务四个 store 的行为契约与持久化键 |
 | [docs/parity-audit.md](docs/parity-audit.md) | 与 Web 版的功能对齐审计：逐页核对表、缺失项 M1–M9、行为不一致 I1–I10、交互形态差异 |
 | [docs/parity-fixes.md](docs/parity-fixes.md) | 上述审计问题的处置记录：14 项已修复、3 项刻意保留的差异及理由、验证方式 |
+| [docs/design-ref-flclash.md](docs/design-ref-flclash.md) | FlClash 设计/动效源码调研：圆角与层级体系、时长与弹簧参数、最值得移植的 5 条手法、明确不移植的部分 |
+| [docs/motion-kit.md](docs/motion-kit.md) | 动效工具包契约：`AppMotion` 令牌表、全部动效组件的用法、页面改造清单、硬约束 |
 
 ## 与 Web 版的差异（有意为之）
 

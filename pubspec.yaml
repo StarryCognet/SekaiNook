@@ -45,6 +45,7 @@ dependencies:
   crypto: ^3.0.7
   flutter_localizations:
     sdk: flutter
+  animations: ^3.0.0
 
 dev_dependencies:
   flutter_test:

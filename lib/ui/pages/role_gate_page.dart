@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,14 +10,24 @@ import '../../config/family_rules.dart';
 import '../../state/family_state.dart';
 import '../../state/settings_state.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
+import '../widgets/motion_widgets.dart';
 
 /// 身份选择门（对应 Web 版 `src/components/RoleGate.tsx`）。
 ///
 /// 只有真正选过身份才放行 —— **绝不能缺省为家长**，
 /// 否则妹妹手机第一次打开就是家长模式，能自己审批自己的打卡。
-class RoleGatePage extends StatelessWidget {
+class RoleGatePage extends StatefulWidget {
   const RoleGatePage({super.key});
+
+  @override
+  State<RoleGatePage> createState() => _RoleGatePageState();
+}
+
+class _RoleGatePageState extends State<RoleGatePage> {
+  /// 刚点下去的那张卡：只驱动选中态的弹簧与描边，不参与任何身份判断
+  FamilyRole? _picked;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +35,6 @@ class RoleGatePage extends StatelessWidget {
     final settings = context.watch<SettingsState>();
 
     return Scaffold(
-      backgroundColor: palette.bg,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -32,13 +42,17 @@ class RoleGatePage extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Text(
-                  'SekaiNook',
-                  style: TextStyle(
-                    fontSize: AppFontSize.xl,
-                    fontWeight: FontWeight.w700,
-                    color: palette.text,
-                    letterSpacing: 1,
+                EnterBox(
+                  index: 0,
+                  scaleFrom: 0.96,
+                  child: Text(
+                    'SekaiNook',
+                    style: TextStyle(
+                      fontSize: AppFontSize.xl,
+                      fontWeight: FontWeight.w700,
+                      color: palette.text,
+                      letterSpacing: 1,
+                    ),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
@@ -47,20 +61,30 @@ class RoleGatePage extends StatelessWidget {
                   style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                _RoleCard(
-                  emoji: '🌸',
-                  title: settings.kidName,
-                  subtitle: '打卡赚积分、看花园、背古诗',
-                  color: palette.primary,
-                  onTap: () => _chooseKid(context),
+                EnterBox(
+                  index: 1,
+                  scaleFrom: 0.94,
+                  child: _RoleCard(
+                    emoji: '🌸',
+                    title: settings.kidName,
+                    subtitle: '打卡赚积分、看花园、背古诗',
+                    color: palette.primary,
+                    selected: _picked == FamilyRole.child,
+                    onTap: _chooseKid,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                _RoleCard(
-                  emoji: '👩',
-                  title: settings.momName,
-                  subtitle: '审批打卡、看账本、管设置',
-                  color: palette.success,
-                  onTap: () => _chooseParent(context),
+                EnterBox(
+                  index: 2,
+                  scaleFrom: 0.94,
+                  child: _RoleCard(
+                    emoji: '👩',
+                    title: settings.momName,
+                    subtitle: '审批打卡、看账本、管设置',
+                    color: palette.success,
+                    selected: _picked == FamilyRole.parent,
+                    onTap: _chooseParent,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 Text(
@@ -75,12 +99,22 @@ class RoleGatePage extends StatelessWidget {
     );
   }
 
-  Future<void> _chooseKid(BuildContext context) async {
+  /// 选中态先弹一下（弹簧），再走原来的切身份 + 跳转 —— 顺序不变，只是中间多一拍反馈。
+  Future<void> _chooseKid() async {
+    if (_picked != null) return;
+    setState(() => _picked = FamilyRole.child);
+    await Future<void>.delayed(AppMotion.fast);
+    if (!mounted) return;
+    showBurst(context);
     await context.read<FamilyState>().setRole(FamilyRole.child);
-    if (context.mounted) context.go('/home');
+    if (mounted) context.go('/home');
   }
 
-  Future<void> _chooseParent(BuildContext context) async {
+  Future<void> _chooseParent() async {
+    if (_picked != null) return;
+    setState(() => _picked = FamilyRole.parent);
+    await Future<void>.delayed(AppMotion.fast);
+    if (!mounted) return;
     final family = context.read<FamilyState>();
     final ok = await showDialog<bool>(
       context: context,
@@ -90,7 +124,13 @@ class RoleGatePage extends StatelessWidget {
         child: const _ParentPinDialog(),
       ),
     );
-    if (ok == true && context.mounted) context.go('/home');
+    if (ok != true || !mounted) {
+      // 口令没对上（或者点了取消）：选中态弹回去，还能再点一次
+      if (mounted) setState(() => _picked = null);
+      return;
+    }
+    showBurst(context);
+    context.go('/home');
   }
 }
 
@@ -101,6 +141,7 @@ class _RoleCard extends StatelessWidget {
     required this.subtitle,
     required this.color,
     required this.onTap,
+    this.selected = false,
   });
 
   final String emoji;
@@ -109,22 +150,32 @@ class _RoleCard extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
+  /// 选中的那张卡会弹出去一点、描边转成自己的强调色
+  final bool selected;
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     return SizedBox(
       width: 320,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
+      child: AnimatedScale(
+        scale: selected ? 1.04 : 1,
+        duration: AppMotion.fast,
+        curve: AppMotion.spring,
+        child: PressInkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          child: Container(
+          child: AnimatedContainer(
+            duration: AppMotion.fast,
+            curve: AppMotion.standard,
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              color: palette.surface,
+              color: selected ? color.withValues(alpha: 0.12) : palette.surface,
               borderRadius: BorderRadius.circular(AppRadius.lg),
-              border: Border.all(color: palette.border),
+              border: Border.all(
+                color: selected ? color : palette.border,
+                width: selected ? 2 : 1,
+              ),
             ),
             child: Row(
               children: <Widget>[
@@ -183,6 +234,9 @@ class _ParentPinDialogState extends State<_ParentPinDialog> {
   bool _busy = false;
   Timer? _lockTimer;
 
+  /// 抖动计数：每失败一次 +1，驱动**一次**横向抖动（不是循环动画）
+  int _shakeTick = 0;
+
   @override
   void initState() {
     super.initState();
@@ -217,6 +271,7 @@ class _ParentPinDialogState extends State<_ParentPinDialog> {
     }
     setState(() {
       _busy = false;
+      _shakeTick++;
       final remaining = family.pinLockRemaining;
       if (remaining > Duration.zero) {
         _error = '试错太多次，请等 ${remaining.inSeconds} 秒后再试';
@@ -236,33 +291,45 @@ class _ParentPinDialogState extends State<_ParentPinDialog> {
     return AlertDialog(
       backgroundColor: palette.surface,
       title: const Text('家长口令'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            obscureText: true,
-            enabled: !locked && !_busy,
-            keyboardType: TextInputType.number,
-            inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(hintText: '输入口令'),
-            onSubmitted: (_) => _submit(),
-          ),
-          if (_error != null) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            Text(_error!, style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger)),
-          ],
-          if (family.hasCustomParentPin)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Text(
-                '已修改过口令',
-                style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
-              ),
+      content: TweenAnimationBuilder<Offset>(
+        // 把「第几次抖动」编进 tween 的终点：每失败一次终点 +1，
+        // 组件不重建（输入框不丢焦点），进度落在小数部分里做一次衰减横摆。
+        tween: Tween<Offset>(begin: Offset.zero, end: Offset(_shakeTick.toDouble(), 0)),
+        duration: AppMotion.slow,
+        curve: AppMotion.linear,
+        builder: (BuildContext context, Offset value, Widget? child) {
+          final double phase = value.dx - value.dx.floorToDouble();
+          final double dx = math.sin(phase * math.pi * 3) * (1 - phase) * 8;
+          return Transform.translate(offset: Offset(dx, 0), child: child);
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              obscureText: true,
+              enabled: !locked && !_busy,
+              keyboardType: TextInputType.number,
+              inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(hintText: '输入口令'),
+              onSubmitted: (_) => _submit(),
             ),
-        ],
+            if (_error != null) ...<Widget>[
+              const SizedBox(height: AppSpacing.sm),
+              Text(_error!, style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger)),
+            ],
+            if (family.hasCustomParentPin)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Text(
+                  '已修改过口令',
+                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                ),
+              ),
+          ],
+        ),
       ),
       actions: <Widget>[
         TextButton(

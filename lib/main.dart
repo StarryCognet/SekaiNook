@@ -1,6 +1,7 @@
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
@@ -19,6 +20,14 @@ import 'state/theme_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 动效验收辅助：加 --dart-define=SLOW_MO=15 时把全局动画放慢 15 倍，
+  // 截图/录屏才抓得到转场与弹层的中间态。默认 1 倍，正式构建不受影响。
+  const slowMo = int.fromEnvironment('SLOW_MO');
+  if (slowMo > 1) {
+    timeDilation = slowMo.toDouble();
+    debugPrint('[SekaiNook] 动效放慢 $slowMo 倍（仅验收用）');
+  }
 
   // 出错兜底卡片：渲染期异常不再白屏（对应 Web 版 ErrorBoundary）
   installErrorWidget();

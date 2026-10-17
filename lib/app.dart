@@ -14,7 +14,9 @@ import 'state/notification_state.dart';
 import 'state/settings_state.dart';
 import 'state/theme_state.dart';
 import 'theme/app_theme.dart';
+import 'theme/motion.dart';
 import 'ui/shell/main_shell.dart';
+import 'ui/widgets/app_background.dart';
 
 /// 应用根（对应 Web 版 `src/App.tsx`）。
 ///
@@ -96,6 +98,10 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
             title: 'SekaiNook',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.build(theme.themeId, hasBackground: theme.hasBackground),
+            // MaterialApp 内部就是 AnimatedTheme：换主题时整个色板慢慢化过去，
+            // 而不是"啪"地一下跳。AppPalette 实现了 lerp，所以玻璃底也会一起过渡。
+            themeAnimationDuration: AppMotion.slower,
+            themeAnimationCurve: AppMotion.emphasized,
             routerConfig: _router,
             locale: const Locale('zh', 'CN'),
             supportedLocales: const <Locale>[Locale('zh', 'CN'), Locale('en')],
@@ -104,6 +110,18 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
+            // 全局背景图铺在所有页面之下（页面在设了背景图时背景是透明的）
+            builder: (BuildContext context, Widget? child) => Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                if (theme.hasBackground)
+                  AppBackgroundLayer(
+                    url: theme.background,
+                    veil: context.palette.bgVeil,
+                  ),
+                child ?? const SizedBox.shrink(),
+              ],
+            ),
           );
         },
       ),

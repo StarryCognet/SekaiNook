@@ -11,8 +11,10 @@ import '../../../core/week.dart';
 import '../../../data/api/plans_api.dart';
 import '../../../data/models/weekly_plan.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 
 /// 每个科目的图标（与 Web 版 SUBJECT_ICONS 一致）
@@ -152,6 +154,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
             .toList(growable: false);
       });
       _toast(applied == next ? '进度已更新' : '已记到上限 $applied');
+      _burst();
     } catch (_) {
       if (!mounted) return;
       setState(() => _inputs[plan.id] = plan.current);
@@ -175,13 +178,38 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// 保存成功那一下的整页反馈：光环 + 对勾，不挡点击、播完自动消失。
+  ///
+  /// 包一层 mounted 判断，异步回调里就不用直接碰 context。
+  void _burst() {
+    if (!mounted) return;
+    showBurst(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     if (_error != null) {
       return ErrorView(message: _error!, onRetry: () => unawaited(_init()));
     }
-    if (_loading) return const LoadingView(message: '正在翻开这周的学习计划…');
+    if (_loading) {
+      // 首屏加载改骨架屏；原来的加载文案保留在旁边
+      return Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            const SkeletonList(count: 3),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              '正在翻开这周的学习计划…',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
 
     return SafeArea(
       child: RefreshIndicator(
@@ -189,7 +217,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.md),
           children: <Widget>[
-            _buildHeader(palette),
+            // 顶部卡与四类计划卡按序号错峰进场
+            EnterBox(index: 0, child: _buildHeader(palette)),
             if (_plans.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: AppSpacing.xl),
@@ -199,7 +228,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
                 ),
               )
             else
-              ..._buildGroups(palette),
+              for (final (i, card) in _buildGroups(palette).indexed)
+                EnterBox(index: i + 1, child: card),
           ],
         ),
       ),
@@ -243,8 +273,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
                 const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: <Widget>[
-                    Text(
-                      '$percent',
+                    AnimatedCount(
+                      value: percent,
                       style: TextStyle(
                         fontSize: AppFontSize.xl,
                         fontWeight: FontWeight.w700,
@@ -262,13 +292,25 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
-                      child: Text(
-                        '$_totalCurrent / $_totalTarget',
-                        style: TextStyle(
-                          fontSize: AppFontSize.sm,
-                          color: palette.textTertiary,
-                          fontFeatures: kTabularNumbers,
-                        ),
+                      child: Row(
+                        children: <Widget>[
+                          AnimatedCount(
+                            value: _totalCurrent,
+                            style: TextStyle(
+                              fontSize: AppFontSize.sm,
+                              color: palette.textTertiary,
+                              fontFeatures: kTabularNumbers,
+                            ),
+                          ),
+                          Text(
+                            ' / $_totalTarget',
+                            style: TextStyle(
+                              fontSize: AppFontSize.sm,
+                              color: palette.textTertiary,
+                              fontFeatures: kTabularNumbers,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -282,7 +324,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
             height: 76,
             child: TweenAnimationBuilder<double>(
               tween: Tween<double>(begin: 0, end: (percent / 100).clamp(0.0, 1.0)),
-              duration: AppDuration.themeChange,
+              duration: AppMotion.slower,
               builder: (_, value, _) => Stack(
                 alignment: Alignment.center,
                 children: <Widget>[
@@ -344,8 +386,16 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
                       ),
                     ),
                     const Spacer(),
+                    AnimatedCount(
+                      value: doneCount,
+                      style: TextStyle(
+                        fontSize: AppFontSize.sm,
+                        color: palette.textTertiary,
+                        fontFeatures: kTabularNumbers,
+                      ),
+                    ),
                     Text(
-                      '$doneCount/${rows.length}',
+                      '/${rows.length}',
                       style: TextStyle(
                         fontSize: AppFontSize.sm,
                         color: palette.textTertiary,
@@ -412,8 +462,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
                     const SizedBox(height: AppSpacing.xs),
                     Row(
                       children: <Widget>[
-                        Text(
-                          '$current',
+                        AnimatedCount(
+                          value: current,
                           style: TextStyle(
                             fontSize: AppFontSize.sm,
                             fontWeight: FontWeight.w700,
@@ -425,8 +475,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
                           ' / ',
                           style: TextStyle(fontSize: AppFontSize.sm, color: palette.textTertiary),
                         ),
-                        Text(
-                          '$target',
+                        AnimatedCount(
+                          value: target,
                           style: TextStyle(
                             fontSize: AppFontSize.sm,
                             color: palette.textSecondary,
@@ -511,14 +561,11 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.full),
-            child: LinearProgressIndicator(
-              value: percent / 100,
-              minHeight: 4,
-              backgroundColor: palette.surfaceSoft,
-              valueColor: AlwaysStoppedAnimation<Color>(accent),
-            ),
+          AnimatedProgressBar(
+            value: percent / 100,
+            color: accent,
+            trackColor: palette.surfaceSoft,
+            height: 4,
           ),
         ],
       ),

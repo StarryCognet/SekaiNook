@@ -15,8 +15,10 @@ import '../../../state/garden_state.dart';
 import '../../../state/notification_state.dart';
 import '../../../state/settings_state.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 
 /// 趋势图天数（对应 Web 版 `BalanceTrend.tsx` 的 `TREND_DAYS`）
@@ -247,7 +249,11 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
     try {
       await context.read<FamilyState>().approve(record.id);
       await _refresh();
-      if (mounted) _toast('「${record.taskName}」已通过', success: true);
+      if (mounted) {
+        // 通过那一下给一整页的「做成了」反馈（不挡点击，自己消失）
+        showBurst(context);
+        _toast('「${record.taskName}」已通过', success: true);
+      }
     } catch (e) {
       if (mounted) _toast('$e', error: true);
     } finally {
@@ -307,7 +313,11 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
         autoApprove: true,
       );
       await _refresh();
-      if (mounted) _toast('已兑换 ${_yuanText(yuan)} 元，扣掉 $balance 积分', success: true);
+      if (mounted) {
+        // 到账那一下同样放一个光环
+        showBurst(context);
+        _toast('已兑换 ${_yuanText(yuan)} 元，扣掉 $balance 积分', success: true);
+      }
     } on LedgerApprovalException {
       await _refresh();
       if (mounted) {
@@ -345,18 +355,34 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
 
     final String momName = settings.momName;
     final String kidName = settings.kidName;
-    if (momName.isEmpty && kidName.isEmpty) return const LoadingView(message: '正在加载…');
+    // 称呼还没到位时用骨架屏占住首屏（判定逻辑不变，只换「加载中」的样子）
+    if (momName.isEmpty && kidName.isEmpty) {
+      return const SafeArea(child: SkeletonList(count: 3));
+    }
 
     final DateTime now = _now;
     final ({int income, int expense, int net, int count, int checkins}) week =
         _recentSummary(family.records, 7, now);
     final List<LedgerRecord> today = _todayRecords(family.records, now);
 
+    // 首屏卡片按顺序错峰进场（对应 `docs/motion-kit.md` 第四节第 1 条）。
+    // 带稳定 key：中途多出一张卡（比如来了新的待审批）时它单独淡入，
+    // 已经在场的卡片不会重播。
+    final List<({String key, Widget card})> cards = <({String key, Widget card})>[
+      (key: 'hero', card: _hero(palette, now, momName, family)),
+      (key: 'todo', card: _todoCard(palette, momName, kidName, family, notices.unreadCount)),
+      if (family.pendingRecords.isNotEmpty) (key: 'pending', card: _pendingCard(palette, family)),
+      (key: 'overview', card: _overviewCard(palette, week, family.records, now)),
+      (key: 'today', card: _todayCard(palette, now, kidName, today)),
+      (key: 'grid', card: _grid(palette, family, garden, notices.unreadCount)),
+    ];
+    // 顶上先插了一张「重试」卡时，后面的卡片整体顺延一位
+    final int leadIndex = _loadFailed ? 1 : 0;
+
     return Scaffold(
-      backgroundColor: palette.bg,
       body: SafeArea(
         child: family.loading && family.records.isEmpty && !_loadFailed
-            ? const LoadingView(message: '正在打开账本…')
+            ? const SkeletonList(count: 4)
             : ListView(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.md,
@@ -366,45 +392,43 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                 ),
                 children: <Widget>[
                   if (_loadFailed) ...<Widget>[
-                    AppCard(
-                      highlight: true,
-                      onTap: () => unawaited(_refresh()),
-                      child: Row(
-                        children: <Widget>[
-                          Icon(Icons.cloud_off, size: AppFontSize.md, color: palette.danger),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: Text(
-                              '没拉到最新数据，点一下重试',
-                              style: TextStyle(fontSize: AppFontSize.sm, color: palette.text),
+                    EnterBox(
+                      index: 0,
+                      child: AppCard(
+                        highlight: true,
+                        onTap: () => unawaited(_refresh()),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(Icons.cloud_off, size: AppFontSize.md, color: palette.danger),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                '没拉到最新数据，点一下重试',
+                                style: TextStyle(fontSize: AppFontSize.sm, color: palette.text),
+                              ),
                             ),
-                          ),
-                          Text(
-                            '重试',
-                            style: TextStyle(
-                              fontSize: AppFontSize.sm,
-                              fontWeight: FontWeight.w700,
-                              color: palette.primary,
+                            Text(
+                              '重试',
+                              style: TextStyle(
+                                fontSize: AppFontSize.sm,
+                                fontWeight: FontWeight.w700,
+                                color: palette.primary,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     _gapSm,
                   ],
-                  _hero(palette, now, momName, family),
-                  _gapSm,
-                  _todoCard(palette, momName, kidName, family, notices.unreadCount),
-                  if (family.pendingRecords.isNotEmpty) ...<Widget>[
-                    _gapSm,
-                    _pendingCard(palette, family),
+                  for (int i = 0; i < cards.length; i++) ...<Widget>[
+                    if (i > 0) _gapSm,
+                    EnterBox(
+                      key: ValueKey<String>(cards[i].key),
+                      index: i + leadIndex,
+                      child: cards[i].card,
+                    ),
                   ],
-                  _gapSm,
-                  _overviewCard(palette, week, family.records, now),
-                  _gapSm,
-                  _todayCard(palette, now, kidName, today),
-                  _gapSm,
-                  _grid(palette, family, garden, notices.unreadCount),
                 ],
               ),
       ),
@@ -475,7 +499,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
           Row(
             children: <Widget>[
               Expanded(
-                child: InkWell(
+                child: PressInkWell(
                   onTap: () => context.go(_familyPath('pending')),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Padding(
@@ -492,8 +516,11 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                           crossAxisAlignment: CrossAxisAlignment.baseline,
                           textBaseline: TextBaseline.alphabetic,
                           children: <Widget>[
-                            Text(
-                              '${family.pendingCount}',
+                            AnimatedCount(
+                              value: family.pendingCount,
+                              // 基线对齐的行里不要「脉冲」那层 Transform，
+                              // 否则会和右边的「条」错开半行；滚动数字本身已经够看
+                              pulse: false,
                               style: TextStyle(
                                 fontSize: AppFontSize.xl,
                                 fontWeight: FontWeight.w800,
@@ -518,7 +545,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
               ),
               Container(width: 1, height: AppSpacing.xl, color: palette.border),
               Expanded(
-                child: InkWell(
+                child: PressInkWell(
                   onTap: () => context.go(_familyPath('history')),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Padding(
@@ -535,8 +562,10 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                           crossAxisAlignment: CrossAxisAlignment.baseline,
                           textBaseline: TextBaseline.alphabetic,
                           children: <Widget>[
-                            Text(
-                              _yuanText(FamilyRules.pointsToYuan(family.balance)),
+                            AnimatedCount(
+                              value: FamilyRules.pointsToYuan(family.balance),
+                              formatter: (num value) => _yuanText(value.toDouble()),
+                              pulse: false,
                               style: TextStyle(
                                 fontSize: AppFontSize.xl,
                                 fontWeight: FontWeight.w800,
@@ -607,6 +636,11 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
         children: <Widget>[
           Row(
             children: <Widget>[
+              // 「有活等着你」的呼吸信号：有待审批偏警示色，只有未读通知走主色
+              if (family.pendingCount > 0 || unreadCount > 0) ...<Widget>[
+                PulseDot(color: family.pendingCount > 0 ? palette.warning : palette.primary),
+                const SizedBox(width: AppSpacing.sm),
+              ],
               Expanded(
                 child: Text(
                   '需要我处理',
@@ -653,7 +687,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
   }) {
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: InkWell(
+      child: PressInkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.md),
         child: Padding(
@@ -870,10 +904,16 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
           _gapSm,
           Row(
             children: <Widget>[
-              _statCell(palette, '收入', '+${week.income}', palette.success),
-              _statCell(palette, '支出', '${week.expense}', palette.danger),
-              _statCell(palette, '净额', '${week.net}', palette.primary),
-              _statCell(palette, '打卡次数', '${week.checkins}', palette.warning),
+              _statCell(
+                palette,
+                '收入',
+                week.income,
+                palette.success,
+                formatter: (num value) => '+${value.round()}',
+              ),
+              _statCell(palette, '支出', week.expense, palette.danger),
+              _statCell(palette, '净额', week.net, palette.primary),
+              _statCell(palette, '打卡次数', week.checkins, palette.warning),
             ],
           ),
           _gapMd,
@@ -892,7 +932,13 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
     );
   }
 
-  Widget _statCell(AppPalette palette, String label, String value, Color color) {
+  Widget _statCell(
+    AppPalette palette,
+    String label,
+    num value,
+    Color color, {
+    String Function(num value)? formatter,
+  }) {
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -902,8 +948,9 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
             style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
           ),
           _gapXs,
-          Text(
-            value,
+          AnimatedCount(
+            value: value,
+            formatter: formatter,
             style: TextStyle(
               fontSize: AppFontSize.md,
               fontWeight: FontWeight.w700,
@@ -1157,7 +1204,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
   }
 
   Widget _gridTile(AppPalette palette, _GridEntry entry) {
-    return InkWell(
+    return PressInkWell(
       onTap: entry.onTap,
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: Padding(
@@ -1261,6 +1308,9 @@ class _BalanceTrend extends StatelessWidget {
     return SizedBox(
       height: _chartHeight,
       child: BarChart(
+        // fl_chart 自带的 swap 动画：数据一变就重新「长」一次柱子
+        duration: AppMotion.slower,
+        curve: AppMotion.emphasized,
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
           maxY: _maxY(values),

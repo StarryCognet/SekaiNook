@@ -18,8 +18,10 @@ import '../../../state/family_state.dart';
 import '../../../state/settings_state.dart';
 import '../../../state/theme_state.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/motion_widgets.dart';
 
 /// 家长口令长度（与 Web 版一致：4-8 位）。
 const int _pinMinLength = 4;
@@ -287,6 +289,7 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     if (!mounted) return;
+    showBurst(context);
     setState(_resetNameInputs);
     _toast(next == FamilyRole.parent ? '已切换为家长' : '已切换为小孩');
   }
@@ -298,6 +301,7 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (_) => _ChangePinDialog(family: family),
     );
     if (ok != true || !mounted) return;
+    showBurst(context);
     _toast('家长口令已更新');
   }
 
@@ -387,6 +391,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ? '已清理 ${result.deleted} 张闲置照片，${result.failed} 张没清掉'
             : '已清理 ${result.deleted} 张闲置照片';
       });
+      showBurst(context);
       _toast('已清理 ${result.deleted} 张闲置照片');
     } catch (error) {
       if (!mounted) return;
@@ -414,6 +419,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _adminUnlocked = true;
       _section = _SettingsSection.admin;
     });
+    showBurst(context);
     _toast('已进入管理员');
     unawaited(_refreshBalances());
     unawaited(_refreshAdjustments());
@@ -522,6 +528,7 @@ class _SettingsPageState extends State<SettingsPage> {
       }
       await _refreshAdjustments();
       if (!mounted) return;
+      showBurst(context);
       _toast(result.changed.isEmpty ? '本来就是 0，没有改动' : '已清零：${result.changed.join('，')}');
     } catch (error) {
       if (!mounted) return;
@@ -578,6 +585,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _newAdminPasswordCtrl.clear();
         _confirmAdminPasswordCtrl.clear();
       });
+      showBurst(context);
       _toast('管理员密码已更新');
     } catch (error) {
       if (!mounted) return;
@@ -609,9 +617,12 @@ class _SettingsPageState extends State<SettingsPage> {
     final palette = context.palette;
     final section = _section;
     return Scaffold(
-      backgroundColor: palette.bg,
       body: SafeArea(
-        child: section == null ? _buildIndex(palette) : _buildSection(palette, section),
+        // 两级钻取：入口页和子页之间做一次横向滑淡切换
+        child: SlideFadeSwitcher(
+          childKey: ValueKey<_SettingsSection?>(section),
+          child: section == null ? _buildIndex(palette) : _buildSection(palette, section),
+        ),
       ),
     );
   }
@@ -638,42 +649,54 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        AppCard(
-          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-          onTap: () => setState(() => _section = _SettingsSection.appearance),
-          child: _EntryRow(
-            icon: Icons.palette_outlined,
-            title: '外观',
-            description:
-                '主题与背景图 · 现在是「${theme.preset.name}」主题${theme.hasBackground ? ' · 已设背景图' : ''}',
+        EnterBox(
+          index: 0,
+          child: AppCard(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            onTap: () => setState(() => _section = _SettingsSection.appearance),
+            child: _EntryRow(
+              icon: Icons.palette_outlined,
+              title: '外观',
+              description:
+                  '主题与背景图 · 现在是「${theme.preset.name}」主题${theme.hasBackground ? ' · 已设背景图' : ''}',
+            ),
           ),
         ),
-        AppCard(
-          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-          onTap: () => setState(() => _section = _SettingsSection.family),
-          child: _EntryRow(
-            icon: Icons.family_restroom_outlined,
-            title: '家庭',
-            description: '身份与称呼 · 现在用的是${isParent ? '家长' : '小孩'}身份',
+        EnterBox(
+          index: 1,
+          child: AppCard(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            onTap: () => setState(() => _section = _SettingsSection.family),
+            child: _EntryRow(
+              icon: Icons.family_restroom_outlined,
+              title: '家庭',
+              description: '身份与称呼 · 现在用的是${isParent ? '家长' : '小孩'}身份',
+            ),
           ),
         ),
         if (isParent)
-          AppCard(
-            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-            onTap: () => setState(() => _section = _SettingsSection.parent),
-            child: const _EntryRow(
-              icon: Icons.lock_outline,
-              title: '家长管理',
-              description: '家长口令、打卡照片清理',
+          EnterBox(
+            index: 2,
+            child: AppCard(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              onTap: () => setState(() => _section = _SettingsSection.parent),
+              child: const _EntryRow(
+                icon: Icons.lock_outline,
+                title: '家长管理',
+                description: '家长口令、打卡照片清理',
+              ),
             ),
           ),
-        AppCard(
-          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-          onTap: _openAdmin,
-          child: const _EntryRow(
-            icon: Icons.tune_outlined,
-            title: '管理员',
-            description: '修改积分数 · 需要管理员密码',
+        EnterBox(
+          index: 3,
+          child: AppCard(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            onTap: _openAdmin,
+            child: const _EntryRow(
+              icon: Icons.tune_outlined,
+              title: '管理员',
+              description: '修改积分数 · 需要管理员密码',
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -744,8 +767,19 @@ class _SettingsPageState extends State<SettingsPage> {
       children: <Widget>[
         const _CardHead(title: '版本日志'),
         const SizedBox(height: AppSpacing.sm),
-        for (int index = 0; index < entries.length; index++)
-          _changelogEntry(palette, entries[index], isFirst: index == 0),
+        // 展开 / 收起时高度平滑过渡，不做会一跳一跳的裸 if
+        AnimatedSize(
+          duration: AppMotion.slow,
+          curve: AppMotion.emphasized,
+          alignment: Alignment.topCenter,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              for (int index = 0; index < entries.length; index++)
+                _changelogEntry(palette, entries[index], isFirst: index == 0),
+            ],
+          ),
+        ),
         if (more > 0)
           Align(
             alignment: Alignment.centerLeft,
@@ -763,13 +797,20 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ),
-        if (!_logExpanded && more > 0)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.xs),
-            child: Text(
-              '收起时只显示最近 $_recentLogCount 个版本，还有 $more 个更早的在里面',
-              style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
-            ),
+        if (more > 0)
+          AnimatedSize(
+            duration: AppMotion.fast,
+            curve: AppMotion.emphasized,
+            alignment: Alignment.topCenter,
+            child: _logExpanded
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Text(
+                      '收起时只显示最近 $_recentLogCount 个版本，还有 $more 个更早的在里面',
+                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                    ),
+                  ),
           ),
       ],
     );
@@ -875,16 +916,17 @@ class _SettingsPageState extends State<SettingsPage> {
                     '全局生效；只改这台手机的显示，另一台手机自己选。顶栏右上角那颗太阳/月亮也能一键在深浅之间来回切',
               ),
               const SizedBox(height: AppSpacing.sm),
-              for (final preset in AppTheme.all) _themeTile(palette, preset, theme.themeId),
+              for (int index = 0; index < AppTheme.all.length; index++)
+                EnterBox(
+                  index: index,
+                  child: _themeTile(palette, AppTheme.all[index], theme.themeId),
+                ),
               const SizedBox(height: AppSpacing.sm),
               Align(
                 alignment: Alignment.centerRight,
                 child: OutlinedButton.icon(
                   onPressed: _toggleBrightness,
-                  icon: Icon(
-                    theme.preset.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                    size: 18,
-                  ),
+                  icon: _BrightnessIcon(dark: theme.preset.dark),
                   label: Text(theme.preset.dark ? '切到浅色' : '切到深色'),
                 ),
               ),
@@ -904,28 +946,44 @@ class _SettingsPageState extends State<SettingsPage> {
                   style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
                 )
               else ...<Widget>[
-                if (theme.hasBackground)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    child: Image.network(
-                      theme.background,
-                      height: 140,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        height: 140,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: palette.surfaceSoft,
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                        child: Text(
-                          '这张图打不开了，换一张吧',
-                          style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
-                        ),
-                      ),
-                    ),
+                // 设了图 / 换了图时淡入，高度也一起平滑（不会把下面的按钮顶一下）
+                AnimatedSize(
+                  duration: AppMotion.slow,
+                  curve: AppMotion.emphasized,
+                  alignment: Alignment.topCenter,
+                  child: AnimatedSwitcher(
+                    duration: AppMotion.slow,
+                    switchInCurve: AppMotion.decelerate,
+                    switchOutCurve: AppMotion.accelerate,
+                    child: theme.hasBackground
+                        ? ClipRRect(
+                            key: ValueKey<String>(theme.background),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                            child: Image.network(
+                              theme.background,
+                              height: 140,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                height: 140,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: palette.surfaceSoft,
+                                  borderRadius: BorderRadius.circular(AppRadius.md),
+                                ),
+                                child: Text(
+                                  '这张图打不开了，换一张吧',
+                                  style: TextStyle(
+                                    fontSize: AppFontSize.xs,
+                                    color: palette.textTertiary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(key: ValueKey<String>('')),
                   ),
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   theme.hasBackground ? '现在用的就是这张，两台手机一样' : '还没设置背景图，现在用主题自带的纯色底',
@@ -991,62 +1049,76 @@ class _SettingsPageState extends State<SettingsPage> {
     final selected = preset.id == current;
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.xs),
-      child: Material(
-        color: selected ? palette.primarySoft : palette.surface,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        child: InkWell(
-          onTap: () => _pickTheme(preset),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: selected ? palette.primary : palette.border),
+      child: AnimatedScale(
+        scale: selected ? 1.03 : 1,
+        duration: AppMotion.fast,
+        curve: AppMotion.spring,
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          curve: AppMotion.standard,
+          decoration: BoxDecoration(
+            color: selected ? palette.primarySoft : palette.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+              color: selected ? palette.primary : palette.border,
+              width: selected ? 1.6 : 1,
             ),
-            child: Row(
-              children: <Widget>[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  child: SizedBox(
-                    width: 48,
-                    height: 30,
-                    child: Row(
-                      children: <Widget>[
-                        for (final color in preset.swatch) Expanded(child: ColoredBox(color: color)),
-                      ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: InkWell(
+              onTap: () => _pickTheme(preset),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Row(
+                  children: <Widget>[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      child: SizedBox(
+                        width: 48,
+                        height: 30,
+                        child: Row(
+                          children: <Widget>[
+                            for (final color in preset.swatch)
+                              Expanded(child: ColoredBox(color: color)),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        preset.name,
-                        style: TextStyle(
-                          fontSize: AppFontSize.sm,
-                          fontWeight: FontWeight.w600,
-                          color: selected ? palette.primary : palette.text,
-                        ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            preset.name,
+                            style: TextStyle(
+                              fontSize: AppFontSize.sm,
+                              fontWeight: FontWeight.w600,
+                              color: selected ? palette.primary : palette.text,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            preset.description,
+                            style: TextStyle(
+                              fontSize: AppFontSize.xs,
+                              color: palette.textSecondary,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        preset.description,
-                        style: TextStyle(
-                          fontSize: AppFontSize.xs,
-                          color: palette.textSecondary,
-                          height: 1.4,
-                        ),
-                      ),
+                    ),
+                    if (selected) ...<Widget>[
+                      const SizedBox(width: AppSpacing.xs),
+                      Icon(Icons.check_circle, size: 18, color: palette.primary),
                     ],
-                  ),
+                  ],
                 ),
-                if (selected) ...<Widget>[
-                  const SizedBox(width: AppSpacing.xs),
-                  Icon(Icons.check_circle, size: 18, color: palette.primary),
-                ],
-              ],
+              ),
             ),
           ),
         ),
@@ -1254,7 +1326,19 @@ class _SettingsPageState extends State<SettingsPage> {
                               height: 16,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : Text('清理 $_orphanCount 张'),
+                          : Text.rich(
+                              TextSpan(
+                                children: <InlineSpan>[
+                                  const TextSpan(text: '清理 '),
+                                  WidgetSpan(
+                                    alignment: PlaceholderAlignment.baseline,
+                                    baseline: TextBaseline.alphabetic,
+                                    child: AnimatedCount(value: _orphanCount),
+                                  ),
+                                  const TextSpan(text: ' 张'),
+                                ],
+                              ),
+                            ),
                     ),
                   ],
                 ],
@@ -1769,27 +1853,33 @@ class _ChoiceRow extends StatelessWidget {
               padding: EdgeInsets.only(
                 right: index == options.length - 1 ? 0 : AppSpacing.sm,
               ),
-              child: Material(
-                color: index == selectedIndex ? palette.segmentedSelected : palette.surfaceSoft,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                child: InkWell(
-                  onTap: () => onChanged(index),
+              child: AnimatedContainer(
+                duration: AppMotion.fast,
+                curve: AppMotion.standard,
+                decoration: BoxDecoration(
+                  color: index == selectedIndex ? palette.segmentedSelected : palette.surfaceSoft,
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Container(
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(
-                        color: index == selectedIndex ? palette.primary : palette.border,
-                      ),
-                    ),
-                    child: Text(
-                      options[index],
-                      style: TextStyle(
-                        fontSize: AppFontSize.sm,
-                        fontWeight: index == selectedIndex ? FontWeight.w600 : FontWeight.w400,
-                        color: index == selectedIndex ? palette.primary : palette.textSecondary,
+                  border: Border.all(
+                    color: index == selectedIndex ? palette.primary : palette.border,
+                  ),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: InkWell(
+                    onTap: () => onChanged(index),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: SizedBox(
+                      height: 40,
+                      child: Center(
+                        child: Text(
+                          options[index],
+                          style: TextStyle(
+                            fontSize: AppFontSize.sm,
+                            fontWeight: index == selectedIndex ? FontWeight.w600 : FontWeight.w400,
+                            color: index == selectedIndex ? palette.primary : palette.textSecondary,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -2195,6 +2285,32 @@ class _AdminPasswordDialogState extends State<_AdminPasswordDialog> {
               : const Text('进入'),
         ),
       ],
+    );
+  }
+}
+
+/// 深浅切换的太阳/月亮：整颗转半圈，两个图标互相淡入淡出。
+class _BrightnessIcon extends StatelessWidget {
+  const _BrightnessIcon({required this.dark});
+
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedRotation(
+      turns: dark ? 0.5 : 0,
+      duration: AppMotion.normal,
+      curve: AppMotion.standard,
+      child: AnimatedSwitcher(
+        duration: AppMotion.normal,
+        switchInCurve: AppMotion.decelerate,
+        switchOutCurve: AppMotion.accelerate,
+        child: Icon(
+          key: ValueKey<bool>(dark),
+          dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+          size: 18,
+        ),
+      ),
     );
   }
 }
