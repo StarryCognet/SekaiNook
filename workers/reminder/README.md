@@ -6,6 +6,10 @@
 > 已完成 0/5 —— 22:00 前做完，不然扣 10 分。
 > 睡觉卡也别忘了：晚于 22:00 打卡要扣 20 分。
 
+线上状态：已部署为 `sekainook-reminder`，cron `30 13 * * *`（21:30 北京），默认通道 **webpush** ——
+孩子在 Android Chrome 打开网站、妈妈在 iPhone 把网站加到主屏幕，各自点一次「设置 → 手机提醒 → 开启提醒」即可，
+两边都不用装 App。
+
 ## 为什么是一个独立 Worker（而不是写在 `functions/` 里）
 
 **Cloudflare Pages 不支持 cron triggers。** `functions/` 只能响应请求，没法「到点自己跑一次」。
@@ -24,17 +28,28 @@
 顺带一提：**不要用首页那个「今日进度」**（`src/utils/taskRules.ts` / `lib/core/task_rules.dart`）——
 它按设备本地时区分「今天」，分母是「有日限的任务数」，和罚款规则不是一个口径。
 
-## 推送通道：三选一
+## 推送通道：四条，默认 Web Push
 
 `src/channels.ts` 的 `sendPush()` 是唯一出口，`reminder.ts` 不关心走哪条。选择顺序：
 
-**显式 `PUSH_CHANNEL`（`ntfy` / `bark` / `webhook`）> 配了 `BARK_KEY` 走 bark > 配了 `PUSH_WEBHOOK_URL` 走 webhook > 否则 ntfy。**
+**显式 `PUSH_CHANNEL`（`ntfy` / `bark` / `webhook` / `webpush`）> 配了 `BARK_KEY` 走 bark > 配了 `PUSH_WEBHOOK_URL` 走 webhook > VAPID 公私钥齐了走 webpush > 否则 ntfy。**
 
 | 通道 | 适合 | 你要准备的 | 备注 |
 | --- | --- | --- | --- |
-| `ntfy` | 孩子用 Android 或 iPhone 都行 | 一个随机主题名（= 密码） | ⚠️ **见下方实测**：ntfy.sh 免费版对 Cloudflare Worker 会 429，自建或付费才稳 |
-| `bark` | 孩子用 **iPhone / iPad** | Bark App 里那串 device key | 国内 iOS 最省事，两分钟搞定 |
+| `webpush` | **孩子 Android 浏览器 + 妈妈 iPhone 主屏 PWA**，两边都不用装 App | VAPID 密钥对（一次生成，公钥写 vars、私钥做 secret） | 本项目线上默认走这条。iOS 必须先把网站「添加到主屏幕」才收得到（iOS 16.4+） |
+| `ntfy` | 想彻底绕开浏览器权限、能接受装个 App | 一个随机主题名（= 密码） | ⚠️ **见下方实测**：ntfy.sh 免费版对 Cloudflare Worker 会 429，自建或付费才稳 |
+| `bark` | 孩子用 **iPhone / iPad** 且不想加主屏 | Bark App 里那串 device key | 国内 iOS 最省事，两分钟搞定 |
 | `webhook` | 自己有中转（自建服务、IFTTT、群机器人网关…） | 一个接收 URL | payload 固定为 `{title,message,priority,tags,click}`；钉钉/飞书/企业微信的机器人格式不同，需要你自己加一层转换 |
+
+### Web Push 这条通道怎么运作
+
+- 浏览器侧：`public/sw.js` 里 `push` 事件 → `showNotification`，点通知开 `click` 里的地址；订阅由
+  `src/utils/push.ts` 用 `GET /api/push/key` 拿到的 VAPID 公钥建立，`POST /api/push/subscribe` 落库。
+- 订阅存在 D1 的 `push_subscriptions`（迁移 `0005_push_subscriptions.sql`），**Pages 与 Worker 必须绑同一个
+  `database_id`**（见 `wrangler.jsonc`）。
+- Worker 侧：`src/webpush.ts` 用 `@block65/webcrypto-web-push` 做 RFC 8291（aes128gcm）+ VAPID JWT 加密，
+  逐台 `fetch(endpoint)`；返回 404 / 410 说明这台设备已经废了（卸载了 PWA、清了站点数据），顺手删掉订阅。
+- 单台超时 15 秒当失败处理，不会让一次 cron 被一台设备拖死。
 
 ### ⚠️ 实测：ntfy.sh 免费版从 Worker 发会被限流
 
@@ -53,26 +68,53 @@
 
 ## 部署
 
+### A. 走 Web Push（本项目线上就是这么配的）
+
+VAPID 密钥对只需生成一次（`node -e` 里用 `crypto.createECDH('prime256v1')` 取 `getPublicKey()` /
+`getPrivateKey()`，都转成 base64url）：
+
 ```bash
 cd workers/reminder
 
 # 1) 触发接口的令牌（防止公网上任何人拿它群发通知）
 npx wrangler secret put REMIND_TOKEN
 
-# 2) 按你选的通道配一个（三选一）
-npx wrangler secret put NTFY_TOPIC      # ntfy：一个够随机的主题名，如 sekainook-a7f3c91d
-npx wrangler secret put BARK_KEY        # bark：Bark App 里那串 key
-npx wrangler secret put PUSH_WEBHOOK_URL  # webhook：你的接收地址
+# 2) Web Push 私钥（公钥 + subject 写在 wrangler.jsonc 的 vars 里，不进 secret）
+npx wrangler secret put VAPID_PRIVATE_KEY
 
 # 3) 部署（含 cron：30 13 * * * = 21:30 北京时间）
 npx wrangler deploy
 ```
 
+Pages 那一侧也要配（否则浏览器拿不到公钥、订阅不了）：
+
+```bash
+cd ../..                      # 回到 Pages 项目根
+# 根 wrangler.jsonc 的 vars 里已有 VAPID_PUBLIC_KEY / VAPID_SUBJECT（必须与 Worker 那份完全一致）
+npx wrangler d1 migrations apply sekainook --remote   # 建 push_subscriptions 表
+npm run deploy                                        # 部署站点（含 /api/push/*、sw.js 的 push 处理、设置页入口）
+```
+
+### B. 走 ntfy / bark / webhook
+
+```bash
+cd workers/reminder
+npx wrangler secret put REMIND_TOKEN
+npx wrangler secret put NTFY_TOPIC        # ntfy：一个够随机的主题名，如 sekainook-a7f3c91d
+npx wrangler secret put BARK_KEY          # bark：Bark App 里那串 key
+npx wrangler secret put PUSH_WEBHOOK_URL  # webhook：你的接收地址
+npx wrangler deploy
+```
+
+
 其他可选配置：
 
 | 名字 | 类型 | 说明 |
 | --- | --- | --- |
-| `PUSH_CHANNEL` | var | 强制通道，`ntfy` / `bark` / `webhook` |
+| `PUSH_CHANNEL` | var | 强制通道，`ntfy` / `bark` / `webhook` / `webpush` |
+| `VAPID_PUBLIC_KEY` | var | Web Push 公钥（与 Pages 项目那份必须一致） |
+| `VAPID_SUBJECT` | var | `mailto:` 或 https 地址，推送服务商出问题时联系你 |
+| `VAPID_PRIVATE_KEY` | secret | Web Push 私钥 |
 | `NTFY_SERVER` | var | 默认 `https://ntfy.sh`；自建填自己的域名 |
 | `NTFY_TOKEN` | secret | 自建 ntfy 开了鉴权 / ntfy 账号令牌时用 |
 | `BARK_SERVER` | var | 默认 `https://api.day.app` |
@@ -82,6 +124,12 @@ npx wrangler deploy
 
 ## 孩子手机上怎么收
 
+- **webpush（默认）**：
+  - **Android**：Chrome 打开 `https://sekainook.pages.dev` → 设置 → 手机提醒 → 开启提醒 →
+    浏览器弹权限点「允许」。不用装任何 App。
+  - **iPhone / iPad**：必须先在 **Safari** 里「分享 → 添加到主屏幕」，然后**从主屏幕图标**打开
+    （iOS 16.4+ 才允许网页推送，且只有主屏 PWA 能收），再进 设置 → 手机提醒 → 开启提醒。
+  - 换手机 / 清了站点数据后要重新开启一次；旧订阅失效（410）时 Worker 会自动清理。
 - **ntfy**：装 **ntfy** App（Android：Play / F-Droid；iOS：App Store），App 里 **Subscribe to topic**，
   填上第 2 步那个主题名。不想装 App 也行：浏览器打开 `https://ntfy.sh/<主题名>` 就能看到消息。
   换主题名 = 重跑 `npx wrangler secret put NTFY_TOPIC` + 在手机上重新订阅。
@@ -129,8 +177,16 @@ curl -H "Authorization: Bearer <REMIND_TOKEN>" "https://sekainook-reminder.<你�
 | `dry=1` | 只算不发（覆盖 `DRY_RUN`）；`dry=0` 可单次真发 |
 | `force=1` | 绕过去重、即使已完成也发（验证通道用） |
 | `test=1` | 发一条固定测试文案，用来确认手机能收到 |
-| `channel=ntfy\|bark\|webhook` | 临时指定通道（非法值 400） |
+| `channel=ntfy\|bark\|webhook\|webpush` | 临时指定通道（非法值 400） |
 | `now=<ISO>` | 假装现在是这个时刻，验证跨日/时区口径 |
+
+### 本地验 Web Push 的坑
+
+`wrangler dev` 会把 `http_proxy` / `https_proxy` 也带上（启动日志里有
+`Proxy environment variables detected`）。实测在这个环境下 **ntfy 能发出去、FCM（Web Push）会一直挂着**，
+加了 15 秒超时后报 `The operation was aborted due to timeout` —— 所以 **Web Push 的端到端只能在线上验**
+（线上 Worker 直连推送服务，不经本地代理）。本地想验通道就 `?channel=ntfy`，或者只跑 `?dry=1` 看判定与文案。
+
 
 ## 幂等：一天只打扰一次
 
@@ -144,14 +200,14 @@ cron 是 at-least-once，所以发送前先在 `settings` 表里抢一个标记
 **发送失败会把标记还回去**：否则通道临时挂掉（ntfy 限流、webhook 没起来）就会把当天唯一一次机会吃掉，
 之后手动 `/trigger` 补发也会被判成「今天已经提醒过」。`force=1` 本来就不抢标记，所以不会去删别人的。
 
-## 想换成 FCM / Web Push 怎么办
+## 还想加 FCM（App 内推送）怎么办
 
 `src/channels.ts` 的 `sendPush` 是唯一出口，`reminder.ts` 不关心用的是哪条通道。要加就：
 
 - **FCM**：Firebase 项目 + `google-services.json` + 服务账号私钥放 Worker secret，App 端接
-  `firebase_messaging`。最稳（App 被杀也能收），但活儿最多。
-- **Web Push**：VAPID 密钥 + Service Worker + 订阅端点存 D1（建议新建一张 `push_subscriptions` 表），
-  iOS 必须「添加到主屏幕」才收得到。适合「孩子只用浏览器 / iPad」的情况。
+  `firebase_messaging`。最稳（App 被杀也能收），但活儿最多 —— 适合以后 Flutter App 想在自己进程里收推送时再上。
+
+（Web Push 已经实现好了：`src/webpush.ts` + `public/sw.js` + `functions/api/push/*` + 设置页「手机提醒」。）
 
 ## 顺带可以做的事
 
@@ -165,7 +221,8 @@ workers/reminder/
   wrangler.jsonc    Worker 配置（cron + D1 绑定 + vars）
   src/index.ts      scheduled（cron）+ fetch（/health、/trigger）
   src/reminder.ts   判定与发送编排（口径来自 functions/_lib/rules.ts）
-  src/channels.ts   推送通道（ntfy / bark / webhook 三条）
+  src/channels.ts   推送通道（webpush / ntfy / bark / webhook 四条）
+  src/webpush.ts    Web Push：aes128gcm + VAPID，逐台发、自动清失效订阅
   src/env.ts        环境变量类型（secret 不进 wrangler.jsonc）
   tsconfig.json     独立于前端那份（只 typecheck 这个 Worker）
   .dev.vars         本地联调密钥（已 gitignore）

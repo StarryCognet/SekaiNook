@@ -10,7 +10,7 @@
  *  - fetch：`/health` 看配置是否齐、`/trigger` 手动触发（要令牌），联调用
  */
 import type { ReminderEnv } from './env';
-import { pickChannel, type PushChannel } from './channels';
+import { PUSH_CHANNELS, pickChannel, type PushChannel } from './channels';
 import { planReminder, runReminder } from './reminder';
 
 export default {
@@ -67,8 +67,8 @@ export default {
       }
 
       const channelParam = url.searchParams.get('channel')?.trim().toLowerCase();
-      if (channelParam && !['ntfy', 'bark', 'webhook'].includes(channelParam)) {
-        return json({ error: 'channel 只能是 ntfy / bark / webhook' }, 400);
+      if (channelParam && !(PUSH_CHANNELS as readonly string[]).includes(channelParam)) {
+        return json({ error: `channel 只能是 ${PUSH_CHANNELS.join(' / ')}` }, 400);
       }
 
       const result = await runReminder(env, {
@@ -87,7 +87,7 @@ export default {
         error: 'not found',
         usage: [
           'GET  /health',
-          'GET|POST /trigger?token=<REMIND_TOKEN>[&dry=1][&force=1][&test=1][&now=2026-10-15T13:30:00Z]',
+          'GET|POST /trigger?token=<REMIND_TOKEN>[&dry=1][&force=1][&test=1][&channel=webpush][&now=2026-10-15T13:30:00Z]',
         ],
       },
       404

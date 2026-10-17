@@ -144,12 +144,15 @@ functions/api/            # 后端接口（文件路径即 URL 路径）
 ├── notifications/[id].ts     # PATCH /api/notifications/:id（标记已读 / 未读）
 ├── notifications/read-all.ts # POST  /api/notifications/read-all（整格信箱一键已读）
 ├── settings/index.ts     #   GET/PATCH    /api/settings（家庭称呼 + 全局背景图，跨设备同步）
+├── push/key.ts           #   GET          /api/push/key（Web Push 的 VAPID 公钥）
+├── push/subscribe.ts     #   POST/DELETE  /api/push/subscribe（浏览器推送订阅落库 / 退订）
 └── maintenance/orphans.ts #  GET/POST     /api/maintenance/orphans（闲置照片扫描 / 清理）
 functions/_lib/           # 后端共用模块（不下划线开头会被当成路由，所以放 _lib）
-migrations/               # D1 建表 SQL（编号递增，必须幂等；0002 给流水加 member 列，0003 建通知表，0004 建 settings 键值表）
+migrations/               # D1 建表 SQL（编号递增，必须幂等；0002 给流水加 member 列，0003 建通知表，0004 建 settings 键值表，0005 建推送订阅表）
 public/_routes.json       # 声明 Functions 只接管 /api/*
 public/_redirects         # SPA 路由回退 /* → /index.html 200
-wrangler.jsonc            # D1 / R2 绑定与 Pages 构建配置
+public/sw.js              # Service Worker（静态资源缓存 + Web Push 的 push / notificationclick 处理）
+wrangler.jsonc            # D1 / R2 绑定与 Pages 构建配置（vars 里有 Web Push 的 VAPID 公钥）
 workers/reminder/         # 独立 cron Worker：每天 21:30 提醒还差几个任务（Pages 不支持 cron，只能另起）
 
 src/
@@ -202,6 +205,9 @@ src/
 | POST | `/api/notifications/read-all` | 整格信箱一键已读（请求体 `{"audience":"parent"\|"child"}`） |
 | GET | `/api/settings` | 读取家庭称呼与全局背景图（`{ names: { momCall, momNickname, kidCall, kidNickname }, background, ready }`，`ready=false` = settings 表还没迁移） |
 | PATCH | `/api/settings` | 部分更新称呼或背景图（只传要改的字段，称呼最多 12 字，留空回默认「妈妈 / 女儿」；`background` 只能是本站 `/api/images/` 地址，传空串 = 移除背景图） |
+| GET | `/api/push/key` | 手机提醒的 VAPID 公钥（`{ publicKey, subject, ready }`，`ready=false` = 订阅表还没迁移） |
+| POST | `/api/push/subscribe` | 保存浏览器推送订阅（`{ audience: "parent"\|"child", subscription: { endpoint, keys: { p256dh, auth } } }`，按 endpoint 幂等 upsert） |
+| DELETE | `/api/push/subscribe` | 退订（请求体 `{ endpoint }`） |
 
 接口**刻意不加鉴权**：本项目是家庭内部工具，权限靠前端身份与家长口令约束（见下方开发规则）。
 
@@ -214,9 +220,13 @@ src/
 - 每天 **21:30 北京时间**（`crons = ["30 13 * * *"]`）算一次今日完成数，不足 5 个就推一条通知；
 - 「今日完成数」直接 `import` 复用 `functions/_lib/rules.ts` 的 `countDayCompletions`，
   **不重写 SQL**（口径只有一份，避免提醒说「还差 2 个」而结算算成「还差 3 个」）；
-- 推送通道三选一：`ntfy` / `bark`（iOS 最省事）/ 通用 `webhook`。**注意 ntfy.sh 免费版按出口 IP 限流，
-  Cloudflare Worker 共用出口 IP，实测会被 429（code 42908）**，要稳定请用 bark 或自建 ntfy；
-- 一天只打扰一次：在 `settings` 表抢 `reminder_sent_<日期>` 标记做幂等。
+- 推送默认走 **Web Push**（`src/webpush.ts` + `public/sw.js` + `functions/api/push/*` + 设置页「手机提醒」）：
+  孩子在 Android Chrome 打开网站、妈妈在 iPhone 把网站「添加到主屏幕」，各自点一次「开启提醒」即可，
+  **两边都不用装 App**（iOS 需 16.4+ 且必须从主屏图标打开）。另备 `ntfy` / `bark` / 通用 `webhook` 三条通道 ——
+  **注意 ntfy.sh 免费版按出口 IP 限流，Cloudflare Worker 共用出口 IP，实测会被 429（code 42908）**；
+- 一天只打扰一次：在 `settings` 表抢 `reminder_sent_<日期>` 标记做幂等，发送失败会把标记还回去。
+
+配置、部署、孩子手机上怎么收、本地联调与手动触发方式见 [`workers/reminder/README.md`](workers/reminder/README.md)。
 
 配置、部署、孩子手机上怎么收、本地联调与手动触发方式见 [`workers/reminder/README.md`](workers/reminder/README.md)。
 

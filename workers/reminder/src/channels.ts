@@ -2,13 +2,17 @@
  * 推送通道。`sendPush` 是唯一出口，reminder.ts 不关心用的是哪条通道 ——
  * 以后要加 FCM / Web Push，在这里加一个 `sendFcm` 并按 env 选择即可。
  *
- * 现在有三条，按「手机上是哪个系统 / 愿不愿意装 App」选：
+ * 现在有四条，按「手机上是哪个系统 / 愿不愿意装 App」选：
+ *  - `webpush` **默认推荐**。浏览器/PWA 原生推送：孩子安卓 Chrome 直接开网站、
+ *              妈妈 iPhone 把网站添加到主屏幕，点一下「开启提醒」就订阅上了，**不用装 App**。
+ *              订阅存在 D1 的 `push_subscriptions`，实现在 `webpush.ts`
  *  - `ntfy`    装 ntfy App（Android / iOS 都有）订阅一个主题；零账号、零证书
  *  - `bark`    iOS 专用。装 Bark App 拿到一个 key，`POST api.day.app/push` 就推过去了；
  *              不需要账号、不需要开发者证书，是 iOS 上最省事的一条
  *  - `webhook` 通用 JSON POST：Server酱 / PushDeer / 自建 ntfy / 自己的机器人，都能接
  *
- * 选哪条由 `PUSH_CHANNEL` 决定；没设就按「配了哪个用哪个」猜（BARK_KEY → webhook → ntfy）。
+ * 选哪条由 `PUSH_CHANNEL` 决定；没设就按「配了哪个用哪个」猜
+ * （BARK_KEY → webhook → VAPID 密钥齐了 → webpush → 兜底 ntfy）。
  *
  * ⚠️ 一个实测坑（2026-10 记）：**ntfy.sh 免费版对 Cloudflare Worker 不可靠** ——
  * 它的限额按出口 IP 算，而 Worker 的出口 IP 是所有 Cloudflare 客户共用的，
@@ -17,6 +21,7 @@
  * 同一时刻从家用宽带直连 ntfy.sh 却是 200。所以生产上要么用 `bark` / `webhook`，
  * 要么自建 ntfy（`NTFY_SERVER` 指自己的域名），要么买 ntfy 付费版。
  */
+import { sendWebPush } from './webpush';
 import type { ReminderEnv } from './env';
 
 export interface PushMessage {
@@ -38,13 +43,18 @@ export interface PushResult {
   channel?: string;
 }
 
-export type PushChannel = 'ntfy' | 'bark' | 'webhook';
+export const PUSH_CHANNELS = ['ntfy', 'bark', 'webhook', 'webpush'] as const;
+
+export type PushChannel = (typeof PUSH_CHANNELS)[number];
 
 export function pickChannel(env: ReminderEnv): PushChannel {
   const explicit = env.PUSH_CHANNEL?.trim().toLowerCase();
-  if (explicit === 'ntfy' || explicit === 'bark' || explicit === 'webhook') return explicit;
+  if (explicit && (PUSH_CHANNELS as readonly string[]).includes(explicit)) {
+    return explicit as PushChannel;
+  }
   if (env.BARK_KEY?.trim()) return 'bark';
   if (env.PUSH_WEBHOOK_URL?.trim()) return 'webhook';
+  if (env.VAPID_PUBLIC_KEY?.trim() && env.VAPID_PRIVATE_KEY?.trim()) return 'webpush';
   return 'ntfy';
 }
 
@@ -59,7 +69,9 @@ export async function sendPush(
       ? await sendBark(env, msg)
       : channel === 'webhook'
         ? await sendWebhook(env, msg)
-        : await sendNtfy(env, msg);
+        : channel === 'webpush'
+          ? await sendWebPush(env, msg)
+          : await sendNtfy(env, msg);
   return { ...result, channel };
 }
 

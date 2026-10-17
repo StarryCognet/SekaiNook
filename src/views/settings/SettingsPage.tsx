@@ -30,6 +30,7 @@ import {
   UpOutlined,
   ToolOutlined,
   HistoryOutlined,
+  BellOutlined,
 } from "@ant-design/icons";
 import { APP_VERSION, CHANGELOG } from "../../config/changelog";
 import { useFamilyStore } from "../../store/useFamilyStore";
@@ -55,10 +56,18 @@ import { deleteLedgerRecord } from "../../api/familyLedger";
 import { uploadImage } from "../../api/upload";
 import { compressImage, isAbortError } from "../../utils/image";
 import { useBackButton } from "../../utils/useBackButton";
+import { fetchPushKey } from "../../api/push";
+import {
+  disablePush,
+  enablePush,
+  getPushState,
+  isIosNeedsInstall,
+  type PushState,
+} from "../../utils/push";
 import styles from "./SettingsPage.module.css";
 
 /** 设置页第二层的大类 */
-type SectionId = "appearance" | "family" | "admin" | "superadmin";
+type SectionId = "appearance" | "family" | "notify" | "admin" | "superadmin";
 
 /** 管理员密码最长几位（与 functions/_lib/settings.ts 的 MAX_ADMIN_PASSWORD_LENGTH 一致） */
 const ADMIN_PASSWORD_MAX_LENGTH = 32;
@@ -115,8 +124,147 @@ function clearNameDraft(target: "mom" | "kid"): void {
 }
 
 /**
+ * 第一层「手机提醒」入口的一句话描述。
+ * 真实开启状态要等组件挂载后才能读，入口这里只给一句静态说明。
+ */
+const PUSH_ENTRY_DESC = "任务没做完时，提前半小时提醒";
+
+/** 每个状态对应的一句话（第二层状态行用） */
+const PUSH_STATE_TEXT: Record<PushState, string> = {
+  unsupported: "这个浏览器不支持通知",
+  denied: "通知权限被拒绝了，去浏览器设置里允许",
+  subscribed: "已经会收到提醒了",
+  off: "还没开启",
+};
+
+/** 服务端 VAPID 公钥读到了没：决定开启按钮能不能点 */
+type PushKeyState = "loading" | "ready" | "missing" | "error";
+
+interface PushSectionProps {
+  /** 订阅的归属身份（role 为 null 时上层已兜成 child）：换身份必须重订阅，否则提醒发错人 */
+  audience: FamilyRole;
+  /** 第二层顶部的返回条，跟其它分区保持同一种做法 */
+  backBar: React.ReactNode;
+}
+
+/**
+ * 第二层「手机提醒」：一个开关按钮 + 状态 + 规则说明。
+ * 订阅本身由 src/utils/push.ts 完成，这里只管界面与提示。
+ */
+function PushSection({ audience, backBar }: PushSectionProps) {
+  /** null = 状态还在读：先别急着说「不支持」，也别把没读完当成「没开启」 */
+  const [state, setState] = useState<PushState | null>(null);
+  const [keyState, setKeyState] = useState<PushKeyState>("loading");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      setState(await getPushState());
+
+      try {
+        const key = await fetchPushKey();
+        setKeyState(key.ready && key.publicKey ? "ready" : "missing");
+      } catch {
+        // 读不到不等于没配（可能只是断网）：按钮留着，让用户点下去拿到更具体的报错
+        setKeyState("error");
+      }
+    })();
+  }, []);
+
+  const subscribed = state === "subscribed";
+  const toggleDisabled =
+    state === null ||
+    state === "unsupported" ||
+    keyState === "loading" ||
+    keyState === "missing";
+
+  const handleToggle = async () => {
+    setBusy(true);
+    try {
+      if (subscribed) {
+        await disablePush();
+        message.success("已关闭提醒");
+      } else {
+        await enablePush(audience);
+        message.success("已开启，提醒会发到这台手机");
+      }
+      setState(await getPushState());
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "操作失败，请重试");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className={styles.group}>
+      {backBar}
+      <h2 className={styles.groupTitle}>手机提醒</h2>
+      <p className={styles.groupDesc}>任务没做完时，提前半小时提醒一下</p>
+
+      <Card className={styles.infoCard} variant="borderless">
+        <div className={styles.infoHeader}>
+          <div className={styles.infoIcon}>
+            <BellOutlined />
+          </div>
+          <div className={styles.infoText}>
+            <div className={styles.appName}>推送提醒</div>
+            <div className={styles.appDesc}>
+              {state === null ? "正在检查…" : PUSH_STATE_TEXT[state]}
+            </div>
+          </div>
+        </div>
+
+        <Button
+          block
+          type={subscribed ? "default" : "primary"}
+          danger={subscribed}
+          className={styles.nameSaveBtn}
+          loading={busy}
+          disabled={toggleDisabled}
+          onClick={handleToggle}
+        >
+          {subscribed ? "关闭提醒" : "开启提醒"}
+        </Button>
+
+        {keyState === "missing" && (
+          <div className={styles.roleHint}>
+            服务端还没配推送密钥，配好之后这里才能开
+          </div>
+        )}
+        {keyState === "error" && (
+          <div className={styles.roleHint}>没读到推送密钥，检查一下网络再试</div>
+        )}
+        {isIosNeedsInstall() && (
+          <div className={styles.roleHint}>
+            iPhone/iPad 要先点分享 → 添加到主屏幕，然后
+            <strong>从主屏幕图标</strong>
+            打开这个页面，才能开启通知（iOS 16.4 以上）
+          </div>
+        )}
+      </Card>
+
+      <Card className={styles.infoCard} variant="borderless">
+        <div className={styles.infoHeader}>
+          <div className={styles.infoIcon}>
+            <InfoCircleOutlined />
+          </div>
+          <div className={styles.infoText}>
+            <div className={styles.appName}>什么时候会响</div>
+            <div className={styles.appDesc}>
+              每天 21:30（北京时间）看一眼当天完成的任务：不足 5 个才提醒，够了就不打扰。
+              睡觉打卡晚于 22:00 会被扣分，早点睡。
+            </div>
+          </div>
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+/**
  * 设置页：两层结构 ——
- *   第一层只列大类入口（外观 / 家庭 / 家长管理）与「关于」（应用信息 + 版本日志）；
+ *   第一层只列大类入口（外观 / 家庭 / 手机提醒 / 家长管理）与「关于」（应用信息 + 版本日志）；
  *   点一个入口进第二层再改具体项，第二层顶部有返回。关于与版本日志留在第一层不动。
  *   版本日志默认收起（只看最新 3 个），展开后顶部与底部各有收起按钮。
  */
@@ -228,6 +376,12 @@ export default function SettingsPage() {
       title: "家庭",
       desc: `身份与称呼 · 现在用的是${isParent ? "家长" : "小孩"}身份`,
       icon: <UserSwitchOutlined />,
+    },
+    {
+      id: "notify",
+      title: "手机提醒",
+      desc: PUSH_ENTRY_DESC,
+      icon: <BellOutlined />,
     },
     ...(isParent
       ? [
@@ -924,6 +1078,11 @@ export default function SettingsPage() {
             )}
           </Card>
         </section>
+      )}
+
+      {/* ================= 第二层：手机提醒 ================= */}
+      {section === "notify" && (
+        <PushSection audience={role ?? "child"} backBar={renderBackBar()} />
       )}
 
       {/* ================= 第二层：家长管理（仅家长可见） ================= */}

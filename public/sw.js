@@ -232,3 +232,86 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(handleStatic(request));
   }
 });
+
+/* ==========================================================================
+ * Web Push：提醒通知（每天 21:30 由 workers/reminder 的 cron 发）
+ * --------------------------------------------------------------------------
+ * 负载是 JSON 文本 { title, message, click }（click 是站内绝对 URL）。
+ * 这里只负责显示通知与点开跳转，不掺和上面的缓存逻辑。
+ * ========================================================================== */
+
+/** 通知图标/角标：public/ 下真实存在的 192 方形图标（与 PRECACHE_URLS 里的一致） */
+const NOTIFICATION_ICON = '/icon-192.png';
+
+/** 没有负载时的兜底文案 */
+const DEFAULT_PUSH_TITLE = 'SekaiNook 提醒';
+const DEFAULT_PUSH_MESSAGE = '今天的任务还没做完哦';
+
+/** 通知分组标签：同一条提醒重复到达时覆盖，不在通知栏堆一摞 */
+const NOTIFICATION_TAG = 'sekainook-reminder';
+
+self.addEventListener('push', (event) => {
+  event.waitUntil(
+    (async () => {
+      let title = DEFAULT_PUSH_TITLE;
+      let message = DEFAULT_PUSH_MESSAGE;
+      let click = '/';
+
+      // PushMessageData 只能稳妥地读一次，先取原文再自己解析
+      const raw = event.data ? event.data.text() : '';
+      if (raw) {
+        try {
+          const payload = JSON.parse(raw);
+          if (typeof payload === 'string') {
+            // 极端情况：服务端直接把一段文本塞进来
+            message = payload;
+          } else if (payload && typeof payload === 'object') {
+            if (typeof payload.title === 'string' && payload.title) title = payload.title;
+            if (typeof payload.message === 'string' && payload.message) message = payload.message;
+            if (typeof payload.click === 'string' && payload.click) click = payload.click;
+          }
+        } catch {
+          // 不是 JSON：把原文当正文，别整条丢掉
+          message = raw;
+        }
+      }
+
+      await self.registration.showNotification(title, {
+        body: message,
+        icon: NOTIFICATION_ICON,
+        badge: NOTIFICATION_ICON,
+        tag: NOTIFICATION_TAG,
+        renotify: true,
+        data: { url: click || '/' },
+      });
+    })()
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  // click 是站内绝对 URL；忽略 notification.data 缺失的情况，回首页
+  const target = new URL(event.notification.data?.url || '/', self.location.origin).href;
+
+  event.waitUntil(
+    (async () => {
+      const clientList = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+
+      // 已经有同源窗口就把它拉到前台并跳到目标页，不再开新标签
+      for (const client of clientList) {
+        if (new URL(client.url).origin !== self.location.origin) continue;
+        await client.focus();
+        if (typeof client.navigate === 'function') {
+          await client.navigate(target);
+        }
+        return;
+      }
+
+      await self.clients.openWindow(target);
+    })()
+  );
+});

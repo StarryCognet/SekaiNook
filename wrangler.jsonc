@@ -18,5 +18,13 @@
       "binding": "STARRYMIKU_BUCKET",
       "bucket_name": "starrymiku"
     }
-  ]
+  ],
+  // Web Push（手机提醒）的 VAPID 公钥：`GET /api/push/key` 要把它发给浏览器，
+  // 浏览器订阅时用它当 applicationServerKey。公钥是公开信息，写在这里没问题；
+  // 私钥只在 workers/reminder 那个 Worker 里（secret），不在这份配置里。
+  // ⚠️ 这两处必须是同一对密钥，改了要一起改。
+  "vars": {
+    "VAPID_PUBLIC_KEY": "BD4ePdfDf4U2Q5pFQuJ85o6bFNuUhKaiwvF-VAUyKRS-S8epOpLggQirGEV1RzMnmLM6ZrtBHH0_yLebZ-6hGsQ",
+    "VAPID_SUBJECT": "https://sekainook.pages.dev"
+  }
 }
