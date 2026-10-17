@@ -1,3 +1,5 @@
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -95,7 +97,7 @@ void main() {
     final SemanticsHandle handle = tester.ensureSemantics();
     await pumpBar(tester, selectedIndex: 1);
     final SemanticsNode node = tester.getSemantics(find.bySemanticsLabel('家庭'));
-    expect(node.hasFlag(SemanticsFlag.isSelected), isTrue);
+    expect(node.flagsCollection.isSelected, Tristate.isTrue);
     handle.dispose();
   });
 }

@@ -146,7 +146,9 @@ docs/                    接口契约与移植说明（见下）
 设计语言参考 [FlClash](https://github.com/chen08209/FlClash) 的 Material 3 做法：
 圆角更大、层级靠底色与描边而非阴影、动效统一由一套令牌驱动。
 调研记录（含真实源码片段与参数）见 [docs/design-ref-flclash.md](docs/design-ref-flclash.md)，
-页面改造的 API 契约见 [docs/motion-kit.md](docs/motion-kit.md)。
+页面改造的 API 契约见 [docs/motion-kit.md](docs/motion-kit.md)；
+想把这套动效搬到别的项目，直接抄 [docs/reusable/floating-dock/](docs/reusable/floating-dock/README.md)
+（悬浮弹簧底栏的零依赖配方）。
 
 - **令牌**：`lib/theme/motion.dart` 的 `AppMotion` —— 时长 90/160/240/360/520/900ms 六档、
   四条曲线（standard / decelerate / accelerate / emphasized）、三档弹簧（`SpringCurve`，
@@ -200,6 +202,7 @@ docs/                    接口契约与移植说明（见下）
 | [docs/parity-fixes.md](docs/parity-fixes.md) | 上述审计问题的处置记录：14 项已修复、3 项刻意保留的差异及理由、验证方式 |
 | [docs/design-ref-flclash.md](docs/design-ref-flclash.md) | FlClash 设计/动效源码调研：圆角与层级体系、时长与弹簧参数、最值得移植的 5 条手法、明确不移植的部分 |
 | [docs/motion-kit.md](docs/motion-kit.md) | 动效工具包契约：`AppMotion` 令牌表、全部动效组件的用法、页面改造清单、硬约束 |
+| [docs/reusable/floating-dock/README.md](docs/reusable/floating-dock/README.md) | **可复用配方**：悬浮弹簧底栏（FlClash 风格）—— 零依赖的两个 dart 文件 + 8 条回归测试 + 接入/参数/坑速查，供其他项目直接抄 |
 
 ## 与 Web 版的差异（有意为之）
 
