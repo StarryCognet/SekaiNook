@@ -128,6 +128,12 @@ async function deliver(
     },
     opts.channel
   );
+  // 发送失败不该占掉「今天这一次」：通道临时挂掉（ntfy 限流、webhook 没起来）时，
+  // 若把标记留着，手动 /trigger 补发也会被当成「今天已经提醒过」而静默跳过。
+  // force 是绕过去重发的，本来就没抢标记，所以不能去删别人抢到的标记。
+  if (!res.ok && !opts.force) {
+    await releaseDay(env, plan.dayKey);
+  }
   log(
     opts.trigger,
     res.ok
@@ -167,4 +173,14 @@ async function claimDay(env: ReminderEnv, dayKey: string): Promise<boolean> {
 
 function log(trigger: string, message: string): void {
   console.log(`[reminder:${trigger}] ${message}`);
+}
+
+/** 发送失败时把标记还回去（尽力而为，删不掉也只是少一次补发机会） */
+async function releaseDay(env: ReminderEnv, dayKey: string): Promise<void> {
+  try {
+    await env.DB.prepare('DELETE FROM settings WHERE key = ?').bind(sentKey(dayKey)).run();
+    console.log(`[reminder] 发送失败，已释放 ${sentKey(dayKey)} 以便补发`);
+  } catch (error) {
+    console.warn('releaseDay failed', error);
+  }
 }
