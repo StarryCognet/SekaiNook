@@ -150,6 +150,7 @@ migrations/               # D1 建表 SQL（编号递增，必须幂等；0002 �
 public/_routes.json       # 声明 Functions 只接管 /api/*
 public/_redirects         # SPA 路由回退 /* → /index.html 200
 wrangler.jsonc            # D1 / R2 绑定与 Pages 构建配置
+workers/reminder/         # 独立 cron Worker：每天 21:30 提醒还差几个任务（Pages 不支持 cron，只能另起）
 
 src/
 ├── api/            # 数据访问层（http.ts 统一 REST 客户端 + familyLedger/familyTasks/upload/notifications）
@@ -203,6 +204,21 @@ src/
 | PATCH | `/api/settings` | 部分更新称呼或背景图（只传要改的字段，称呼最多 12 字，留空回默认「妈妈 / 女儿」；`background` 只能是本站 `/api/images/` 地址，传空串 = 移除背景图） |
 
 接口**刻意不加鉴权**：本项目是家庭内部工具，权限靠前端身份与家长口令约束（见下方开发规则）。
+
+### 🔔 晚间任务提醒（独立 cron Worker）
+
+「22:00 前没做够 5 个任务」原本只能在下次打开 App 时由 `POST /api/ledger/settle` 补记罚款，
+没法主动提醒。提醒部分放在 **`workers/reminder/`**（Pages 不支持 cron triggers，只能另起一个 Worker，
+读同一个 D1）：
+
+- 每天 **21:30 北京时间**（`crons = ["30 13 * * *"]`）算一次今日完成数，不足 5 个就推一条通知；
+- 「今日完成数」直接 `import` 复用 `functions/_lib/rules.ts` 的 `countDayCompletions`，
+  **不重写 SQL**（口径只有一份，避免提醒说「还差 2 个」而结算算成「还差 3 个」）；
+- 推送通道三选一：`ntfy` / `bark`（iOS 最省事）/ 通用 `webhook`。**注意 ntfy.sh 免费版按出口 IP 限流，
+  Cloudflare Worker 共用出口 IP，实测会被 429（code 42908）**，要稳定请用 bark 或自建 ntfy；
+- 一天只打扰一次：在 `settings` 表抢 `reminder_sent_<日期>` 标记做幂等。
+
+配置、部署、孩子手机上怎么收、本地联调与手动触发方式见 [`workers/reminder/README.md`](workers/reminder/README.md)。
 
 ## 📜 业务规则
 

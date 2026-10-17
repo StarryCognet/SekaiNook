@@ -1,0 +1,12 @@
+{
+  "name": "sekainook-reminder",
+  "private": true,
+  "version": "1.0.0",
+  "description": "SekaiNook 晚间任务提醒 Worker —— Pages 不支持 cron，所以这部分独立部署",
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled --persist-to ../../.wrangler/state --port 8789",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

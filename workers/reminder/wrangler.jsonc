@@ -1,0 +1,29 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "sekainook-reminder",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "observability": {
+    "enabled": true
+  },
+  // 和 Pages 项目同一个 D1（database_id 一致），所以提醒读的是同一份流水
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sekainook",
+      "database_id": "bef627b5-9c70-42ae-b8ec-7f51d6edb7b8"
+    }
+  ],
+  // 21:30 北京时间 = 13:30 UTC（Cloudflare 的 cron 一律按 UTC 解释）
+  "triggers": {
+    "crons": ["30 13 * * *"]
+  },
+  "vars": {
+    "NTFY_SERVER": "https://ntfy.sh",
+    "APP_URL": "https://sekainook.pages.dev/home"
+  }
+  // NTFY_TOPIC / REMIND_TOKEN / NTFY_TOKEN 是 secret，不进这个文件：
+  //   npx wrangler secret put NTFY_TOPIC
+  //   npx wrangler secret put REMIND_TOKEN
+  // 本地联调写在同目录的 .dev.vars（已 gitignore）
+}
