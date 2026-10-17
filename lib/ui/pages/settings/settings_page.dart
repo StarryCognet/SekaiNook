@@ -12,6 +12,7 @@ import '../../../core/api_client.dart';
 import '../../../core/api_exception.dart';
 import '../../../core/image_compress.dart';
 import '../../../data/api/admin_api.dart';
+import '../../../data/api/changelog_api.dart';
 import '../../../data/api/maintenance_api.dart';
 import '../../../data/api/upload_api.dart';
 import '../../../data/models/family_names.dart';
@@ -73,6 +74,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   final ApiClient _client = ApiClient();
   late final AdminApi _adminApi = AdminApi(_client);
+  late final ChangelogApi _changelogApi = ChangelogApi(_client);
   late final MaintenanceApi _maintenanceApi = MaintenanceApi(_client);
 
   _SettingsSection? _section;
@@ -115,6 +117,13 @@ class _SettingsPageState extends State<SettingsPage> {
   // 关于：版本日志展开 / 收起
   bool _logExpanded = false;
 
+  /// 要展示的版本日志：先摆上本机那份（立刻有内容，不用等网络），
+  /// 云端那份读到了再整体替换 —— 真源在服务端 D1，网页版和 App 看的才是同一份。
+  List<ChangelogEntry> _logEntries = changelog;
+
+  /// [_logEntries] 是不是云端来的；false = 正在用本机内置的那份兜底
+  bool _logFromCloud = false;
+
   int _pinLockSeconds = 0;
   Timer? _lockTimer;
 
@@ -123,6 +132,8 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     _callCtrl.addListener(_onNameInputChanged);
     _nicknameCtrl.addListener(_onNameInputChanged);
+    // 版本日志以云端为准（D1 那张表网页版和 App 共用）；读不到就继续用本机那份，不阻塞渲染
+    unawaited(_loadChangelog());
     // 口令锁定时每秒把倒计时刷出来（和引导页同一套口径）
     _lockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
@@ -148,6 +159,23 @@ class _SettingsPageState extends State<SettingsPage> {
     if (_syncingNames) return;
     if (!mounted) return;
     setState(() => _namesTouched = true);
+  }
+
+  /// 读云端版本日志（`GET /api/changelog`）。
+  ///
+  /// 读不到就静默继续用本机那份兜底 —— 表没迁移 / 还没同步 / 断网都会走到这儿。
+  /// 日志是次要信息，不弹提示打扰用户；卡片底部那行小字会说清当前看的是哪一份。
+  Future<void> _loadChangelog() async {
+    try {
+      final ChangelogPayload payload = await _changelogApi.fetchChangelog();
+      if (!mounted || !payload.ready || payload.entries.isEmpty) return;
+      setState(() {
+        _logEntries = payload.entries;
+        _logFromCloud = true;
+      });
+    } catch (_) {
+      // 故意吞掉：ApiClient 抛 ApiException、JSON 形状不对抛别的类型，这里都不用区分
+    }
   }
 
   @override
@@ -818,9 +846,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildChangelog(AppPalette palette) {
     final entries = _logExpanded
-        ? changelog
-        : changelog.take(_recentLogCount).toList(growable: false);
-    final more = changelog.length - _recentLogCount;
+        ? _logEntries
+        : _logEntries.take(_recentLogCount).toList(growable: false);
+    final more = _logEntries.length - _recentLogCount;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -852,7 +880,7 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Text(
                 _logExpanded
                     ? '收起，只看最近 $_recentLogCount 个版本'
-                    : '展开全部（共 ${changelog.length} 个版本）',
+                    : '展开全部（共 ${_logEntries.length} 个版本）',
               ),
             ),
           ),
@@ -871,6 +899,16 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
           ),
+        // 数据来源说明：日志存在云端 D1 里，网页版和 Flutter 版读的是同一份
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xs),
+          child: Text(
+            _logFromCloud
+                ? '已与云端同步：网页版和 Flutter 版看的是同一份日志'
+                : '暂时读不到云端，显示的是本机内置的那一份',
+            style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+          ),
+        ),
       ],
     );
   }

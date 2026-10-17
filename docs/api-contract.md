@@ -9,9 +9,9 @@
   - `functions/api/plans/index.ts`、`functions/api/plans/[id].ts`
   - `functions/api/upload.ts`、`functions/api/images/[[key]].ts`
   - `functions/api/notifications/index.ts`、`functions/api/notifications/[id].ts`、`functions/api/notifications/read-all.ts`
-  - `functions/api/settings/index.ts`、`functions/api/admin/index.ts`、`functions/api/maintenance/orphans.ts`
-  - `functions/_lib/rules.ts`、`functions/_lib/settings.ts`、`functions/_lib/notifications.ts`
-  - `migrations/0001_init.sql` ~ `migrations/0004_settings.sql`
+  - `functions/api/settings/index.ts`、`functions/api/admin/index.ts`、`functions/api/maintenance/orphans.ts`、`functions/api/changelog/index.ts`
+  - `functions/_lib/rules.ts`、`functions/_lib/settings.ts`、`functions/_lib/notifications.ts`、`functions/_lib/changelog.ts`
+  - `migrations/0001_init.sql` ~ `migrations/0006_changelog.sql`
   - Web 客户端调用方式参考：`src/api/*.ts`、`src/config/familyRules.ts`、`src/config/garden.ts`、`src/utils/week.ts`、`src/types/*.ts`
 
 ---
@@ -29,7 +29,7 @@
 5. **错误响应统一形态**：`{"error": "<中文原文>"}` + 非 2xx 状态码。但有两种例外必须容忍：① `GET /api/images/:key` 的 404 是**纯文本** `Not Found`；② 少数接口路径没有 try/catch，底层异常会冒出平台级 500（**不是** JSON）。
 6. 本文档中的所有中文错误文案都是**原文**，可用于 `expect` 断言或用作用户提示（占位符用 `${}` 标注）。
 
-### 1.1 端点总览（19 个路由）
+### 1.1 端点总览（20 个路由）
 
 | # | 方法 | 路径 | 成功状态 | 返回形态 | Web 端调用点 |
 |---|---|---|---|---|---|
@@ -52,6 +52,7 @@
 | 17 | POST | `/api/admin` | 200 | `{family,sun,...}` | `src/api/admin.ts:27,36,44,66` |
 | 18 | GET | `/api/maintenance/orphans` | 200 | `{total,referenced,orphans,keys}` | `src/api/maintenance.ts:35` |
 | 19 | POST | `/api/maintenance/orphans` | 200 | `{deleted,failed,keys}` | `src/api/maintenance.ts:40` |
+| 20 | GET | `/api/changelog` | 200 | `{version,entries,ready}` | `src/api/changelog.ts:27` |
 
 ### 1.2 分层结构图（用于理解相对路径的解析）
 
@@ -62,7 +63,7 @@
 /api/ledger/<任意字符串>    → ledger/[id].ts          (PATCH, DELETE)
 /api/plans, /api/plans/<id>, /api/upload, /api/images/<任意/多级路径>,
 /api/notifications, /api/notifications/read-all, /api/notifications/<id>,
-/api/settings, /api/admin, /api/maintenance/orphans
+/api/settings, /api/changelog, /api/admin, /api/maintenance/orphans
 ```
 
 - `settle`、`summary`、`read-all` 都是**字面量段**，Cloudflare Pages 的最具体路由优先，不会被 `[id]` 抢走。
@@ -1307,6 +1308,12 @@ delta !== 0 → INSERT 一条 approved 流水：
 - [ ] `POST /api/maintenance/orphans {}` → 400 `危险操作：请在请求体中传入 {"confirm": true} 以确认清理闲置照片`。
 - [ ] `POST {"confirm":true}` → 200 `{deleted,failed,keys}`；再扫描 `orphans` 归零。
 
+### 20.13 版本日志
+
+- [ ] `GET /api/changelog` → 200 `{version,entries,ready}`；`entries` 最新在前，`version` = `entries[0].version`。
+- [ ] 表没迁移 / 还没同步时 → 200 且 `ready:false`、`entries:[]`（**不是** 4xx/5xx），客户端退回本机那份。
+- [ ] 同步后条数与 Web 仓库 `src/config/changelog.ts` 的 `CHANGELOG.length` 一致（Flutter 这份 `lib/config/changelog.dart` 由 `npm run changelog:fallback` 生成，条数相同）。
+
 ## 21. 手机提醒（`/api/push/*`）与全站自检（`/api/admin/selftest`）
 
 > 这两组接口是 Web Push 提醒与「设置 → 管理员 → 全站自检」用的。**完整契约在 Web 仓库**：
@@ -1333,7 +1340,36 @@ delta !== 0 → INSERT 一条 approved 流水：
 - `POST /api/admin/selftest` body `{password, items?, groups?, params?, clientResults?, includeClient?}` → 管理员口令（与 `POST /api/admin` 同一套，含节流）。
   响应 `{ranAt, durationMs, env, params, summary, results, clientMissing, notes}`；
   `results[]`：`{id, group, name, side, mutates, ms, status: "pass"|"fail"|"warn"|"skip", detail, data?}`。
-- 当前清单 **70 项 / 11 组**；`clientMissing` 是「这轮选了但没回传结果的客户端项」，前端要提示出来。
+- 当前清单 **71 项 / 11 组**；`clientMissing` 是「这轮选了但没回传结果的客户端项」，前端要提示出来。
 - 写库类检查（`mutates:true`）在 `params.dryRun=true` 时只预演；真跑时会自清理，`keep:true` 才保留。
 - `flutter.notify.*` 三项**依赖 `flutter_local_notifications`，目前 App 未接入**，如实返回 `skip`（不要为自检加依赖）。
+
+## 22. 版本日志（`/api/changelog`）
+
+> 版本日志（设置页底部那份）的**真源在 D1 的 `changelog` 表**，网页版与 Flutter 版读同一份 ——
+> 以前两端各存一份代码常量（`src/config/changelog.ts` / `lib/config/changelog.dart`），改一边另一边不跟着变。
+> 现在代码里那份的身份是**播种数据 + 兜底**。
+
+### 22.1 `GET /api/changelog`
+
+无参数、**不需要鉴权**（与 `/api/settings` 同类：给全家看的公开信息）。**正常一律 200**，用 `ready` 区分数据能不能用：
+
+```jsonc
+{
+  "version": "1.31.0",     // 最新一条的版本号；没有内容时为 null
+  "entries": [             // 最新在前
+    { "version": "1.31.0", "date": "2026-10-17 22:40:00", "title": "…", "changes": ["…", "…"] }
+  ],
+  "ready": true            // = entries 非空。false 时 entries 一定是 []
+}
+```
+
+- `ready:false` 的两种原因：① `changelog` 表还没迁移（Web 仓库 `migrations/0006_changelog.sql` 没跑）；
+  ② 表建好了但还没同步（Web 仓库跑 `npm run changelog:sync`）。**不要把 `ready:false` 当错误显示**，
+  静默用自己 bundle 里那份 `lib/config/changelog.dart` 兜底即可（App 已这么做）。
+- `date` 是**展示用字符串**（`YYYY-MM-DD HH:mm:ss`），原样显示、不做时区换算；顺序以服务端返回为准（最新在前），
+  客户端不要再按 `date` 排序。
+- 没有写接口：改日志的唯一入口是 Web 仓库的 `src/config/changelog.ts` + `npm run changelog:sync`
+  （脚本把它同步进 D1，`npm run changelog:fallback` 顺手重新生成 Flutter 这份 `lib/config/changelog.dart`）。
+- handler 内部 try/catch，读库失败也回 200 + `ready:false`；所以拿不到 200 只可能是平台级故障。
 
