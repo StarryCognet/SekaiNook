@@ -76,7 +76,8 @@ flutter test --no-pub test/app_nav_bar_test.dart
 # 七套主题的对比度回归（42 条：字压在各种底上是否读得清）
 flutter test --no-pub test/palette_contrast_test.dart
 
-# 本地提醒（17 个用例：完成数口径、东八区切日、排程时刻、撤程、落盘、测试按钮）
+# 本地提醒（35 个用例：完成数口径、东八区切日、排程时刻与撤程、准时模式、
+# 提醒项增删改、只提醒一次、表现（声音/震动/悬浮/锁屏）、落盘与坏数据回落、测试按钮）
 flutter test --no-pub test/local_notify_test.dart
 
 # 口径对账：App 算的「今天完成了几个」必须与提醒 Worker 算的一样
@@ -92,9 +93,9 @@ flutter test --no-pub test/reminder_parity_test.dart \
 
 已经做过的验证：
 
-- `flutter analyze` 零 error（15 条 info，都是 `prefer_initializing_formals` /
+- `flutter analyze` 零 error（16 条 info，都是 `prefer_initializing_formals` /
   `unnecessary_brace_in_string_interps` 这类既有提示）
-- 上面七个测试文件全部通过（70 个用例，其中 9 个要对本地后端跑）
+- 上面八个测试文件全部通过（106 个用例，其中 9 个要对本地后端跑）
 - Chrome 里逐个跑通 8 个页面：身份门 / 女儿版首页 / 家长版首页 / 家庭账本 / 花园 / 通知 / 周计划 / 设置
 - 390×844 手机视口下 7 个主页面实拍留证（`docs/shots/`：
   04 妈妈版首页 / 06 妹妹版首页 / 10 家庭账本 / 11 花园 / 12 设置 /
@@ -138,10 +139,10 @@ lib/
   app.dart               MaterialApp.router + Provider 注入 + 启动加载
   router.dart            go_router 路由表（对应 Web 版 src/App.tsx）
   config/                业务规则常量（family_rules / garden_config / app_constants）
-  core/                  api_client(dio) / api_exception / pin_guard / task_rules / week / image_compress / ledger_ids
-  data/api/              接口层：ledger / plans / notifications / settings / admin / upload / maintenance
-  data/models/           数据模型
-  state/                 全局状态（ChangeNotifier）：family / theme / settings / notification / customTasks / garden
+  core/                  api_client(dio) / api_exception / pin_guard / task_rules / week / image_compress / ledger_ids / day_completion（提醒口径）/ local_notifications（系统通知通道）
+  data/api/              接口层：ledger / plans / notifications / settings / admin / upload / maintenance / push / selftest
+  data/models/           数据模型（含 local_reminder：提醒项 / 消息类型 / 重复 / 表现）
+  state/                 全局状态（ChangeNotifier）：family / theme / settings / notification / customTasks / garden / localNotify
   theme/                 tokens（间距圆角字号）+ app_theme（7 套主题色板）+ motion（动效令牌）
   ui/shell/              底部导航骨架 MainShell（含 15 秒通知轮询）
   ui/pages/              页面：home(妹妹版/妈妈版/通知) / family(工作台/周计划) / garden / settings / role_gate
@@ -199,7 +200,34 @@ docs/                    接口契约与移植说明（见下）
   要看/要抓中间态就加 `--dart-define=SLOW_MO=60` 构建（把 `timeDilation` 放慢 60 倍，
   默认 1 倍完全不生效），实拍见 `docs/shots/`。
 
-## 契约文档（写代码前先查这里）
+## 手机提醒（两条独立通道）
+
+「设置 → 手机提醒」页里有两条**互不替代**的提醒通道，都开就会各响一次：
+
+1. **浏览器推送（Web Push）**：网站 / 已「添加到主屏幕」的 PWA 收。服务端 21:30 的
+   cron Worker 算出「今天还差几个」再推；装了 App 但没开网站的用户收不到。
+2. **App 本地通知（安卓系统通知栏）**：App 自己用系统闹钟排程，**不依赖服务端**，
+   划掉后台、锁屏、重启手机都照响。被「强行停止」或卸载重装会清掉（重开 App 自动重排）；
+   想卸载后还收到，只能用第 1 条。
+
+本地通知这一页能做的事：
+
+- **提醒项列表**：出厂两条内置（任务提醒 21:30 / 睡觉提醒 22:00），可再加任意条自定义提醒；
+  每条可单独开关、改时间、改文案、删除（内置项删不掉，只能关或改）。
+- **消息类型**：任务进度（文案里的 `{done}` `{remaining}` `{total}` `{day}` 会用当天真实
+  完成数渲染）/ 睡觉提醒 / 打卡提醒 / 自定义。
+- **重复方式**：每天 / 只在工作日 / 只提醒一次（选日期，响完自动关掉）。
+- **表现**：声音、震动、悬浮横幅、锁屏显示内容四个开关 —— 编进通知渠道 id
+  （安卓渠道建好就不可改，所以改设置等于换一个新渠道）。
+- **准时模式**：开 = 精确闹钟（到点就响，安卓 12+ 要用户允许「闹钟和提醒」权限）；
+  关 = `inexactAllowWhileIdle`（省电，可能晚几分钟）。
+- **试一下**：按某条提醒当前的值立刻弹一条，用来确认权限与样式。
+
+口径与提醒 Worker **同一套**（`lib/core/day_completion.dart`：东八区当日、待审批不算完成、
+按 `task_id` 去重、排除三条系统流水），对账测试见 `test/reminder_parity_test.dart`。
+注意**不要**用首页那个 `todayProgress`（分母是「有日限的任务数」、按设备本地时区，口径不同）。
+
+
 
 | 文件 | 内容 |
 | --- | --- |

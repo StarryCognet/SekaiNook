@@ -88,4 +88,10 @@ abstract final class AppConstants {
 
   /// 上一次排程时算的是哪一天（东八区日期键），用于判断文案是否过期
   static const String keyLocalNotifyDay = 'sekainook_local_notify_day';
+
+  /// 提醒项列表（JSON 数组：类型/时间/重复/文案/声音震动悬浮锁屏）
+  static const String keyLocalNotifyReminders = 'sekainook_local_notify_items';
+
+  /// 准时模式（精确闹钟；关着时用省电模式，到点可能晚几分钟）
+  static const String keyLocalNotifyExact = 'sekainook_local_notify_exact';
 }

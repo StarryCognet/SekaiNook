@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../config/app_constants.dart';
 import '../../../core/api_exception.dart';
 import '../../../data/api/push_api.dart';
+import '../../../data/models/local_reminder.dart';
 import '../../../data/models/notification_record.dart';
 import '../../../state/family_state.dart';
 import '../../../state/local_notify_state.dart';
@@ -11,6 +12,7 @@ import '../../../theme/app_theme.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
+import 'reminder_list.dart';
 
 /// 「设置 → 手机提醒」区块。
 ///
@@ -97,6 +99,31 @@ class _PushSectionState extends State<PushSection> {
     _flushMessage(state);
   }
 
+  Future<void> _setExact(bool value) async {
+    final LocalNotifyState state = context.read<LocalNotifyState>();
+    await state.setExactMode(value);
+    if (!mounted) return;
+    setState(() {});
+    _flushMessage(state);
+  }
+
+  /// 通知预览挑哪一条：开着、有排上、且最快会响的那条（列表里各有各的，
+  /// 这张卡只展示「下一条要弹的通知长什么样」）
+  LocalReminder? _previewReminder(LocalNotifyState local) {
+    LocalReminder? best;
+    DateTime? earliest;
+    for (final LocalReminder reminder in local.activeReminders) {
+      if (local.scheduledTextFor(reminder) == null) continue;
+      final DateTime? at = local.nextFireAtFor(reminder);
+      final bool earlier = at != null && (earliest == null || at.isBefore(earliest));
+      if (best == null || earlier) {
+        best = reminder;
+        if (at != null) earliest = at;
+      }
+    }
+    return best;
+  }
+
   Future<void> _send() async {
     final NotifyAudience? audience = _audienceOf(context.read<FamilyState>().role);
     setState(() => _sending = true);
@@ -123,6 +150,11 @@ class _PushSectionState extends State<PushSection> {
     final AppPalette palette = context.palette;
     final FamilyRole? role = context.watch<FamilyState>().role;
     final LocalNotifyState local = context.watch<LocalNotifyState>();
+    final LocalReminder? preview = _previewReminder(local);
+    // 状态层把文案拼成「标题\n正文」，这里拆开按通知栏的两级样式显示
+    final String previewText =
+        preview == null ? '' : (local.scheduledTextFor(preview) ?? '');
+    final int previewCut = previewText.indexOf('\n');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -154,12 +186,14 @@ class _PushSectionState extends State<PushSection> {
                     value: _fireAtText(local.nextFireAt!),
                     tone: _Tone.plain,
                   ),
-                if (local.enabled && local.scheduledBody != null) ...<Widget>[
+                if (local.enabled && preview != null) ...<Widget>[
                   const SizedBox(height: AppSpacing.xs),
                   _PreviewBox(
                     palette: palette,
-                    title: local.scheduledTitle ?? '',
-                    body: local.scheduledBody ?? '',
+                    title: previewCut < 0
+                        ? previewText
+                        : previewText.substring(0, previewCut),
+                    body: previewCut < 0 ? '' : previewText.substring(previewCut + 1),
                   ),
                 ],
                 const SizedBox(height: AppSpacing.sm),
@@ -208,8 +242,80 @@ class _PushSectionState extends State<PushSection> {
             ),
           ),
         ),
+        ReminderList(onToast: widget.onToast, index: 1),
         EnterBox(
-          index: 1,
+          index: 2,
+          child: AppCard(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    const Expanded(
+                      child: _PushHead(
+                        title: '准时模式',
+                        description: '提醒是交给系统闹钟排的，响得准不准就看这个开关。',
+                      ),
+                    ),
+                    Switch.adaptive(
+                      value: local.exactMode,
+                      onChanged: local.busy ? null : _setExact,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _ModeLine(
+                  text: '关（默认）：省电，到点可能晚几分钟',
+                  active: !local.exactMode,
+                ),
+                _ModeLine(
+                  text: '开：到点就响，更耗电；安卓 12+ 需要你在系统里允许「闹钟和提醒」',
+                  active: local.exactMode,
+                ),
+                if (local.exactMode && !local.exactGranted) ...<Widget>[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '系统里没给「闹钟和提醒」权限 —— 现在还是按省电的方式排，到点可能晚几分钟。'
+                    '去手机「设置 → 应用 → 特殊权限」里允许一下。',
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.warningInk,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        EnterBox(
+          index: 3,
+          child: AppCard(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const _PushHead(
+                  title: '划掉后台也会响吗？',
+                  description: '会 —— 但有两种情况例外，先看清楚，免得以为没排上。',
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                const _PushBullet(
+                  text: '提醒不是 App 自己盯着时间弹的，是交给系统闹钟排的：划掉后台、锁屏、甚至重启手机都照样响（重启后由系统恢复）。',
+                ),
+                const _PushBullet(
+                  text: '在系统设置里对 App 点过「强行停止」，或者卸载重装，排好的提醒会被清掉 —— 重新打开一次 App 就会自动重排。',
+                ),
+                const _PushBullet(
+                  text: '想让卸载 App 之后也照样收到，只能用上面那张卡的浏览器推送（网站订阅），本地通知做不到。',
+                ),
+              ],
+            ),
+          ),
+        ),
+        EnterBox(
+          index: 4,
           child: AppCard(
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: Column(
@@ -233,7 +339,7 @@ class _PushSectionState extends State<PushSection> {
           ),
         ),
         EnterBox(
-          index: 2,
+          index: 5,
           child: AppCard(
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: Column(
@@ -439,6 +545,47 @@ class _PushBullet extends StatelessWidget {
                 fontSize: AppFontSize.xs,
                 color: palette.textSecondary,
                 height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 准时模式的两行代价说明：当前生效的那行点亮，另一行灰着
+class _ModeLine extends StatelessWidget {
+  const _ModeLine({required this.text, required this.active});
+
+  final String text;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    final Color color = active ? palette.primaryInk : palette.textTertiary;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs, right: AppSpacing.sm),
+            child: Icon(
+              active ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: AppFontSize.sm,
+              color: color,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: AppFontSize.xs,
+                color: color,
+                height: 1.5,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ),
