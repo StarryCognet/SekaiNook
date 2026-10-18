@@ -38,3 +38,6 @@ coverage/
 
 # 版本日志同步时生成的 SQL（内容来自 src/config/changelog.ts，别提交）
 migrations/.changelog-sync.sql
+
+# 图标工作目录（本地生成脚本与候选图，不入库）
+.icon-work/
