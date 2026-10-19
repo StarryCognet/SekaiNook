@@ -9,13 +9,14 @@ import 'package:sekainook_app/data/api/settings_api.dart';
 import 'package:sekainook_app/state/notification_state.dart';
 import 'package:sekainook_app/state/theme_state.dart';
 import 'package:sekainook_app/theme/app_theme.dart';
+import 'package:sekainook_app/theme/tokens.dart';
 import 'package:sekainook_app/ui/shell/app_top_bar.dart';
 
 /// 全局顶栏的回归测试。
 ///
 /// 守五件事：① location → 页面名 / 图标 的推法（含先例顺序那个坑）；
 /// ② 铃铛的未读角标与点击；③ 深浅开关「点另一档才切、点当前这档不动」；
-/// ④ 挂 `Scaffold.appBar` 时高度算得对（状态栏自己让、正文不被压、窄屏不溢出）；
+/// ④ 真悬浮时高度算得对（状态栏自己让、正文从屏幕顶开始、`contentInset` 算得对、窄屏不溢出）；
 /// ⑤ 接线层 `AppTopBarHost` 在真 store（`ThemeState`）上点一下真的换主题。
 ///
 /// 前四组都是**裸 pump**（一层 Provider 都没有）—— 顶栏本体刻意不读 Provider
@@ -61,19 +62,42 @@ void main() {
         theme: AppTheme.build(dark ? ThemeId.midnight : ThemeId.original),
         home: Builder(
           builder: (BuildContext context) => MediaQuery(
-            // 只改状态栏高度，其余（尺寸 / 方向）照旧从真实窗口来
+            // 只改状态栏高度，其余（尺寸 / 方向）照旧从真实窗口来。
+            // `viewPadding` 也要一起给：顶栏的 `contentInset` 读的是它
+            // （真机上两者都是状态栏高度，只是 `padding` 会被外壳抹掉）。
             data: MediaQuery.of(context).copyWith(
               padding: EdgeInsets.only(top: topPadding),
+              viewPadding: EdgeInsets.only(top: topPadding),
             ),
+            // 照 `MainShell` 的挂法：顶栏是 `Stack` 里浮在内容之上的一层，
+            // body 的 `MediaQuery.padding.top` 被抹掉 —— 内容从屏幕顶铺下来，
+            // 由各页自己的 `AppTopBar.contentInset` 让位。
             child: Scaffold(
-              appBar: AppTopBar(
-                page: page,
-                unread: unread,
-                hasBackground: hasBackground,
-                onNotifications: () => log.notifications++,
-                onToggleBrightness: () => log.brightness++,
+              body: Stack(
+                // 与 MainShell 一致：不给 expand 的话 Stack 会缩到正文大小，
+                // `Positioned(left: 0, right: 0)` 的顶栏就只剩 28.5px 宽。
+                fit: StackFit.expand,
+                children: <Widget>[
+                  MediaQuery(
+                    data: MediaQuery.of(context).copyWith(
+                      padding: MediaQuery.of(context).padding.copyWith(top: 0),
+                    ),
+                    child: const SafeArea(child: Text('正文')),
+                  ),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: AppTopBar(
+                      page: page,
+                      unread: unread,
+                      hasBackground: hasBackground,
+                      onNotifications: () => log.notifications++,
+                      onToggleBrightness: () => log.brightness++,
+                    ),
+                  ),
+                ],
               ),
-              body: const SafeArea(child: Text('正文')),
             ),
           ),
         ),
@@ -128,7 +152,7 @@ void main() {
     expect(log.brightness, 1);
   });
 
-  testWidgets('挂 Scaffold.appBar：状态栏高度自己让，正文紧贴顶栏下方', (WidgetTester tester) async {
+  testWidgets('真悬浮：顶栏不占布局（盖在内容上），让位交给 contentInset', (WidgetTester tester) async {
     await pumpTopBar(tester, topPadding: 44);
     expect(tester.takeException(), isNull, reason: '高度算歪了会在这里以溢出报出来');
 
@@ -137,11 +161,13 @@ void main() {
       tester.getBottomLeft(find.byType(AppTopBar)).dy,
       moreOrLessEquals(44 + AppTopBar.preferredBarSize.height),
     );
-    // 正文里的 SafeArea 不该再让一次顶部 —— 有 appBar 时 Scaffold 已经把 body 的
-    // 顶部 padding 抹成 0（各页现有的 SafeArea 就是靠这个，不用改页面）
+    // 悬浮的关键：body 的 padding.top 被抹掉，正文从屏幕最顶开始 ——
+    // 顶栏是盖在它上面的一层，不是把它推下去
+    expect(tester.getTopLeft(find.text('正文')).dy, moreOrLessEquals(0));
+    // 各页要自己让的高度 = 状态栏 + 条自身高 + 一道气口（与 AppNavBar.contentInset 对称）
     expect(
-      tester.getTopLeft(find.text('正文')).dy,
-      moreOrLessEquals(44 + AppTopBar.preferredBarSize.height),
+      AppTopBar.contentInset(tester.element(find.byType(AppTopBar))),
+      moreOrLessEquals(44 + AppTopBar.topMargin + AppTopBar.innerHeight + AppSpacing.sm),
     );
   });
 
@@ -206,8 +232,18 @@ void main() {
             builder: (BuildContext context, ThemeState state, Widget? child) => MaterialApp(
               theme: AppTheme.build(state.themeId, hasBackground: state.hasBackground),
               home: const Scaffold(
-                appBar: AppTopBarHost(location: '/settings'),
-                body: SizedBox.shrink(),
+                body: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    SizedBox.shrink(),
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: AppTopBarHost(location: '/settings'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

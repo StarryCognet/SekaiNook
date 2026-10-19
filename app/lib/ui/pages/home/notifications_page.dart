@@ -15,6 +15,7 @@ import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
+import '../../shell/app_top_bar.dart';
 import '../../shell/main_shell.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
@@ -457,7 +458,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         // 底部让出底栏胶囊（MainShell 开了 extendBody，它浮在内容之上）
         padding: EdgeInsets.fromLTRB(
           AppSpacing.md,
-          0,
+          AppTopBar.contentInset(context),
           AppSpacing.md,
           AppSpacing.lg + AppNavBar.contentInset(context),
         ),
@@ -605,7 +606,7 @@ class _NotifySkeleton extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(
         AppSpacing.md,
-        0,
+        AppTopBar.contentInset(context),
         AppSpacing.md,
         AppSpacing.lg + AppNavBar.contentInset(context),
       ),

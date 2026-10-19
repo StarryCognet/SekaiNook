@@ -13,6 +13,7 @@ import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
+import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
@@ -500,7 +501,7 @@ class _GardenPageState extends State<GardenPage> {
         builder: (BuildContext context) => ListView(
           padding: EdgeInsets.fromLTRB(
             AppSpacing.md,
-            AppSpacing.sm,
+            AppSpacing.sm + AppTopBar.contentInset(context),
             AppSpacing.md,
             AppSpacing.xl + AppNavBar.contentInset(context),
           ),

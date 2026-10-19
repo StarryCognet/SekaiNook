@@ -28,6 +28,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/update_dialog.dart';
 import '../../shell/app_nav_bar.dart';
+import '../../shell/app_top_bar.dart';
 import '../../shell/back_intent.dart';
 import 'push_section.dart';
 import 'selftest_panel.dart';
@@ -801,7 +802,7 @@ class _SettingsPageState extends State<SettingsPage> {
       // 底部让出底栏胶囊的高度（`MainShell` 开了 extendBody，它是浮在内容上的）
       padding: EdgeInsets.fromLTRB(
         AppSpacing.md,
-        AppSpacing.md,
+        AppSpacing.md + AppTopBar.contentInset(context),
         AppSpacing.md,
         AppSpacing.xl + AppNavBar.contentInset(context),
       ),
@@ -1857,7 +1858,7 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 底栏是浮在内容之上的，不让位的话滚到底会被胶囊压住最后一条。
   static EdgeInsets _pagePadding(BuildContext context) => EdgeInsets.fromLTRB(
         AppSpacing.md,
-        AppSpacing.sm,
+        AppSpacing.sm + AppTopBar.contentInset(context),
         AppSpacing.md,
         AppSpacing.xl + AppNavBar.contentInset(context),
       );

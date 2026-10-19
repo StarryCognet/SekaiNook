@@ -119,6 +119,15 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => preferredBarSize;
 
+  /// 页面顶部要为悬浮顶栏让出的高度 —— 与 [AppNavBar.contentInset] 对称。
+  ///
+  /// 顶栏是浮在内容之上的一层（不再占 `Scaffold.appBar` 槽），内容从屏幕顶铺下来，
+  /// 不让位的话首屏第一条会被胶囊压住。用 `viewPadding` 而不是 `padding`：
+  /// 外壳会把 body 的 `padding.top` 抹掉（跟底栏那侧同一个道理），
+  /// 只有 `viewPadding` 始终是屏幕自己的安全区原值。
+  static double contentInset(BuildContext context) =>
+      MediaQuery.viewPaddingOf(context).top + topMargin + innerHeight + AppSpacing.sm;
+
   /// 胶囊落影 —— 数值与 [AppNavBar] 里那份一致（那边是私有的，借不过来），
   /// 让上下两条悬浮胶囊看着是一套东西。颜色取自 `colorScheme.shadow`（主题里是黑），
   /// 不写字面量。

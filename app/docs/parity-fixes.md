@@ -15,7 +15,7 @@
 | M3 | 学习记录页缺「今日已完成」清单 | 补上任务名 + 完成时刻 + 奖励标签，空态文案与 Web 一字不差 | `ui/pages/garden/garden_page.dart` |
 | M4 | 无全局错误边界 | `ErrorWidget.builder` 装中文兜底卡片（🌱 + 页面出了点问题 + 重新加载），`PlatformDispatcher.onError` / `FlutterError.onError` 留痕 | `core/app_error.dart`、`main.dart`、`app.dart` |
 | M5 | 底部导航少「学习计划」Tab | 补第 5 格；并把周计划页、通知页一并收进 `ShellRoute` | `ui/shell/main_shell.dart`、`router.dart` |
-| M6 | 无全局顶栏 | **补上全局顶栏**：左侧页面名胶囊、右侧通知铃铛（带未读角标）与太阳/月亮深浅开关；挂 `Scaffold.appBar`（不是包 body） | `ui/shell/app_top_bar.dart`（新建 469 行）、`ui/shell/main_shell.dart:181` |
+| M6 | 无全局顶栏 | **补上全局顶栏**：左侧页面名胶囊、右侧通知铃铛（带未读角标）与太阳/月亮深浅开关；**真悬浮**——不占 `Scaffold.appBar` 槽，挂在 body 的 `Stack` 顶层（`Positioned(left: 0, right: 0)`，须 `StackFit.expand`），内容从屏顶铺下来、能从胶囊后穿过；各页用 `AppTopBar.contentInset(context)` 顶部让位（13 处滚动容器） | `ui/shell/app_top_bar.dart`（新建 + `contentInset`）、`ui/shell/main_shell.dart`、8 个页面文件各加一行 import |
 | M7 | 通知筛选不记忆 + 孩子端首页无实时时钟 | 筛选落 `SharedPreferences`（键 `sekainook_notice_filter`）且地址栏仍可深链；首页 20 秒轮询每轮重取 `DateTime.now()`，跨 22:00 / 跨天最迟 20 秒刷新 | `ui/pages/home/notifications_page.dart`、`ui/pages/home/kid_home_page.dart` |
 | M8 | 家庭称呼草稿不落盘（切页即丢） | 草稿按身份落 `SharedPreferences`（`sekainook_name_draft:kid\|mom`），保存成功即清 | `ui/pages/settings/settings_page.dart`、`config/app_constants.dart` |
 | M9 | 花园菜单没写进地址栏 | 菜单改由 `/garden?tab=` 承载（唯一真相是地址栏） | `ui/pages/garden/garden_page.dart` |
@@ -78,7 +78,7 @@ flutter build web --release --dart-define=API_BASE=https://sn.starrymiku.com   #
 | `test/api_smoke_test.dart` / `e2e_flow_test.dart` / `garden_flow_test.dart` | ✓ 全过（打生产后端） |
 
 **尚未在真机/真浏览器里验证过的**（如实交底）：
-- 顶栏挂上之后的实际渲染，特别是「顶栏 + 页内大标题」是否显重复（React 版 `MainLayout` 也是这个结构，但手机上要人眼看一眼；要收掉只需把 `appBar:` 改成按路由给 `null`）。
+- ~~顶栏挂上之后的实际渲染，特别是「顶栏 + 页内大标题」是否显重复~~：**已在真浏览器看过**（Edge，495×909 手机视口与 1874 宽屏各一次）—— 不显重复（顶栏那条是导航指示、页内是内容头，React 版 `MainLayout` 同结构）；真悬浮下内容能正常从顶栏后滚过。**注意**：合成指针事件在这个 Flutter 版本里对 canvas 不生效（连底栏 Tab 都点不动），所以顶栏右侧按钮的「真点击」没能在浏览器里复现，改由 `test/app_top_bar_test.dart` 的 11 条兜住。
 - Android 上点「导出流水」：系统分享面板会不会弹、`XFile` 的 mime 类型被微信/文件管理器认不认、临时文件删除与「保存到文件」的竞态。
 - Web 下载分支的运行时行为（只过了 `flutter build web` 的编译）：Blob 真造得出来、`<a download>` 真触发下载、中文文件名没问题。
 

@@ -30,6 +30,7 @@ import '../../../state/settings_state.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
+import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
@@ -562,7 +563,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
           // 底部让出底栏胶囊（MainShell 开了 extendBody，它浮在内容之上）
           padding: EdgeInsets.fromLTRB(
             AppSpacing.md,
-            AppSpacing.md,
+            AppSpacing.md + AppTopBar.contentInset(context),
             AppSpacing.md,
             AppSpacing.xl + AppNavBar.contentInset(context),
           ),
@@ -2319,7 +2320,7 @@ class _HomeSkeleton extends StatelessWidget {
     return ListView(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.md,
-        AppSpacing.md,
+        AppSpacing.md + AppTopBar.contentInset(context),
         AppSpacing.md,
         AppSpacing.xl + AppNavBar.contentInset(context),
       ),
