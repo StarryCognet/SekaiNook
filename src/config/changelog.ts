@@ -14,10 +14,19 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = '2.0.1';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.0.1',
+    date: '2026-10-19 13:30:00',
+    title: '顶部导航栏也浮起来了，内容不再被切掉一条',
+    changes: [
+      '顶部那条导航栏（左边写着当前在哪一页、右边是通知铃铛和太阳/月亮开关）现在是浮在内容上的一层 —— 跟底部那条一样，页面内容从屏幕最顶上铺下来，往下滚的时候会从它后面穿过去，不再被硬切走一条',
+      '首屏不再被顶栏压着：问候卡和第一张任务卡从头开始显示；顶栏让出来的高度按状态栏自己算，有刘海、有手势条的机器都不会错位',
+    ],
+  },
   {
     version: '2.0.0',
     date: '2026-10-19 09:50:00',

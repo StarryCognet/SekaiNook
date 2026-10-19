@@ -61,7 +61,11 @@ function Publish-File([string]$LocalPath, [string]$Key, [string]$ContentType, [s
 
 # 固定「单个包」的两种打法：都不带 ABI 过滤，所以 versionCode 就是 pubspec 里那个数。
 # 千万别改成 --split-per-abi：那会给每个包加上 1000×ABI 偏移，版本号就不再单调递增了。
-$buildArgs = @('build', 'apk', '--release')
+# `--no-pub`：不加它，flutter 会先隐式跑一次 `pub get`，而本机 pub 请求走代理时常
+# 直接连不上（`SocketException: 远程计算机拒绝网络连接 ... uri=https://pub.dev/...`），
+# 整个发版就在这里断掉。依赖真变了（改过 pubspec 的 dependencies）就先手动跑
+# `flutter pub get --offline` 再发版。
+$buildArgs = @('build', 'apk', '--release', '--no-pub')
 $abiTag = 'arm64-v8a'
 if (-not $Universal) {
     $buildArgs += @('--target-platform', 'android-arm64')
