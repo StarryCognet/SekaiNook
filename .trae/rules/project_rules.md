@@ -9,7 +9,7 @@ alwaysApply: true
 
 - 前端：React 18 + Vite + TypeScript + antd / antd-mobile + zustand
 - 后端：**Cloudflare Pages Functions**（文件即路由）+ **D1**（SQLite）+ **R2**（对象存储）
-- 部署：`git push` → Cloudflare Pages 自动构建重部署（无需手动操作）
+- 部署：**主域名 `sn.starrymiku.com` 现在跑 Flutter Web**（Pages 项目 `sekainook`）→ 仓库根 `npm run web:deploy`；该项目的 Git 自动构建已关，`git push` 不再触发部署（详见 `AGENTS.md` 的「网页端」）
 - 数据分层：
   - **D1 云端**：`family_ledger`（积分流水）、`weekly_plans`（每周计划）→ 跨设备共享
   - **localStorage 本地**：角色、家长密码、花园 → 各设备独立，不跨设备同步
@@ -122,7 +122,7 @@ export async function addReward(input: { name: string }): Promise<boolean> {
 
 - 两个终端：`npm run dev`（前端 5173）+ `npm run dev:api`（wrangler 8788）
 - 前端经 `vite.config.ts` 代理 `/api` → `http://127.0.0.1:8788`
-- 部署：`git push` 后 Cloudflare Pages 自动构建，无需手动 deploy
+- 部署：主域名跑 Flutter Web，仓库根 `npm run web:deploy`（**手动**；该项目 Git 自动构建已关，push 不会触发）
 
 ## 关键约束（踩过的坑，务必遵守）
 

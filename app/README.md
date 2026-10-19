@@ -111,8 +111,9 @@ flutter test --no-pub test/reminder_parity_test.dart \
 
 ## 部署
 
-Flutter Web 产物是纯静态文件，丢给任意静态托管即可。它默认连线上后端
-（`https://sn.starrymiku.com`，属跨域调用，后端已加 CORS 中间件）：
+Flutter Web 产物是纯静态文件，部署在 Cloudflare Pages 项目 `sekainook` ——
+**它就是主域名 `sn.starrymiku.com` 本身**（2026-10-19 从 React 版切过来）。
+默认连的后端跟产物同源（`https://sn.starrymiku.com`，跨域调用，后端已加 CORS 中间件）：
 
 ```bash
 # 在仓库根跑（app/ 的上一级）—— 构建 + 部署一条命令
@@ -120,9 +121,12 @@ npm run web:deploy
 
 # 等价于：
 #   cd app && flutter build web --release --no-pub --dart-define=API_BASE=https://sn.starrymiku.com
-#   npx wrangler pages deploy app/build/web --project-name sekainook-app
+#   npx wrangler pages deploy app/build/web --project-name sekainook --branch main
 ```
 
+> ⚠️ 该项目的 **Git 自动构建已关掉**（`deployments_enabled=false`）—— 否则每次 `git push`
+> 都会用 React 产物把 Flutter 版盖回去。所以网页端**不是** push 即上线，改完要手动跑 `npm run web:deploy`。
+> 后端（`functions/`、D1 / R2 绑定、环境变量）是项目级的，换前端产物不影响它。
 > 应用用的是 hash 路由（`#/home`），所以**不需要** SPA 的 `_redirects` 兜底规则。
 > 想指向别的后端，构建时加 `--dart-define=API_BASE=https://你的域名`。
 

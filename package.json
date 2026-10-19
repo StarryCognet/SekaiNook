@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "deploy": "npm run build && wrangler pages deploy",
     "web:build": "cd app && flutter build web --release --no-pub --dart-define=API_BASE=https://sn.starrymiku.com",
-    "web:deploy": "npm run web:build && wrangler pages deploy app/build/web --project-name sekainook-app",
+    "web:deploy": "npm run web:build && wrangler pages deploy app/build/web --project-name sekainook --branch main",
     "db:migrate:local": "wrangler d1 migrations apply sekainook --local",
     "db:migrate:remote": "wrangler d1 migrations apply sekainook --remote",
     "changelog:sync": "node scripts/changelog-sync.mjs sync",

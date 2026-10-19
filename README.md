@@ -78,7 +78,7 @@
 | 后端 | Cloudflare Pages Functions（文件即路由，`functions/api/`） |
 | 数据库 | Cloudflare D1（SQLite，绑定名 `DB`，database `sekainook`） |
 | 对象存储 | Cloudflare R2（绑定名 `STARRYMIKU_BUCKET`，bucket `starrymiku`） |
-| 部署 | React 版 `npm run deploy`（`pages_build_output_dir=./dist`）；Flutter Web 版 `npm run web:deploy`；`compatibility_date=2025-09-01` |
+| 部署 | **主域名 `sn.starrymiku.com` 跑 Flutter Web**：`npm run web:deploy`（手动推到 Pages 项目 `sekainook`；该项目 Git 自动构建已关）；React 版仍可用 `npm run deploy`（会覆盖 Flutter 产物）；`compatibility_date=2025-09-01` |
 
 > 后端已于提交 `4e6347c` 从 Supabase 迁移到 Cloudflare Pages Functions + D1 + R2，仓库中不再有任何 Supabase 依赖、配置或 SQL。
 >
@@ -112,11 +112,11 @@ npm run build
 # 预览构建产物
 npm run preview
 
-# 部署 React 版（build + wrangler pages deploy）
-npm run deploy
-
-# 部署 Flutter Web 版（产物在 app/build/web）
+# 部署线上（Flutter Web → 主域名所在的 Pages 项目 sekainook）
 npm run web:deploy
+
+# 切回 React 版（会覆盖 Flutter 产物；React 版仍完整保留在 src/ public/）
+npm run deploy
 
 # 线上数据库迁移
 npm run db:migrate:remote

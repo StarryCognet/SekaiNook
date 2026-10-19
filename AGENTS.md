@@ -73,7 +73,15 @@ cp icon-v3.svg E:\Git\SekaiNook\public\icon.svg   # 网页端矢量版
 
 ## 网页端
 
-- **React 版（当前主域名 `sn.starrymiku.com`）**：`git push` 后由 Cloudflare Pages 自动构建，用户刷新就是最新版。
-  ⚠️ 该项目的 Git 集成监听**整个仓库** —— 改了 `app/` 再 push 也会触发一次构建（白烧构建次数）。
-- **Flutter Web 版**（预览 `sekainook-app.pages.dev`）：纯静态产物，手动部署 —— `npm run web:deploy`。
+- **主域名 `sn.starrymiku.com` 现在跑的是 Flutter Web**（Cloudflare Pages 项目名 `sekainook`，2026-10-19 从 React 切过来）。
+  纯静态产物，**手动部署**：`npm run web:deploy`
+  （= `flutter build web` + `wrangler pages deploy app/build/web --project-name sekainook --branch main`）。
+- ⚠️ **该项目的 Git 自动构建已关掉**（`deployments_enabled=false`，经 API 设置）：push 不再触发构建 ——
+  否则每次 push 都会用 React 产物把 Flutter 版盖回去。要恢复：
+  `PATCH /accounts/<account_id>/pages/projects/sekainook` 里把 `source.config.deployments_enabled` 设回 `true`，
+  或在 Dashboard → Workers & Pages → sekainook → Settings 里改。**改前端产物不影响后端** ——
+  `functions/`、D1 / R2 绑定、环境变量都是项目级的，每次 deploy 都会把 `functions/` 一起传上去。
+- **React 版仍完整留在本仓库**（`src/` + `public/`），只是主域名不再服务它。回滚方式：
+  `npm run deploy`（把 React 推回同一个项目，覆盖 Flutter 产物）；
+  或去 Dashboard 的部署历史里选一个旧版本 Rollback。
 - 上面那套 APK 发版流程只为安卓端。
