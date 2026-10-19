@@ -46,6 +46,14 @@ export interface CustomTask {
   kind: 'preset' | 'custom';
   /** 默认 true：每天可再打卡一次 */
   repeatDaily: boolean;
+  /**
+   * 提交这条任务是否必须带一张照片（拍照 / 相册）。
+   *
+   * 家长在「添加任务」里勾选，默认开 —— 孩子交的任务大多得看见东西才算数。
+   * 消费 / 罚款类固定 false（扣分只要写清原因，不要求拍照）。
+   * 最终判定统一走 `utils/taskRules.ts` 的 `taskRequiresPhoto()`。
+   */
+  requirePhoto: boolean;
 }
 
 /** 新增一条任务需要的信息（id / createdAt 由 store 生成） */
@@ -58,6 +66,8 @@ export interface CustomTaskInput {
   kind?: 'preset' | 'custom';
   /** 缺省 true */
   repeatDaily?: boolean;
+  /** 缺省 true（仅赚钱类有效；消费 / 罚款固定不需要照片） */
+  requirePhoto?: boolean;
   /** 预置任务用固定 id；不给就按 createdBy 生成 custom_/wish_ */
   id?: string;
 }
@@ -74,6 +84,8 @@ const PRESET_TASKS: readonly CustomTask[] = [
     createdAt: '',
     kind: 'preset',
     repeatDaily: true,
+    // 两条预置都是学习任务（赚钱类）：照规矩要带照片才算完成
+    requirePhoto: true,
   },
   {
     id: PRESET_TASK_IDS[1],
@@ -84,6 +96,7 @@ const PRESET_TASKS: readonly CustomTask[] = [
     createdAt: '',
     kind: 'preset',
     repeatDaily: true,
+    requirePhoto: true,
   },
 ];
 
@@ -135,6 +148,8 @@ function toTask(value: unknown): CustomTask | null {
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
     kind: raw.kind === 'preset' ? 'preset' : 'custom',
     repeatDaily: raw.repeatDaily !== false,
+    // 老存档里没有这个字段：赚钱类按「要照片」兜底，消费 / 罚款一律不要
+    requirePhoto: type === 'earning' ? raw.requirePhoto !== false : false,
   };
 }
 
@@ -233,6 +248,8 @@ export const useCustomTasksStore = create<CustomTasksState>((set, get) => {
         createdAt: new Date().toISOString(),
         kind: input.kind ?? 'custom',
         repeatDaily: input.repeatDaily !== false,
+        // 家长在表单里勾的「必须添加照片」只在赚钱类上生效；扣分类不需要照片
+        requirePhoto: type === 'earning' ? input.requirePhoto !== false : false,
       };
       const tasks = [...get().tasks.filter((t) => t.id !== created.id), created];
       set({ tasks });

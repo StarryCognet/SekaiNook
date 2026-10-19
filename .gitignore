@@ -41,3 +41,6 @@ migrations/.changelog-sync.sql
 
 # 图标工作目录（本地生成脚本与候选图，不入库）
 .icon-work/
+
+# 本地临时目录（截图 / flclash 工作区 / 校验产物，动辄几个 G，不入库）
+.tmp-*/

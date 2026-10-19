@@ -22,6 +22,14 @@ export interface TaskConfig {
    * 例如「按时睡觉」只在 19:00-22:00 内可打卡。
    */
   window?: { start: string; end: string };
+  /**
+   * 提交这条任务是否必须带一张照片（拍照或从相册选）。
+   *
+   * **缺省按类型决定**：赚钱类（value > 0 / type 'earning'）必须，消费与罚款不强制 ——
+   * 判断一律走 `utils/taskRules.ts` 的 `taskRequiresPhoto()`，别在组件里各写一遍。
+   * 自定义任务由家长在「添加任务」里决定，值存在本地任务列表里，通过这里带进来。
+   */
+  requirePhoto?: boolean;
 }
 
 /** 积分流水记录 */

@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>底部 Tab 栏 · 悬浮还是遮挡 · 方案页</title>
+<style>
+  :root{
+    --bg:#0e1013; --card:#171a20; --card2:#1d2129; --line:#262b33;
+    --fg:#e8eaed; --dim:#9aa3ad; --dim2:#6f7883;
+    --accent:#4cc9f0; --warn:#f5a623; --bad:#f0435c; --good:#35c98a;
+    --mono:ui-monospace,SFMono-Regular,"Cascadia Mono",Consolas,monospace;
+  }
+  html[data-theme="light"]{
+    --bg:#f4f5f7; --card:#ffffff; --card2:#f0f2f5; --line:#e2e5ea;
+    --fg:#1b1e23; --dim:#5b626b; --dim2:#8b929b;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:15px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:56px 28px 120px}
+  h1{font-size:30px;line-height:1.35;margin:0 0 14px;letter-spacing:-.01em}
+  h2{font-size:22px;margin:0 0 6px;letter-spacing:-.01em}
+  h3{font-size:16px;margin:26px 0 8px;color:var(--fg)}
+  h4{font-size:14px;margin:18px 0 6px;color:var(--dim);font-weight:600;letter-spacing:.02em}
+  p{margin:10px 0;color:var(--dim)}
+  strong{color:var(--fg);font-weight:600}
+  code{font-family:var(--mono);font-size:12.5px;background:var(--card2);border:1px solid var(--line);
+       border-radius:5px;padding:1px 5px;color:var(--fg)}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent) 35%,transparent)}
+  .sec{margin-top:64px;padding-top:28px;border-top:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--dim2);text-transform:uppercase}
+  .lede{font-size:17px;line-height:1.8;color:var(--fg)}
+  .lede em{font-style:normal;background:linear-gradient(transparent 62%,color-mix(in srgb,var(--accent) 28%,transparent) 62%)}
+
+  .topbar{position:fixed;top:16px;right:18px;display:flex;gap:8px;z-index:50}
+  .topbar button{
+    font:inherit;font-size:12.5px;padding:7px 13px;border-radius:999px;cursor:pointer;
+    background:var(--card);color:var(--dim);border:1px solid var(--line);
+  }
+  .topbar button:hover{color:var(--fg);border-color:var(--dim2)}
+
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+  .card.tight{padding:14px 16px}
+  .tag{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+       padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+  .tag.ok{color:var(--good);border-color:color-mix(in srgb,var(--good) 45%,transparent)}
+  .tag.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
+  .tag.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+  .tag.info{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+
+  pre{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+      overflow:auto;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--fg);margin:12px 0}
+  pre .c{color:var(--dim2)}
+  pre .k{color:#c792ea}
+  pre .s{color:#c3e88d}
+  pre .n{color:#f78c6c}
+
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim2);font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+  td.num{font-family:var(--mono);color:var(--fg);white-space:nowrap}
+  td.path{font-family:var(--mono);font-size:12px;color:var(--dim)}
+  tr:last-child td{border-bottom:0}
+
+  .callout{border-radius:12px;padding:14px 18px;margin:16px 0;border:1px solid var(--line);
+           background:var(--card2);border-left:3px solid var(--accent)}
+  .callout.bad{border-left-color:var(--bad)}
+  .callout.warn{border-left-color:var(--warn)}
+  .callout.ok{border-left-color:var(--good)}
+  .callout p{margin:4px 0}
+  .callout .h{color:var(--fg);font-weight:600;font-size:14px}
+
+  ul{padding-left:20px;margin:10px 0}
+  li{margin:6px 0;color:var(--dim)}
+  li strong{color:var(--fg)}
+
+  /* ---------- 手机模型 ---------- */
+  .phones{display:flex;flex-wrap:wrap;gap:26px;justify-content:center;margin:26px 0 6px}
+  .phcell{text-align:center}
+  .phcap{margin-top:12px;font-size:13px;color:var(--dim);max-width:270px;margin-left:auto;margin-right:auto;line-height:1.6}
+  .phcap b{display:block;color:var(--fg);font-size:14px;font-weight:600;margin-bottom:3px}
+  .phwrap{width:calc(390px * var(--s));height:calc(844px * var(--s));position:relative}
+  .ph{width:390px;height:844px;position:absolute;top:0;left:0;transform:scale(var(--s));transform-origin:top left;
+       background:#f6f7f9;border-radius:26px;overflow:hidden;border:1px solid rgba(0,0,0,.35);
+       box-shadow:0 18px 40px -18px rgba(0,0,0,.65)}
+  .ph .statusbar{height:26px;background:#eef0f3}
+  .ph .viewport{position:absolute;left:0;right:0;top:26px;bottom:0;overflow:hidden}
+  .ph .scroller{position:absolute;left:0;right:0;top:0;padding:14px 14px 0}
+  .ph .row{height:56px;border-radius:12px;background:#e6e9ee;margin-bottom:12px;
+           display:flex;align-items:center;gap:10px;padding:0 14px}
+  .ph .row i{width:26px;height:26px;border-radius:8px;background:#cfd5de;display:block;flex:0 0 auto}
+  .ph .row u{height:9px;border-radius:5px;background:#cfd5de;display:block;text-decoration:none}
+  .ph .row u.a{width:44%}
+  .ph .row u.b{width:22%;margin-left:auto;background:#c3c9d2}
+  .ph .home{position:absolute;left:50%;transform:translateX(-50%);bottom:8px;width:118px;height:5px;
+            border-radius:99px;background:rgba(0,0,0,.28)}
+  .ph .pill{position:absolute;left:16px;right:16px;bottom:32px;height:66px;border-radius:33px;
+            background:#ffffff;box-shadow:0 10px 26px -10px rgba(15,25,45,.34),0 2px 8px rgba(15,25,45,.10);
+            display:flex;align-items:center;justify-content:space-around;padding:0 12px;border:1px solid rgba(0,0,0,.05)}
+  .ph .pill span{width:24px;height:24px;border-radius:7px;background:#d6dbe3;display:block}
+  .ph .pill span.on{background:#3f4a5a}
+  .ph .pill.glass{background:rgba(255,255,255,.86);border:1px solid rgba(0,0,0,.09);
+                  box-shadow:0 10px 26px -12px rgba(15,25,45,.28)}
+  .ph .pill.clear{background:rgba(255,255,255,.55);border:1px solid rgba(0,0,0,.12)}
+  .ph .pill .dot{position:absolute;width:36px;height:36px;border-radius:50%;background:#3f4a5a;
+                 left:26px;top:calc(50% - 18px);opacity:.9}
+
+  /* 滚动演示：每台手机各自的最大滚动量用 --max 给 */
+  .anim .scroller{animation:roll 7s cubic-bezier(.55,0,.35,1) infinite alternate}
+  @keyframes roll{0%,12%{transform:translateY(0)} 62%,100%{transform:translateY(calc(-1 * var(--max)))}}
+  .paused .scroller{animation-play-state:paused}
+
+  .legend{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin-top:18px;font-size:12.5px;color:var(--dim)}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+  /* 透明度三态 */
+  .fade3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:18px}
+  .fadebox{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .fadedemo{height:120px;border-radius:10px;position:relative;overflow:hidden;background:#f6f7f9}
+  .fadedemo .under{position:absolute;inset:0;padding:12px}
+  .fadedemo .under div{height:16px;border-radius:5px;background:#b9c1cc;margin-bottom:9px}
+  .fadedemo .under div.dark{background:#3f4a5a}
+  .ph .row.dark{background:#3f4a5a}
+  .ph .row.dark i{background:#5b6a7e}
+  .ph .row.dark u{background:#5b6a7e}
+  .fadedemo .over{position:absolute;left:12px;right:12px;bottom:12px;height:52px;border-radius:26px;
+                  display:flex;align-items:center;justify-content:center;font-size:12px;color:#3f4a5a;font-weight:600}
+
+  .check{list-style:none;padding-left:0}
+  .check li{padding-left:28px;position:relative}
+  .check li::before{content:"✓";position:absolute;left:4px;top:0;color:var(--good);font-weight:700}
+
+  footer{margin-top:80px;padding-top:22px;border-top:1px solid var(--line);color:var(--dim2);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <button onclick="toggleTheme()">主题</button>
+</div>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">SekaiNook · 底部 Tab 栏</div>
+  <h1>它不是「悬浮」，它是<b>浮着长的占位条</b></h1>
+  <p class="lede">
+    你说：<em>「软件底部 tab 栏虽然是悬浮但不完全是，底部的内容完全被遮挡了」</em>。
+    我理解成两件事叠在一起：<strong>① 它长得像浮在内容之上（圆角胶囊、四周露背景、带阴影），但布局上是一条独占的硬条带</strong>；
+    <strong>② 屏幕最底部那一块（约 98dp，接近屏高的 12%）永远只显示背景，内容滚到底也进不去</strong> —— 所以「底部的内容」被这块区域吃掉了。
+  </p>
+  <div class="callout warn">
+    <p class="h">先说结论（本节 04/05 有可视化对比）</p>
+    <p>App 端这一条底栏是 <code>Scaffold.bottomNavigationBar</code>，<strong>没有开 <code>extendBody</code></strong>。这意味着它不是一个「浮在内容上的层」，而是<strong>从 body 里切走 98dp 的一条固定带</strong>：内容区的底边 = 胶囊的顶边，两边严丝合缝，中间的 32dp 只是列表自己的内边距。想要真悬浮，必须开 <code>extendBody</code> 并把胶囊做成半透明 —— 两件事缺一不可。</p>
+  </div>
+  <div class="callout">
+    <p class="h">有一处我不敢替你定，放在最后一节（07）</p>
+    <p>我实测的是「内容滚不到胶囊下面」，<strong>没有测到文字被胶囊压住看不见</strong>。如果你手机上确实看见有字被盖住，那是另一回事（多半是某一页的底部内边距偏小），麻烦把那页截个图给我。</p>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<section class="sec" id="s01">
+  <div class="eyebrow">01 · 先把尺寸算清楚</div>
+  <h2>这 98dp 是怎么来的</h2>
+  <p>所有数字都能在两处代码里对上，不是我估的。</p>
+
+  <table>
+    <thead><tr><th>构成</th><th>数值</th><th>出处</th></tr></thead>
+    <tbody>
+      <tr><td>胶囊内部高度（图标 + 文字那一层）</td><td class="num">58 dp</td><td class="path">app_nav_bar.dart:61 <code>_innerHeight = 58</code></td></tr>
+      <tr><td>胶囊内层上下内边距</td><td class="num">4 × 2 dp</td><td class="path">app_nav_bar.dart:62 <code>_barPadding = 4</code></td></tr>
+      <tr><td><strong>胶囊实际高度</strong></td><td class="num">66 dp</td><td class="path">58 + 4 + 4</td></tr>
+      <tr><td>胶囊离屏幕底部间距</td><td class="num">8 dp</td><td class="path">app_nav_bar.dart:66 <code>_bottomMargin = AppSpacing.sm</code></td></tr>
+      <tr><td>胶囊左右外边距</td><td class="num">16 dp</td><td class="path">app_nav_bar.dart:65 <code>_edgeMargin = AppSpacing.md</code></td></tr>
+      <tr><td>系统手势条（被 <code>SafeArea</code> 让出）</td><td class="num">≈ 24 dp</td><td class="path">main_shell.dart:177 <code>SafeArea(top: false, child: AppNavBar(...))</code></td></tr>
+      <tr><td><strong>Scaffold 从 body 切走的总高</strong></td><td class="num">98 dp</td><td class="path">66 + 8 + 24</td></tr>
+      <tr><td>内容区（body）可用高度 · 844 屏</td><td class="num">746 dp</td><td class="path">844 − 98</td></tr>
+      <tr><td>列表自己的底部内边距</td><td class="num">32 dp</td><td class="path">family_dashboard_page.dart:625 等，<code>AppSpacing.xl</code></td></tr>
+    </tbody>
+  </table>
+
+  <p>换成比例：<strong>98 / 844 ≈ 11.6%</strong> 的竖向空间，是永久交给「栏 + 它周围的空白」的，与内容多少无关。</p>
+</section>
+
+<!-- ============================================================ -->
+<section class="sec" id="s02">
+  <div class="eyebrow">02 · 为什么说它是「假悬浮」</div>
+  <h2>两端的做法一模一样：让位，而不是穿透</h2>
+
+  <div class="grid g2">
+    <div class="card">
+      <span class="tag info">App / Flutter</span>
+      <h3>Scaffold 里没有 extendBody</h3>
+      <pre><span class="c">// main_shell.dart:169</span>
+child: <span class="k">Scaffold</span>(
+  <span class="c">// 换 Tab 时内容横向滑入淡出</span>
+  body: <span class="k">SlideFadeSwitcher</span>(...),
+  <span class="c">// 悬浮胶囊底栏</span>
+  bottomNavigationBar: <span class="k">SafeArea</span>(
+    top: <span class="n">false</span>,
+    child: <span class="k">AppNavBar</span>(...),
+  ),
+  <span class="c">// ← 这里没有 extendBody: true</span>
+)</pre>
+      <p><code>bottomNavigationBar</code> 不给 <code>extendBody</code> 时是<strong>硬占位</strong>：body 的高度会被减掉栏高，内容区物理上到不了栏下面。名字里的「悬浮」只体现在<strong>画法</strong>（胶囊、圆角、阴影）上。</p>
+    </div>
+
+    <div class="card">
+      <span class="tag info">Web / React</span>
+      <h3>用 padding 给自己垫底</h3>
+      <pre><span class="c">/* MainLayout.module.css:11 */</span>
+--bottom-nav-space: <span class="n">108px</span>;
+
+<span class="c">/* :245 （移动端） */</span>
+.content {
+  padding-bottom: calc(
+    var(--bottom-nav-space) + env(safe-area-inset-bottom)
+  );
+}</pre>
+      <p>网页端的底栏是真 <code>fixed</code> 浮层，但内容区靠 <strong>108px 的底部内边距</strong>把自己推上去 —— 效果一样：内容不进入底栏所在的那条带。</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <p class="h">一句话概括现状</p>
+    <p><strong>视觉上是悬浮，布局上是占位。</strong> 两端都选了「把内容往上推」，而不是「让内容从栏底下穿过去」。所以你会在滚动到底时看到：最后一条内容停在栏顶上方 32dp，栏和屏幕底边之间那段也只能是背景。</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section class="sec" id="s03">
+  <div class="eyebrow">03 · 这块区域吃掉了什么</div>
+  <h2>一条竖屏账</h2>
+
+  <div class="grid g3">
+    <div class="card tight">
+      <div class="eyebrow">竖向空间</div>
+      <p style="font-size:26px;color:var(--fg);margin:6px 0 0;font-family:var(--mono)">11.6%</p>
+      <p style="margin:2px 0 0">屏高永久划给底栏（98 / 844）</p>
+    </div>
+    <div class="card tight">
+      <div class="eyebrow">内容可视高度</div>
+      <p style="font-size:26px;color:var(--fg);margin:6px 0 0;font-family:var(--mono)">746 → 844</p>
+      <p style="margin:2px 0 0">真悬浮后内容区多 <strong>98dp</strong>（+13%）</p>
+    </div>
+    <div class="card tight">
+      <div class="eyebrow">一屏能多显示</div>
+      <p style="font-size:26px;color:var(--fg);margin:6px 0 0;font-family:var(--mono)">+0.9 张</p>
+      <p style="margin:2px 0 0">卡片按 100dp + 12dp 间距估</p>
+    </div>
+  </div>
+
+  <h4>在什么页面上感觉最强</h4>
+  <ul>
+    <li><strong>任务区 / 花园 / 设置</strong>这类长列表：每滚一屏都少 98dp，看完一条长列表要多滚一两下。</li>
+    <li><strong>底部正好是一张卡片的页尾</strong>：内容止于栏顶上方，下面一整块空背景，看起来像「内容没加载完」。</li>
+    <li><strong>矮屏手机</strong>（如 720dp 高）：98dp 占到 13.6%，比你我这台更明显。</li>
+  </ul>
+
+  <div class="callout bad">
+    <p class="h">顺带查到一处偏小的</p>
+    <p>通知页的列表底部内边距是 <code>AppSpacing.lg</code>（24dp），比其它页的 32dp 少 8dp：<code>notifications_page.dart:424</code>。都不算「被遮挡」，但它是全套页面里最贴栏的一条 —— 如果你说的遮挡出现在通知页，就是这里。</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section class="sec" id="s04">
+  <div class="eyebrow">04 · 看一遍就懂了</div>
+  <h2>现状 vs 真悬浮（滚动演示，会自动滚到底再滚回）</h2>
+  <p>三台手机都是 390 × 844，几何按上面那张表 1:1 画的。看三件事：<strong>内容区的下边界在哪</strong>、<strong>滚到底时最后一条停在哪</strong>、<strong>内容能不能滑到胶囊下面去</strong>。</p>
+
+  <div class="phones" id="phones">
+    <div class="phcell">
+      <div class="phwrap" style="--s:.68">
+        <div class="ph anim" style="--max:650px">
+          <div class="statusbar"></div>
+          <div class="viewport" style="bottom:98px">
+            <div class="scroller" id="rows-a"></div>
+          </div>
+          <div class="pill"><span class="on"></span><span></span><span></span><span></span><span></span></div>
+          <div class="home"></div>
+        </div>
+      </div>
+      <div class="phcap"><b>现状 · 硬占位</b>内容区止于 746（胶囊顶边），滚到底最后一条停在 714，下面 98dp 永远是空的。</div>
+    </div>
+
+    <div class="phcell">
+      <div class="phwrap" style="--s:.68">
+        <div class="ph anim" style="--max:626px">
+          <div class="statusbar"></div>
+          <div class="viewport">
+            <div class="scroller" id="rows-b" style="padding-bottom:106px"></div>
+          </div>
+          <div class="pill glass"><span class="on"></span><span></span><span></span><span></span><span></span></div>
+          <div class="home"></div>
+        </div>
+      </div>
+      <div class="phcap"><b>方案 A · 真悬浮（半透明）</b>内容区铺到屏幕底（<code>extendBody</code>），内容从胶囊后面滚过去；滚到底时最后一条停在 738，仍完整可见。</div>
+    </div>
+
+    <div class="phcell">
+      <div class="phwrap" style="--s:.68">
+        <div class="ph anim" style="--max:626px">
+          <div class="statusbar"></div>
+          <div class="viewport">
+            <div class="scroller" id="rows-c" style="padding-bottom:106px"></div>
+          </div>
+          <div class="pill"><span class="on"></span><span></span><span></span><span></span><span></span></div>
+          <div class="home"></div>
+        </div>
+      </div>
+      <div class="phcap"><b>方案 B · 穿透但不透明</b>内容确实滑到胶囊后面了，但看不见 —— 滚动手感没变，只省掉「被切一刀」的观感。</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:#e6e9ee"></i>列表内容</span>
+    <span><i style="background:#ffffff;border:1px solid #ddd"></i>底栏胶囊</span>
+    <span><i style="background:#f6f7f9"></i>永远只显示背景的那块</span>
+  </div>
+
+  <h3>为什么我强调「半透明」这一步不能省</h3>
+  <p>下面的演示里，底下那几条内容位置完全相同，只改胶囊的透明度。开到不透明时，穿透等于没做 —— 内容确实过去了，但被挡住，用户感知不到任何差别。</p>
+
+  <div class="fade3">
+    <div class="fadebox">
+      <span class="tag bad">不透明 · 现状</span>
+      <div class="fadedemo">
+        <div class="under"><div></div><div class="dark"></div><div></div><div></div></div>
+        <div class="over" style="background:#ffffff;box-shadow:0 8px 20px -10px rgba(15,25,45,.35)">内容被完全挡住</div>
+      </div>
+      <p style="font-size:12.5px;margin-top:10px">胶囊后面的内容一个字都看不见 → 穿透无收益。</p>
+    </div>
+    <div class="fadebox">
+      <span class="tag warn">半透明 0.86 · 方案 A</span>
+      <div class="fadedemo">
+        <div class="under"><div></div><div class="dark"></div><div></div><div></div></div>
+        <div class="over" style="background:rgba(255,255,255,.86);box-shadow:0 8px 20px -12px rgba(15,25,45,.3);border:1px solid rgba(0,0,0,.08)">内容隐约透出</div>
+      </div>
+      <p style="font-size:12.5px;margin-top:10px">能看出「底下有东西在移动」，栏本身仍然清晰可读。</p>
+    </div>
+    <div class="fadebox">
+      <span class="tag">更透 0.72</span>
+      <div class="fadedemo">
+        <div class="under"><div></div><div class="dark"></div><div></div><div></div></div>
+        <div class="over" style="background:rgba(255,255,255,.72);box-shadow:0 8px 20px -12px rgba(15,25,45,.3)">透得更明显</div>
+      </div>
+      <p style="font-size:12.5px;margin-top:10px">悬浮感最强，但图标文字的对比度开始往下掉，浅色主题 + 浅色内容时读起来发虚。</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <p class="h">三格看完，请注意一件容易被忽略的事</p>
+    <p>0.86 的白胶囊叠在<strong>浅色内容</strong>上，明度差只有几个百分点 —— 真机上几乎看不出「穿透」。上面三格之所以看得出差别，是因为我特意在演示里塞了一张<strong>深色卡</strong>（手机模型里每隔 5 条也放了一张）。</p>
+    <p>换算到真实页面：任务区、设置页基本都是白卡，<strong>方案 A 的透明收益接近于 0，真正拿到的是「内容能滚到栏下面」本身</strong>（多 98dp 可视高度）。你会明显感觉到透明，是在设了背景图、或列表里滚过深色/彩色卡片的时候。</p>
+  </div>
+
+  <div class="callout warn">
+    <p class="h">一个硬约束：App 端不能用毛玻璃糊</p>
+    <p>最漂亮的解法是 <code>BackdropFilter</code> 毛玻璃（内容在栏背后被糊开）。但 <strong>1.31.8 你已经把它整套撤掉了</strong> —— 真机实测滚动手感掉帧，网页端更吃力。所以方案 A 只能走<strong>半透明实色 + 细描边 + 轻阴影</strong>，不能退回模糊。（<code>AGENTS.md</code>：卡片一律走 <code>AppCard</code>，禁止 <code>BackdropFilter</code> 毛玻璃。）</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section class="sec" id="s05">
+  <div class="eyebrow">05 · 三套修法</div>
+  <h2>改什么、动几处、有什么代价</h2>
+
+  <div class="grid g3">
+    <div class="card">
+      <span class="tag ok">A · 推荐</span>
+      <h3>真悬浮半透明</h3>
+      <p><code>extendBody: true</code>，各页底部内边距 32 → 106，胶囊底色改半透明（0.86）+ 细描边。</p>
+      <ul>
+        <li><strong>得到</strong>：内容能从栏后面滚过去，一屏多 98dp，观感真正「浮」起来</li>
+        <li><strong>代价</strong>：胶囊文字对比度略降；页面内边距必须改准，漏一页那页最后一条会被栏压住</li>
+        <li><strong>改动面</strong>：1 处 Scaffold + 5~6 处列表内边距 + 1 处胶囊配色</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="tag warn">B · 折中</span>
+      <h3>穿透但不透明</h3>
+      <p>只做 <code>extendBody</code> + 内边距，胶囊保持现在的白色实底。</p>
+      <ul>
+        <li><strong>得到</strong>：去掉「内容被硬切在一条假边界上」的观感，滚动更连续</li>
+        <li><strong>代价</strong>：可视内容其实没多（滚到底仍要让位），悬浮感提升有限</li>
+        <li><strong>适用</strong>：你担心半透明后字发虚，先上这一档</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="tag">C · 保守</span>
+      <h3>不改布局，只做减法</h3>
+      <p>保持硬占位，把占位压小、把压迫感去掉：内高 58 → 54、离底 8 → 6、阴影减淡、页内边距 32 → 24。</p>
+      <ul>
+        <li><strong>得到</strong>：省回约 10~14dp，视觉上栏更轻</li>
+        <li><strong>代价</strong>：治标；那块区域依然进不去内容</li>
+        <li><strong>适用</strong>：暂时不想碰全局布局</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>我建议的顺序</h3>
+  <ul>
+    <li><strong>先 A。</strong> 你要的「真悬浮」只有 A 能给全 —— B 少了透明那一半，C 根本没解决。</li>
+    <li>透明度的稳妥取法是 <strong>0.86</strong>：能透出底下有内容在动，图标与文字仍然清晰。先别一上来就 0.72。</li>
+    <li>如果做完觉得字发虚，<strong>退到 B</strong>（只保留 extendBody 与内边距），不用整套回滚。</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section class="sec" id="s06">
+  <div class="eyebrow">06 · 落地清单</div>
+  <h2>真要动手的话，改这些地方</h2>
+
+  <h3>App 端（E:\Git\SekaiNook-App）</h3>
+  <table>
+    <thead><tr><th>#</th><th>文件</th><th>改什么</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td class="path">lib/ui/shell/main_shell.dart:169</td><td><code>Scaffold</code> 加 <code>extendBody: true</code>（body 铺到屏幕底）</td></tr>
+      <tr><td class="num">2</td><td class="path">lib/ui/widgets/app_nav_bar.dart:61-66</td><td>胶囊底色走 <code>palette.cardColor(...)</code> 的 <strong>0.86</strong> 版本，补 1px 细描边；尺寸常量不动</td></tr>
+      <tr><td class="num">3</td><td class="path">family_dashboard_page.dart:625</td><td>列表底部内边距 32 → <strong>106</strong>（= 手势条 24 + 离底 8 + 胶囊 66 + 余量 8）</td></tr>
+      <tr><td class="num">4</td><td class="path">settings_page.dart:722</td><td>同上</td></tr>
+      <tr><td class="num">5</td><td class="path">parent_home_page.dart:1533 / kid_home_page.dart:622</td><td>同上</td></tr>
+      <tr><td class="num">6</td><td class="path">garden_page.dart:502</td><td>同上</td></tr>
+      <tr><td class="num">7</td><td class="path">notifications_page.dart:424</td><td>24 → 106（顺便把偏小的 8dp 一起补上）</td></tr>
+    </tbody>
+  </table>
+  <div class="callout">
+    <p>这 6 处内边距是同一个数，<strong>建议抽成一个公共常量</strong>（例如 <code>AppNavBar.contentBottomInset</code>），以后底栏高度一改，所有页面自动跟上 —— 不然就是下一轮「漏了一页」。</p>
+  </div>
+
+  <h3>Web 端（E:\Git\SekaiNook）</h3>
+  <table>
+    <thead><tr><th>#</th><th>文件</th><th>改什么</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td class="path">src/layouts/MainLayout.module.css:11</td><td><code>--bottom-nav-space</code> 只保留「真正需要让出的高度」，多余余量去掉</td></tr>
+      <tr><td class="num">2</td><td class="path">src/layouts/MainLayout.module.css:245</td><td>移动端 <code>.content</code> 的 <code>padding-bottom</code> 跟着上面同步</td></tr>
+      <tr><td class="num">3</td><td class="path">底部悬浮条组件</td><td>底色改半透明（网页端可以用 <code>backdrop-filter</code>，桌面浏览器不心疼；手机上留给 <code>@media</code> 兜底）</td></tr>
+    </tbody>
+  </table>
+  <div class="callout bad">
+    <p class="h">两端要一起改</p>
+    <p>同一个家人在手机上看 App、在浏览器上看网页版。只改一端，他会觉得「手机上浮起来了、电脑上还是老样子」。<strong>App 端改完必须走发版流程</strong>（改 <code>src/config/changelog.ts</code> → <code>changelog:fallback</code> → <code>changelog:sync</code> → 升 <code>pubspec.yaml</code> 版本 → <code>tool/publish_apk.ps1</code> → 核对 <code>latest.json</code>），网页版 <code>git push</code> 即可。</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section class="sec" id="s07">
+  <div class="eyebrow">07 · 验收 与 需要你确认的</div>
+  <h2>改完怎么算成</h2>
+
+  <ul class="check">
+    <li>滚动到底时，最后一条内容<strong>完整可见</strong>，不被胶囊压住任何像素</li>
+    <li>滚动过程中，内容<strong>能滑到胶囊后面并透视出来</strong>（方案 A）/ 或至少滑到胶囊后面（方案 B）</li>
+    <li>胶囊上的 5 个图标与文字在<strong>浅色主题 + 浅色内容</strong>下仍然清晰（对比度目测正常）</li>
+    <li>五个 Tab 页（首页 / 家庭 / 花园 / 设置 / 计划）<strong>逐一滚到底</strong>检查，没有一页漏改内边距</li>
+    <li>网页版窄窗口（&lt; 560px）滚到底同样不被盖住</li>
+    <li>矮屏（720dp 高）与高屏（900dp 高）各测一次</li>
+  </ul>
+
+  <div class="callout warn">
+    <p class="h">需要你确认的一点（这是我这页最想问你的事）</p>
+    <p>「底部的内容完全被遮挡」我读成了 <strong>① 内容滚不到栏下面，那块区域永远进不去</strong>。如果你实际遇到的是 <strong>② 有文字/按钮真的被胶囊盖住看不见</strong>，那修法完全不同 —— 那是个 bug（某页内边距不够或某个固定定位元素算错了高度），不用动全局布局。</p>
+    <p>告诉我是 ① 还是 ②；如果是 ②，把那页截图给我，我直接定位到行。</p>
+  </div>
+
+  <div class="callout ok">
+    <p class="h">另外</p>
+    <p>确认之后我就按方案 A 动手：App 端 7 处 + Web 端 3 处，改完跑 <code>flutter analyze</code> / <code>flutter test</code>，再走发版。</p>
+  </div>
+</section>
+
+<footer>
+  SekaiNook · 底部 Tab 栏悬浮与遮挡分析 · 数据取自
+  <code>E:\Git\SekaiNook-App</code> 与 <code>E:\Git\SekaiNook</code> 当前工作区（1.31.11）。
+</footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const h = document.documentElement;
+  h.dataset.theme = h.dataset.theme === 'light' ? '' : 'light';
+}
+// 生成列表内容条（20 条，够滚）；每 5 条插一张深色卡，
+// 这样「内容从半透明胶囊后面透出来」才看得出来（浅灰卡叠白胶囊几乎没差别）
+function fill(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  let html = '';
+  for(let i=0;i<20;i++){
+    html += (i % 5 === 2)
+      ? '<div class="row dark"><i></i><u class="a"></u><u class="b"></u></div>'
+      : '<div class="row"><i></i><u class="a"></u><u class="b"></u></div>';
+  }
+  el.innerHTML = html;
+}
+['rows-a','rows-b','rows-c'].forEach(fill);
+</script>
+</body>
+</html>

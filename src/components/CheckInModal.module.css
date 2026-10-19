@@ -14,6 +14,25 @@
   gap: 6px;
 }
 
+/* 「（必填）」：照片是硬门槛时挂在标签后面的小红字 */
+.requiredMark {
+  color: var(--color-error, #ff4d4f);
+  font-weight: 500;
+}
+
+/* 空态下的一句提醒，说明为什么确认按钮点不动 */
+.photoHint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.photoHintRequired {
+  color: var(--color-error, #ff4d4f);
+}
+
 .uploadArea {
   display: flex;
   flex-direction: column;

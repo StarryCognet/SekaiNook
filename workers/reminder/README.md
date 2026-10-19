@@ -119,13 +119,13 @@ npx wrangler deploy
 | `NTFY_TOKEN` | secret | 自建 ntfy 开了鉴权 / ntfy 账号令牌时用 |
 | `BARK_SERVER` | var | 默认 `https://api.day.app` |
 | `PUSH_WEBHOOK_HEADERS` | secret | 额外请求头的 JSON 字符串，如 `{"X-Token":"abc"}` |
-| `APP_URL` | var | 点通知打开哪个页面，默认 `https://sekainook.pages.dev/home` |
+| `APP_URL` | var | 点通知打开哪个页面，默认 `https://sn.starrymiku.com/home` |
 | `DRY_RUN` | var | `1` = 只算不发（本地联调用，线上别开） |
 
 ## 孩子手机上怎么收
 
 - **webpush（默认）**：
-  - **Android**：Chrome 打开 `https://sekainook.pages.dev` → 设置 → 手机提醒 → 开启提醒 →
+  - **Android**：Chrome 打开 `https://sn.starrymiku.com` → 设置 → 手机提醒 → 开启提醒 →
     浏览器弹权限点「允许」。不用装任何 App。
   - **iPhone / iPad**：必须先在 **Safari** 里「分享 → 添加到主屏幕」，然后**从主屏幕图标**打开
     （iOS 16.4+ 才允许网页推送，且只有主屏 PWA 能收），再进 设置 → 手机提醒 → 开启提醒。

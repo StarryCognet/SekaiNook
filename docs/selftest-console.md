@@ -86,7 +86,7 @@
 {
   "ranAt": "2026-10-17T10:00:01.000Z",
   "durationMs": 1830,
-  "env": { "db": "sekainook", "origin": "https://sekainook.pages.dev", "now": "…", "worker": "https://sekainook-reminder.3398377037.workers.dev" },
+  "env": { "db": "sekainook", "origin": "https://sn.starrymiku.com", "now": "…", "worker": "https://sekainook-reminder.3398377037.workers.dev" },
   "params": { "dryRun": true, "simulateDone": 2, "now": "…", "…": "…" },   // 本轮实际生效的参数（回显）
   "summary": { "total": 71, "passed": 52, "failed": 0, "skipped": 19, "warned": 0 },
   "results": [
@@ -189,7 +189,7 @@
 ```md
 # SekaiNook 自检报告
 - 时间：2026-10-17 18:00:01 (+08:00)
-- 环境：https://sekainook.pages.dev · Worker sekainook-reminder
+- 环境：https://sn.starrymiku.com · Worker sekainook-reminder
 - 参数：simulateDone=2, dryRun=true
 - 结果：44 项 · 通过 41 · 失败 2 · 跳过 1
 

@@ -3,6 +3,10 @@ import type { TaskConfig } from '../types/family';
 /**
  * 赚钱/花钱/罚款任务规则 —— 唯一数据源。
  * 所有任务名、积分值、单位均从此处读取，禁止在组件中硬编码。
+ *
+ * 照片要求不在这里逐个标注：按 `utils/taskRules.ts` 的 `taskRequiresPhoto()` 兜底规则，
+ * **赚钱类是必须拍照或从相册选一张才能提交，消费 / 罚款不强制**。
+ * 某条任务要单独破例时，直接给它加 `requirePhoto: false | true` 即可。
  */
 export const TASK_RULES: TaskConfig[] = [
   // ===== 赚钱区（earning，正数）=====

@@ -4,6 +4,7 @@ import { CameraOutlined, PictureOutlined } from '@ant-design/icons';
 import { addLedgerRecord, LedgerApprovalError } from '../api/familyLedger';
 import { uploadImage } from '../api/upload';
 import { compressImage } from '../utils/image';
+import { taskRequiresPhoto } from '../utils/taskRules';
 import { useBackButton } from '../utils/useBackButton';
 import { useFamilyStore } from '../store/useFamilyStore';
 import type { TaskConfig } from '../types/family';
@@ -14,6 +15,10 @@ import styles from './CheckInModal.module.css';
  *
  * 账本页与首页（妹妹版）共用：家长提交直接入账，小孩提交进入待审批。
  * 提交成功后由调用方负责刷新数据与提示（两边文案不一样）。
+ *
+ * **照片门槛**：赚钱类任务（以及自定义任务里勾了「必须添加照片」的）没有照片就提交不了 ——
+ * 确认按钮直接置灰 + 写明原因，这是需求要的「必须拍照或从相册选照片才能提交」。
+ * 消费 / 罚款不强制（判断见 utils/taskRules 的 taskRequiresPhoto）。
  */
 export interface CheckInModalProps {
   /** 正在打卡的任务；null = 关闭 */
@@ -42,6 +47,10 @@ export default function CheckInModal({
   const draftTaskId = useRef<string | null>(null);
   /** 扣分任务（消费 / 罚款）：金额是负的，要显示扣多少、并要求写清原因 */
   const isDeduct = !!task && task.value < 0;
+  /** 这条任务必须带照片才能提交（赚钱类默认必须；自定义任务看家长怎么设） */
+  const needPhoto = !!task && taskRequiresPhoto(task);
+  /** 必填但还没选照片：确认按钮置灰，免得点了才被拦 */
+  const photoMissing = needPhoto && !imageFile;
 
   useEffect(() => {
     const id = task?.id ?? null;
@@ -87,6 +96,13 @@ export default function CheckInModal({
     // 扣分（消费 / 罚款）必须写清原因：这句话会原样出现在女儿的通知里
     if (isDeduct && !note.trim()) {
       message.warning('写一句原因，让女儿知道为什么扣分');
+      return;
+    }
+
+    // 照片是硬门槛（赚钱类任务 / 家长勾了「必须添加照片」的自定义任务）：
+    // 按钮本来就置灰了，这里再兜一次 —— 键盘回车、外部程序触发提交都拦得住
+    if (needPhoto && !imageFile) {
+      message.warning('这项任务要拍一张照片，或者从相册选一张，才能提交');
       return;
     }
 
@@ -152,6 +168,8 @@ export default function CheckInModal({
       }
       cancelText="取消"
       confirmLoading={uploading}
+      // 必填照片没选时确认按钮直接置灰：先选照片，再谈提交
+      okButtonProps={{ disabled: photoMissing }}
       // 手机端键盘弹出时不要把弹窗顶出屏幕：贴顶 + 内容区自己滚动
       style={{ top: 24 }}
       styles={{ body: { maxHeight: '60vh', overflowY: 'auto' } }}
@@ -168,10 +186,16 @@ export default function CheckInModal({
         />
       )}
 
-      {/* 上方：拍照 / 相册 双入口 */}
+      {/* 上方：拍照 / 相册 双入口。赚钱类任务没有照片就交不了，
+          标签上直接把「（必填）」写出来，空态再补一句为什么按钮点不动 */}
       <div className={styles.modalSection}>
         <div className={styles.modalLabel}>
           <CameraOutlined /> 上传照片
+          {needPhoto ? (
+            <span className={styles.requiredMark}>（必填）</span>
+          ) : (
+            <span>（可选）</span>
+          )}
         </div>
         <div className={styles.uploadArea}>
           {imagePreview ? (
@@ -219,6 +243,11 @@ export default function CheckInModal({
             </div>
           )}
         </div>
+        {photoMissing && (
+          <div className={`${styles.photoHint} ${styles.photoHintRequired}`}>
+            这项任务要拍一张照片，或者从相册选一张，才能提交
+          </div>
+        )}
       </div>
 
       {/* 下方：备注 */}

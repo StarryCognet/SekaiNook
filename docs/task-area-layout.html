@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SekaiNook · Flutter 任务区排版优化提案</title>
+<style>
+/* ============================================================
+   页面本体样式（提案文档的 UI，与 App 无关）
+   ============================================================ */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:#F6F7FB;
+  color:#0F172A;
+  font:14px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",Roboto,"Helvetica Neue",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:#4F46E5;text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;background:#EEF2FF;color:#3730A3;padding:1px 5px;border-radius:5px}
+.wrap{max-width:1400px;margin:0 auto;padding:28px 24px 120px}
+
+/* 顶栏 */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  backdrop-filter:saturate(160%) blur(10px);
+  background:rgba(246,247,251,.88);
+  border-bottom:1px solid #E6E8F0;
+}
+.topbar-in{max-width:1400px;margin:0 auto;padding:10px 24px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:13px;letter-spacing:.02em;color:#3730A3}
+.navlinks{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.navlinks a{font-size:12.5px;color:#475569;padding:5px 10px;border-radius:999px;border:1px solid #E2E8F0;background:#fff}
+.navlinks a:hover{border-color:#C7D2FE;background:#EEF2FF;text-decoration:none;color:#3730A3}
+
+/* 主题切换 */
+.themebar{display:flex;align-items:center;gap:6px;font-size:12px;color:#64748B}
+.themebar button{
+  font:inherit;font-size:12px;cursor:pointer;border:1px solid #E2E8F0;background:#fff;color:#334155;
+  padding:4px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;
+}
+.themebar button .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+.themebar button[aria-pressed="true"]{border-color:#4F46E5;box-shadow:0 0 0 2px rgba(79,70,229,.15);color:#3730A3;font-weight:600}
+
+/* 标题区 */
+.hero{padding:34px 0 8px}
+.kicker{font-size:12px;font-weight:700;letter-spacing:.14em;color:#6366F1;text-transform:uppercase}
+h1{font-size:34px;line-height:1.25;margin:10px 0 10px;letter-spacing:-.01em}
+.lead{font-size:15.5px;color:#475569;max-width:900px;margin:0 0 18px}
+.verdicts{display:flex;gap:10px;flex-wrap:wrap}
+.vcard{
+  background:#fff;border:1px solid #E6E8F0;border-radius:14px;padding:12px 16px;flex:1 1 260px;min-width:240px;
+  border-left:3px solid #4F46E5;
+}
+.vcard b{display:block;font-size:13px;color:#3730A3;margin-bottom:2px}
+.vcard span{font-size:13px;color:#475569}
+
+/* 章节 */
+.sec{margin-top:52px;scroll-margin-top:70px}
+.sec-head{display:flex;align-items:baseline;gap:12px;border-bottom:2px solid #E6E8F0;padding-bottom:10px}
+.sec-num{font-size:12px;font-weight:800;color:#4F46E5;letter-spacing:.1em}
+.sec-head h2{font-size:21px;margin:0;letter-spacing:-.01em}
+.sec-sub{color:#64748B;font-size:13.5px;margin:10px 0 22px;max-width:960px}
+.sec-sub b{color:#334155}
+
+/* 通用两栏 / 三栏 */
+.cols{display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap}
+.col-mock{flex:0 0 auto}
+.col-info{flex:1 1 380px;min-width:320px}
+.gallery{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap}
+
+/* 说明卡 */
+.note-card{background:#fff;border:1px solid #E6E8F0;border-radius:14px;padding:16px 18px;margin-bottom:14px}
+.note-card h4{margin:0 0 6px;font-size:14px}
+.note-card p{margin:0;font-size:13.5px;color:#475569}
+.note-card ul{margin:6px 0 0;padding-left:18px;font-size:13.5px;color:#475569}
+.note-card li{margin:3px 0}
+.badge-src{font-size:11.5px;color:#64748B;background:#F1F5F9;border-radius:6px;padding:2px 7px;display:inline-block;margin-bottom:8px}
+
+/* 问题清单 */
+.issues{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.issues li{display:flex;gap:11px;padding:12px 14px;background:#fff;border:1px solid #E6E8F0;border-radius:12px;font-size:13.5px;color:#334155}
+.issues li b{color:#0F172A}
+.pin{
+  flex:0 0 22px;height:22px;border-radius:999px;background:#FEF2F2;color:#B91C1C;border:1px solid #FECACA;
+  font-size:12px;font-weight:800;display:grid;place-items:center;margin-top:1px;font-variant-numeric:tabular-nums;
+}
+
+/* 手机壳 */
+.phone{
+  width:390px;flex:0 0 auto;position:relative;
+  background:#fff;border:10px solid #14161C;border-radius:40px;
+  box-shadow:0 30px 60px -30px rgba(15,23,42,.45),0 6px 18px -10px rgba(15,23,42,.25);
+  overflow:hidden;
+  /* ↓↓ App 主题令牌（默认：经典 / 出厂主题） —— mockup 内全部元素只读这些变量 */
+  --bg:#F5F6FA; --surface:#FFFFFF; --soft:#F9FAFB;
+  --text:#1A1A2E; --text2:#6B7280; --text3:#727780; --border:#E5E7EB;
+  --primary:#1A1A2E; --primary-soft:#2A2A4A;
+  --success:#0F9B6C; --success-ink:#0A6B4A;
+  --danger:#E94560; --danger-ink:#AE2C42;
+  --warning:#F5A623; --warning-ink:#8A5A08;
+  --seg:#FFFFFF; --on-seg:#1A1A2E;
+  --on-primary:#FFFFFF; --on-success:#FFFFFF; --on-danger:#FFFFFF;
+  --tint:.12;
+  --shadow:0 1px 2px rgba(15,23,42,.06);
+}
+.phone[data-theme="midnight"]{
+  background:#0E1A33;
+  --bg:#060C1C; --surface:#0E1A33; --soft:#132241;
+  --text:#E8F1FF; --text2:#92A8C9; --text3:#7B8FAE; --border:#22355A;
+  --primary:#2B7FE0; --primary-soft:#1B4A8F;
+  --success:#34D399; --success-ink:#6EE7B7;
+  --danger:#FF6B81; --danger-ink:#FF9AA9;
+  --warning:#F7B955; --warning-ink:#F7C878;
+  --seg:#1D3160; --on-seg:#E8F1FF;
+  --on-primary:#06152C; --on-success:#04241A; --on-danger:#2B0710;
+  --shadow:0 1px 2px rgba(0,0,0,.5);
+}
+.phone[data-theme="sakura"]{
+  --bg:#FFF5F8; --surface:#FFFFFF; --soft:#FDF1F5;
+  --text:#3B2430; --text2:#8B6B78; --text3:#847279; --border:#F6DBE5;
+  --primary:#E8628F; --primary-soft:#F6A8C4;
+  --success:#2FAE86; --success-ink:#1F7C5E;
+  --danger:#E8455F; --danger-ink:#AE2C42;
+  --warning:#E9A13A; --warning-ink:#83540A;
+  --seg:#FFFFFF; --on-seg:#3B2430;
+  --on-primary:#FFFFFF; --on-success:#FFFFFF; --on-danger:#FFFFFF;
+}
+.phone[data-theme="sunset"]{
+  --bg:#FFF8F1; --surface:#FFFFFF; --soft:#FDF3E9;
+  --text:#3F2A1B; --text2:#8A6C55; --text3:#837262; --border:#F4E0CC;
+  --primary:#E07B39; --primary-soft:#F5B183;
+  --success:#3D9E6D; --success-ink:#2A7350;
+  --danger:#D8452F; --danger-ink:#A63422;
+  --warning:#DD9A2A; --warning-ink:#7A5209;
+  --seg:#FFFFFF; --on-seg:#3F2A1B;
+  --on-primary:#FFFFFF; --on-success:#FFFFFF; --on-danger:#FFFFFF;
+}
+.phone .statusbar{
+  height:30px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px 0 24px;font-size:11px;color:var(--text2);
+  background:var(--bg);font-variant-numeric:tabular-nums;
+}
+.phone .statusbar .sb-r{display:flex;gap:5px;align-items:center}
+.phone .statusbar .sb-r i{display:block;width:14px;height:8px;border:1.2px solid var(--text3);border-radius:2px;position:relative}
+.phone .statusbar .sb-r i::after{content:"";position:absolute;inset:1.4px;width:60%;background:var(--text3);border-radius:1px}
+.phone .screen{background:var(--bg);padding:16px 16px 28px;color:var(--text)}
+.phone .screen.dim{opacity:1}
+.caption{margin-top:12px;width:390px;font-size:12.5px;color:#64748B}
+.caption b{color:#334155}
+
+/* mockup 内的 App 组件（严格按 Flutter 尺寸：1px = 1dp） */
+.tabbar{display:flex;height:46px;margin-bottom:16px}
+.tab{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;font-size:14px;color:var(--text2);position:relative}
+.tab.on{color:var(--on-seg);font-weight:600}
+.tab.on::before{content:"";position:absolute;inset:3px 0;background:var(--seg);border:1px solid color-mix(in srgb,var(--primary) 35%,transparent);border-radius:999px}
+.tab .lb{position:relative;z-index:1}
+.tab .cnt{
+  position:relative;z-index:1;background:var(--danger);color:var(--on-danger);font-size:12px;
+  border-radius:999px;padding:0 5px;line-height:15px;font-variant-numeric:tabular-nums;
+}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px}
+.card+.card{margin-top:16px}
+.card.soft{background:var(--soft)}
+.shd{display:flex;align-items:center;margin-bottom:8px}
+.shd::before{content:"";width:3px;height:16px;background:var(--primary);border-radius:999px;margin-right:8px;flex:0 0 auto}
+.shd .t{font-size:16px;font-weight:600;flex:1}
+.shd .x{font-size:14px;color:var(--text2)}
+.shd .sub{display:block;font-size:12px;color:var(--text3);font-weight:400}
+.grp{display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:var(--text2);margin:0 0 8px}
+.ic{width:14px;height:14px;flex:0 0 auto;display:block}
+.ic16{width:16px;height:16px;flex:0 0 auto;display:block}
+.ic18{width:18px;height:18px;flex:0 0 auto;display:block}
+.ic20{width:20px;height:20px;flex:0 0 auto;display:block}
+
+/* 现状按钮（FilledButton 实色） —— 1:1 复刻 */
+.btn-now{
+  display:flex;align-items:center;gap:8px;width:100%;height:40px;padding:0 22px;
+  border:0;border-radius:20px;font-size:14px;font-weight:500;margin-bottom:8px;
+  background:var(--success);color:var(--on-success);font-family:inherit;
+}
+.btn-now.spend{background:var(--danger);color:var(--on-danger)}
+.btn-now.off{background:var(--soft);color:var(--text3)}
+.btn-now .nm{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:left}
+.btn-now .val{font-weight:600;font-variant-numeric:tabular-nums}
+.gap-md{height:16px}
+.gap-sm{height:8px}
+.gap-xs{height:4px}
+.mb-sm{margin-bottom:8px}
+.muted{color:var(--text3);font-size:12px}
+
+/* 问题标记（贴在 mockup 上） */
+.mark{position:relative;border:1.5px dashed #F87171;border-radius:12px;padding:9px 9px 1px;background:rgba(248,113,113,.045)}
+.mark>.tag{
+  position:absolute;top:-10px;left:8px;background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;
+  padding:1px 8px;border-radius:999px;letter-spacing:.01em;white-space:nowrap;
+}
+.mark.tight{padding:6px 8px 4px}
+
+/* ===== 优化方案里的新组件 ===== */
+.prog{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.prog .bar{flex:1;height:8px;border-radius:999px;background:var(--soft);border:1px solid var(--border);overflow:hidden}
+.prog .bar>span{display:block;height:100%;background:var(--success);border-radius:999px}
+.prog .num{font-size:14px;font-weight:700;color:var(--primary);font-variant-numeric:tabular-nums}
+.prog .lbl{font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums}
+
+.seg-ctl{display:flex;background:var(--soft);border:1px solid var(--border);border-radius:999px;padding:3px;margin-bottom:14px}
+.seg-ctl .it{flex:1;text-align:center;font-size:13px;padding:6px 0;border-radius:999px;color:var(--text2);font-weight:600}
+.seg-ctl .it.on{background:var(--seg);color:var(--on-seg);border:1px solid color-mix(in srgb,var(--primary) 35%,transparent)}
+
+.row-task{
+  display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px;
+  background:var(--surface);border:1px solid var(--border);margin-bottom:8px;min-height:56px;
+}
+.row-task.soft{background:var(--soft)}
+.row-task .ibox{
+  width:36px;height:36px;flex:0 0 auto;border-radius:12px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--success) calc(var(--tint)*100%),transparent);color:var(--success-ink);
+}
+.row-task.spend .ibox{background:color-mix(in srgb,var(--danger) calc(var(--tint)*100%),transparent);color:var(--danger-ink)}
+.row-task.primary .ibox{background:color-mix(in srgb,var(--primary) calc(var(--tint)*100%),transparent);color:var(--primary)}
+.row-task.done .ibox{background:var(--soft);color:var(--text3)}
+.row-task .main{flex:1;min-width:0}
+.row-task .nm{font-size:14px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row-task .meta{font-size:12px;color:var(--text3);display:flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
+.row-task .val{
+  font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--success-ink);flex:0 0 auto;
+}
+.row-task.spend .val{color:var(--danger-ink)}
+.row-task.done .nm{color:var(--text3);text-decoration:line-through}
+.row-task.done .val{color:var(--text3)}
+.row-task .unit{font-size:12px;color:var(--text3);font-weight:400}
+.chk{
+  width:24px;height:24px;flex:0 0 auto;border-radius:999px;border:1.8px solid var(--border);
+  display:grid;place-items:center;color:var(--text3);
+}
+.row-task.armed .chk{border-color:var(--success);color:var(--success)}
+.row-task.armed{border-color:color-mix(in srgb,var(--success) 45%,var(--border))}
+.row-task.off{opacity:.62}
+.pill{
+  display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:600;border-radius:999px;
+  padding:2px 8px;background:color-mix(in srgb,var(--success) 12%,transparent);color:var(--success-ink);
+}
+.pill.red{background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger-ink)}
+.pill.grey{background:var(--soft);color:var(--text3)}
+.pill.blue{background:color-mix(in srgb,var(--primary) 12%,transparent);color:var(--primary)}
+.limitdots{display:flex;gap:3px;align-items:center}
+.limitdots i{width:6px;height:6px;border-radius:999px;background:var(--border);display:block}
+.limitdots i.on{background:var(--success)}
+.fold{
+  display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;border-radius:12px;
+  background:var(--soft);color:var(--text2);font-size:14px;font-weight:500;margin-top:2px;
+}
+.fold .sp{flex:1}
+.fold .n{font-variant-numeric:tabular-nums;font-weight:700;color:var(--text)}
+.groupcard{border:1px solid var(--border);border-radius:14px;padding:12px;background:var(--surface)}
+.groupcard+.groupcard{margin-top:12px}
+.groupcard .gh{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700;margin-bottom:10px}
+.ring{width:64px;height:64px;border-radius:999px;display:grid;place-items:center;flex:0 0 auto;
+  background:conic-gradient(var(--success) 0 62%,var(--soft) 62% 100%);position:relative}
+.ring::after{content:"";position:absolute;inset:7px;border-radius:999px;background:var(--surface)}
+.ring b{position:relative;z-index:1;font-size:15px;font-variant-numeric:tabular-nums}
+.flexrow{display:flex;align-items:center;gap:12px}
+.flexcol{display:flex;flex-direction:column;gap:4px}
+.kv{font-size:12px;color:var(--text3)}
+.hero-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.hero-head .ttl{font-size:16px;font-weight:700}
+.formrow{display:flex;gap:8px}
+.formrow .fld{flex:1;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--text3);background:var(--surface)}
+.formrow .fld.sel{display:flex;align-items:center;justify-content:space-between}
+.btn-fill{
+  width:100%;height:40px;border-radius:20px;border:0;background:var(--primary);color:var(--on-primary);
+  font-size:14px;font-weight:600;font-family:inherit;margin-top:10px;
+}
+.hr{height:1px;background:var(--border);margin:12px 0}
+
+/* 表格 */
+table.tbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid #E6E8F0;border-radius:12px;overflow:hidden;font-size:13px}
+table.tbl th,table.tbl td{text-align:left;padding:10px 12px;border-bottom:1px solid #EEF1F6;vertical-align:top}
+table.tbl th{background:#F8FAFC;font-size:12px;color:#475569;font-weight:700;white-space:nowrap}
+table.tbl tr:last-child td{border-bottom:0}
+table.tbl td.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:#3730A3;white-space:nowrap}
+table.tbl tr.hi td{background:#F5F3FF}
+
+/* anatomy 放大图 */
+.anatomy{display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start}
+.anatomy .zoom{flex:0 0 auto;width:430px}
+.anatomy .zoom .row-task{transform:scale(1.12);transform-origin:left top;margin-bottom:26px}
+.spec{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.spec li{display:flex;gap:10px;font-size:13px;color:#334155;background:#fff;border:1px solid #E6E8F0;border-radius:10px;padding:9px 12px}
+.spec .k{flex:0 0 92px;color:#3730A3;font-weight:700;font-size:12.5px}
+.states{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+.state{width:250px;background:#fff;border:1px solid #E6E8F0;border-radius:12px;padding:12px}
+.state h5{margin:0 0 8px;font-size:12.5px;color:#475569}
+.state .demo{--bg:#F5F6FA;--surface:#fff;--soft:#F9FAFB;--text:#1A1A2E;--text2:#6B7280;--text3:#727780;--border:#E5E7EB;--primary:#1A1A2E;--success:#0F9B6C;--success-ink:#0A6B4A;--danger:#E94560;--danger-ink:#AE2C42;--warning:#F5A623;--on-success:#fff;--on-danger:#fff;--tint:.12}
+.kbd{display:inline-block;font-size:11.5px;background:#F1F5F9;border:1px solid #E2E8F0;border-radius:5px;padding:0 5px;color:#475569;font-family:ui-monospace,monospace}
+.phase{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.phase .p{border-radius:999px;font-size:12px;font-weight:700;padding:4px 12px}
+.phase .p0{background:#DCFCE7;color:#166534}
+.phase .p1{background:#DBEAFE;color:#1E40AF}
+.phase .p2{background:#FEF3C7;color:#92400E}
+.foot{margin-top:70px;padding-top:20px;border-top:1px solid #E6E8F0;font-size:12.5px;color:#64748B}
+
+/* 补充：完成态勾选圈 / 原因行 / 方案标签 */
+.row-task .chk.done{background:color-mix(in srgb,var(--success) 16%,transparent);border-color:var(--success);color:var(--success-ink)}
+.row-task .chk.lock{background:var(--soft);border-color:var(--border);color:var(--text3)}
+.reason{font-size:11.5px;color:var(--text3);margin:-4px 0 8px 54px;display:flex;gap:4px;align-items:center}
+.plan-badge{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;letter-spacing:.06em;
+  color:#3730A3;background:#EEF2FF;border:1px solid #C7D2FE;border-radius:999px;padding:3px 11px;margin-bottom:10px;
+}
+.plan-title{font-size:17px;font-weight:700;margin:0 0 4px}
+.plan-sub{font-size:13px;color:#64748B;margin:0 0 16px;max-width:390px}
+.pros-cons{display:grid;gap:8px;margin-top:14px;width:390px}
+.pc{background:#fff;border:1px solid #E6E8F0;border-bottom-width:2px;border-radius:12px;padding:10px 13px;font-size:12.5px;color:#475569}
+.pc b{display:block;font-size:12px;margin-bottom:2px}
+.pc.pro{border-bottom-color:#86EFAC}.pc.pro b{color:#15803D}
+.pc.con{border-bottom-color:#FCA5A5}.pc.con b{color:#B91C1C}
+.pc.verdict{border-bottom-color:#C7D2FE}.pc.verdict b{color:#3730A3}
+</style>
+</head>
+<body>
+
+<!-- ============ 图标库（线性几何风，等价 Material Symbols Outlined） ============ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="g-plus"><path d="M12 5v14M5 12h14"/></g>
+    <g id="g-minus"><path d="M5 12h14"/></g>
+    <g id="g-check"><path d="M4.5 12.5l5 5L19.5 7"/></g>
+    <g id="g-clock"><circle cx="12" cy="12" r="8"/><path d="M12 7.6V12l3 1.9"/></g>
+    <g id="g-rise"><path d="M4 16.5l5-5 3.5 3.5L20 7.5"/><path d="M14.5 7.5H20v5.5"/></g>
+    <g id="g-fall"><path d="M4 7.5l5 5 3.5-3.5L20 16.5"/><path d="M14.5 16.5H20V11"/></g>
+    <g id="g-down"><path d="M6 9.5l6 6 6-6"/></g>
+    <g id="g-up"><path d="M6 14.5l6-6 6 6"/></g>
+    <g id="g-broom"><path d="M4.5 11L12 5l7.5 6v7.5a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z"/><path d="M9.5 19.5v-5h5v5"/></g>
+    <g id="g-dish"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.2"/></g>
+    <g id="g-shirt"><path d="M8.5 4.5L12 6.4l3.5-1.9 4.2 3-2 4.2-1.4-1v8.8H7.7v-8.8l-1.4 1-2-4.2z"/></g>
+    <g id="g-trash"><path d="M5 7h14M9.5 7V4.8h5V7M7.4 7l.9 12.2h7.4L16.6 7"/></g>
+    <g id="g-edit"><path d="M4 20h4L19.4 8.6l-4-4L4 16z"/><path d="M14.4 5.6l4 4"/></g>
+    <g id="g-book"><path d="M4 5.2h5.6a2.4 2.4 0 0 1 2.4 2.4v11.2a2 2 0 0 0-2-2H4z"/><path d="M20 5.2h-5.6a2.4 2.4 0 0 0-2.4 2.4v11.2a2 2 0 0 1 2-2H20z"/></g>
+    <g id="g-moon"><path d="M20.2 14.6A8.6 8.6 0 1 1 9.4 3.8a6.8 6.8 0 0 0 10.8 10.8z"/></g>
+    <g id="g-tablet"><rect x="5" y="3.2" width="14" height="17.6" rx="2.2"/><path d="M10.6 17.8h2.8"/></g>
+    <g id="g-phone"><rect x="7" y="2.8" width="10" height="18.4" rx="2.2"/><path d="M11 18.4h2"/></g>
+    <g id="g-eye"><path d="M2.6 12S6.1 6.2 12 6.2 21.4 12 21.4 12 17.9 17.8 12 17.8 2.6 12 2.6 12z"/><circle cx="12" cy="12" r="2.6"/></g>
+    <g id="g-alert"><path d="M12 4.2l8.6 15.6H3.4z"/><path d="M12 9.6v4.4"/><path d="M12 17h.01"/></g>
+    <g id="g-sun"><circle cx="12" cy="12" r="3.8"/><path d="M12 3.2v2.4M12 18.4v2.4M3.2 12h2.4M18.4 12h2.4M5.8 5.8l1.7 1.7M16.5 16.5l1.7 1.7M18.2 5.8l-1.7 1.7M7.5 16.5l-1.7 1.7"/></g>
+    <g id="g-wallet"><rect x="3" y="6" width="18" height="13" rx="2.4"/><path d="M3 10.4h18M16 14.6h2"/></g>
+    <g id="g-fire"><path d="M12 3.2c3.2 4 6 6.2 6 10a6 6 0 0 1-12 0c0-3.8 2.8-6 6-10z"/></g>
+    <g id="g-plus-c"><circle cx="12" cy="12" r="8.4"/><path d="M12 8v8M8 12h8"/></g>
+    <g id="g-x"><path d="M16.5 7.5l-9 9M7.5 7.5l9 9"/></g>
+  </defs>
+</svg>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <span class="brand">SekaiNook · 任务区排版提案</span>
+    <div class="themebar">
+      <span>预览主题</span>
+      <button data-th="classic" aria-pressed="true"><i class="sw" style="background:#1A1A2E"></i>经典</button>
+      <button data-th="midnight" aria-pressed="false"><i class="sw" style="background:#2B7FE0"></i>午夜蓝</button>
+      <button data-th="sakura" aria-pressed="false"><i class="sw" style="background:#E8628F"></i>樱花粉</button>
+      <button data-th="sunset" aria-pressed="false"><i class="sw" style="background:#E07B39"></i>暖阳橙</button>
+    </div>
+    <nav class="navlinks">
+      <a href="#now">现状诊断</a>
+      <a href="#web">Web 端参照</a>
+      <a href="#planA">方案 A</a>
+      <a href="#planB">方案 B</a>
+      <a href="#planC">方案 C</a>
+      <a href="#planD">家长端</a>
+      <a href="#anatomy">任务行规范</a>
+      <a href="#landing">落地清单</a>
+      <a href="#accept">验收</a>
+    </nav>
+  </div>
+</div>
+
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">Flutter 客户端 · /family?tab=tasks</div>
+  <h1>任务区排版优化：从「12 个实色按钮」到「一张能读的清单」</h1>
+  <p class="lead">
+    乱的不是信息量，而是<b>表达方式</b>：12 条任务被渲染成 12 个全宽高饱和实色按钮（绿 7 + 红 5），塞进同一张白卡里，
+    色块本身就是内容，分组标签反而最轻；做完的任务只从彩色变灰、继续占位；
+    <code>TaskConfig</code> 里已有的时间窗 / 日限 / 说明一个都没露出来。
+    下面按「现状 1:1 复刻 → 4 套排版方案 → 统一任务行规范 → 逐条落地位置」展开，所有 mockup 都是按 Flutter 实际尺寸画的（1px = 1dp），
+    并可在右上角切换 4 个出厂主题预览。
+  </p>
+  <div class="verdicts">
+    <div class="vcard"><b>核心结论</b><span>把「实色按钮」降级为「清单行」，颜色退回到语义提示（图标块 / 分值），首屏色块数从 12 降到 0。</span></div>
+    <div class="vcard"><b>结构结论</b><span>只摊开今天没做完的，完成项收进「今日已完成 N 项」折叠区；分类用子卡或分段控件，而不是红绿两列。</span></div>
+    <div class="vcard"><b>信息结论</b><span>行内补回已有但没显示的字段：日限 <code>1/2 次</code>、时间窗 <code>19:00–22:00</code>、说明（保护眼睛）。</span></div>
+  </div>
+</header>
+
+<!-- ==================== 01 现状 ==================== -->
+<section class="sec" id="now">
+  <div class="sec-head"><span class="sec-num">01</span><h2>现状 1:1 复刻：一张卡里塞了 12 个实色按钮</h2></div>
+  <p class="sec-sub">
+    复刻自 <code>lib/ui/pages/family/family_dashboard_page.dart</code> 的 <code>_buildTasksArea()</code>（第 1081–1176 行）
+    与 <code>_taskButton()</code>（第 1193–1237 行）。Tab 名就叫「任务区」，是家庭页默认打开的分区。
+    下方手机为整页长图（未裁切），虚线红框与编号对应右侧问题清单。
+  </p>
+
+  <div class="cols">
+    <div class="col-mock">
+      <div class="phone" data-theme="classic">
+        <div class="statusbar"><span>15:20</span><span class="sb-r"><span>5G</span><i></i></span></div>
+        <div class="screen">
+          <!-- 页面上方还有三张卡，此处收成一行提示 -->
+          <div class="muted" style="text-align:center;padding:2px 0 12px">↑ 上方还有：余额卡 · 今日任务与作息 · 近 7 天趋势</div>
+
+          <div class="tabbar">
+            <div class="tab on"><span class="lb">任务区</span></div>
+            <div class="tab"><span class="lb">待审批</span><span class="cnt">3</span></div>
+            <div class="tab"><span class="lb">历史记录</span></div>
+          </div>
+
+          <div class="card">
+            <div class="shd"><span class="t">快捷任务</span></div>
+
+            <div class="mark">
+              <span class="tag">① 7 连排高饱和绿 · ② 与下方红相邻</span>
+              <div class="grp"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-rise"/></svg>赚钱任务</div>
+              <button class="btn-now"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-plus"/></svg><span class="nm">整理房间</span><span class="val">+10</span></button>
+              <button class="btn-now"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-plus"/></svg><span class="nm">洗碗</span><span class="val">+5</span></button>
+              <button class="btn-now"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-plus"/></svg><span class="nm">洗衣服</span><span class="val">+15</span></button>
+              <button class="btn-now"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-plus"/></svg><span class="nm">倒垃圾</span><span class="val">+5</span></button>
+              <button class="btn-now off"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-check"/></svg><span class="nm">按时完成作业</span><span class="val">+20</span></button>
+              <button class="btn-now off"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-check"/></svg><span class="nm">课外阅读30分钟</span><span class="val">+10</span></button>
+              <button class="btn-now"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-plus"/></svg><span class="nm">按时睡觉</span><span class="val">+10</span></button>
+            </div>
+
+            <div class="gap-md"></div>
+
+            <div class="mark">
+              <span class="tag">③ 日常操作用了 danger 全宽填色 · ⑦ 时间窗/日限/说明全丢</span>
+              <div class="grp"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-fall"/></svg>消费 / 罚款</div>
+              <button class="btn-now spend"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-minus"/></svg><span class="nm">看iPad 30分钟</span><span class="val">-10</span></button>
+              <button class="btn-now spend"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-minus"/></svg><span class="nm">玩手机 30分钟</span><span class="val">-10</span></button>
+              <button class="btn-now spend"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-minus"/></svg><span class="nm">视力下降1度</span><span class="val">-100</span></button>
+              <button class="btn-now spend"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-minus"/></svg><span class="nm">未按时作息(晚于22:00)</span><span class="val">-20</span></button>
+              <button class="btn-now spend"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-minus"/></svg><span class="nm">作业未完成</span><span class="val">-50</span></button>
+            </div>
+          </div>
+
+          <div class="mark tight" style="margin-top:16px">
+            <span class="tag">⑨ 家长端：常驻占下半屏，风格与上卡割裂</span>
+            <div class="card">
+              <div class="shd"><span class="t">自定义任务<span class="sub">「添加任务」本身不入账，打卡完成才给积分</span></span></div>
+              <div class="caption" style="width:auto;margin:0 0 6px;font-size:12.5px;color:var(--text2)">类型</div>
+              <div style="display:flex;gap:8px;margin-bottom:10px">
+                <span class="pill blue">赚钱</span>
+                <span class="pill grey">消费 / 罚款</span>
+              </div>
+              <div class="caption" style="width:auto;margin:0 0 4px;font-size:12.5px;color:var(--text2)">价格</div>
+              <div class="formrow" style="margin-bottom:10px"><div class="fld">积分</div></div>
+              <div class="caption" style="width:auto;margin:0 0 4px;font-size:12.5px;color:var(--text2)">名称</div>
+              <div class="formrow"><div class="fld">例如：帮忙浇花</div></div>
+              <button class="btn-fill">添加任务</button>
+              <div class="hr"></div>
+              <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+                <span style="flex:1">浇花</span><span class="pill blue">孩子提的</span><span style="font-weight:700;color:var(--success-ink)">+5</span>
+                <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.8" stroke-linecap="round"><use href="#g-trash"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption"><b>现状</b>：一屏 12 个按钮，其中 5 个是「已做过」的灰按钮（<code>disabled</code>），灰块比彩色块更让人找不到重点。</p>
+    </div>
+
+    <div class="col-info">
+      <ol class="issues">
+        <li><span class="pin">1</span><span><b>色块过载。</b>12 条任务 = 12 个全宽实色按钮，绿色 7 个连排。卡片内 16px 栅格里没有留白节奏，颜色变成了「内容的形状」。</span></li>
+        <li><span class="pin">2</span><span><b>红绿直接相邻。</b>两组之间只有一个 <code>_groupLabel</code>（14px 灰字 + 12px 图标）＋ 16px 空隙。红绿是色觉障碍最不友好的一对，这类用户会完全失去「赚 / 罚」的区分线索。</span></li>
+        <li><span class="pin">3</span><span><b>语义错位。</b>「看 iPad 30 分钟」是一次正常记账，却用 <code>palette.danger</code> 铺满整行底色 —— 孩子点下去像在触发事故；而「罚款」这类真正要慎重的项，视觉权重与普通消费完全相同。</span></li>
+        <li><span class="pin">4</span><span><b>层级颠倒。</b>分组标签 14px / <code>textSecondary</code>，比按钮文字（14px 白字 on 实色）弱得多；分类信息本该是导航级信息，现在是最弱的元素。</span></li>
+        <li><span class="pin">5</span><span><b>完成态淹没列表。</b>做完只换 <code>disabled</code> 样式（底 <code>surfaceSoft</code>、字 <code>textTertiary</code>），仍占原位。下午打开列表时，剩下的待做任务被一堆灰块埋在中间。</span></li>
+        <li><span class="pin">6</span><span><b>没有进度锚点。</b>任务区看不到「今天 x/y」；进度只在首页 <code>todayProgress()</code> 与「今日任务与作息」卡里。用户必须切页面才知道还剩多少。</span></li>
+        <li><span class="pin">7</span><span><b>已有字段没露出来。</b><code>TaskConfig</code> 自带 <code>window</code>（按时睡觉 19:00–22:00）、<code>dailyLimit</code>（整理房间 2 次 / 洗 iPad 4 次）、<code>description</code>（视力下降1度：保护眼睛），行内一个都看不到；用户只能靠点下去被拒后才知道规则。</span></li>
+        <li><span class="pin">8</span><span><b>对齐不稳。</b>按钮内是 <code>Icon + Expanded(name) + value</code>，分值列跟着名字长度浮动；按钮高度由 M3 <code>FilledButton</code> 默认值决定（40dp），与卡片 16px 栅格、其他列表行不同拍。</span></li>
+        <li><span class="pin">9</span><span><b>家长端表单常驻。</b>「类型 / 价格 / 名称 / 添加」四段垂直堆叠 + 任务列表长期占据任务区下半屏；且白底表单与上方满色卡风格割裂。Web 版已把这块收进折叠。</span></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 02 Web 端参照 ==================== -->
+<section class="sec" id="web">
+  <div class="sec-head"><span class="sec-num">02</span><h2>参照：Web 端已经做过一轮，Flutter 端只同步了一半</h2></div>
+  <p class="sec-sub">
+    网页版 <code>src/views/family/FamilyDashboard.tsx</code> 的 <code>renderTasks()</code>（第 666–713 行）与
+    <code>FamilyDashboard.module.css</code>（<code>.actionGrid</code> 双列、手机单列）已经实现了结构优化：
+    <b>只摊开今天没做完的</b>、<b>已完成收进「今日已完成 N 项」折叠</b>、<b>自定义任务软折叠</b>。
+    Flutter 端目前只同步了「点任务弹打卡窗」，结构仍是全量铺开。所以这次迭代不是重新发明，而是<b>把 Web 端已验证的结构补到移动端，并把行样式做对</b>。
+  </p>
+
+  <div class="cols">
+    <div class="col-mock">
+      <div class="phone" data-theme="classic">
+        <div class="statusbar"><span>15:20</span><span class="sb-r"><span>Web</span><i></i></span></div>
+        <div class="screen">
+          <div class="card">
+            <div class="shd"><span class="t">快捷任务</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+              <div>
+                <div class="grp"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#g-rise"/></svg>赚钱任务</div>
+                <button class="btn-now" style="padding:0 16px"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-plus"/></svg><span class="nm" style="font-size:13px">整理房间</span><span class="val">+10</span></button>
+                <button class="btn-now" style="padding:0 16px"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-plus"/></svg><span class="nm" style="font-size:13px">洗碗</span><span class="val">+5</span></button>
+                <button class="btn-now" style="padding:0 16px"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-plus"/></svg><span class="nm" style="font-size:13px">按时睡觉</span><span class="val">+10</span></button>
+              </div>
+              <div>
+                <div class="grp"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#g-fall"/></svg>消费 / 罚款</div>
+                <button class="btn-now spend" style="padding:0 16px"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-minus"/></svg><span class="nm" style="font-size:13px">看iPad</span><span class="val">-10</span></button>
+                <button class="btn-now spend" style="padding:0 16px"><svg class="ic16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><use href="#g-minus"/></svg><span class="nm" style="font-size:13px">玩手机</span><span class="val">-10</span></button>
+              </div>
+            </div>
+            <div class="fold" style="margin-top:12px">
+              <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-check"/></svg>
+              <span>今日已完成 <span class="n">2</span> 项</span><span class="sp"></span>
+              <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#g-down"/></svg>
+            </div>
+          </div>
+          <div class="card">
+            <div class="fold" style="margin:0">
+              <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-plus-c"/></svg>
+              <span>自定义任务 · <span class="n">2</span> 个</span><span class="sp"></span>
+              <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#g-down"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption"><b>Web 端现状（桌面双列 / 手机单列）</b>：结构对了，但按钮仍是实色 —— 移动端 48dp 高、16px 字，一条 4 字的任务名配一条满屏色块，色块问题在手机上比桌面更突出。</p>
+    </div>
+
+    <div class="col-info">
+      <div class="note-card">
+        <span class="badge-src">FamilyDashboard.tsx:666-713</span>
+        <h4>已经在 Web 端成立的三条结构原则</h4>
+        <ul>
+          <li><b>只摊开未完成：</b><code>earningEntries.filter(e =&gt; !e.done)</code>，做完的进 <code>doneEntries</code>。</li>
+          <li><b>折叠承载完成态：</b>折叠行本身就是成就反馈（「今日已完成 2 项」），比灰按钮更有正反馈。</li>
+          <li><b>管理操作收起来：</b>家长的自定义任务表单默认折叠，任务区长期只服务「打卡」这一件事。</li>
+        </ul>
+      </div>
+      <div class="note-card">
+        <span class="badge-src">FamilyDashboard.module.css:105-135 / 469-500</span>
+        <h4>移动端差异点（本次要重新决策的地方）</h4>
+        <ul>
+          <li>Web 桌面用 <code>1fr 1fr</code> 双列；手机是 <code>1fr</code> 单列 —— 手机上「双列」不是选项，所以分组必须靠<b>标题 + 子卡</b>而不是左右两列。</li>
+          <li>按钮高 44 → 48dp、字号 14 → 16px。在 390dp 宽的手机上，48dp 实色按钮的视觉重量比桌面大得多（占宽 100%、面积占比约 12%）。</li>
+          <li>Web 版有 hover / 光标暗示可点；移动端只能靠形状与文案，所以行样式必须自带「可点」语义（勾选圈 / 按钮高亮）。</li>
+        </ul>
+      </div>
+      <div class="note-card">
+        <span class="badge-src">结论</span>
+        <h4>本次迭代的目标可以一句话概括</h4>
+        <p>把 Web 端的「结构」（只摊未完成 + 完成折叠 + 管理收起）搬到 Flutter，
+        再把两者共同的「行样式」从实色按钮改成清单行 —— 顺带把 Flutter 端三处各不相同的任务行统一成一套。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 03 方案画廊 ==================== -->
+<section class="sec" id="gallery">
+  <div class="sec-head"><span class="sec-num">03</span><h2>四套排版方案（按 Flutter 实际尺寸绘制）</h2></div>
+  <p class="sec-sub">
+    四套方案不是四选一，而是<b>四个可叠加的层次</b>：A 解决「一行长什么样」，B 解决「结构怎么组织」，
+    C 解决「此刻该做哪件」，D 解决「家长的编辑区放哪」。推荐组合是 <b>A + B 先落地（P0）</b>，D 紧随（P1），C 作为下一版（P2）。
+  </p>
+
+  <div class="gallery">
+    <!-- ========== 方案 A ========== -->
+    <div class="col-mock" id="planA">
+      <span class="plan-badge">方案 A</span>
+      <h3 class="plan-title">清单降噪：按钮 → 行</h3>
+      <p class="plan-sub">同样的 12 条任务，只是不再用整行色块表达。颜色退到 36dp 图标块与分值上，语义还在，色块消失。</p>
+      <div class="phone" data-theme="classic">
+        <div class="statusbar"><span>15:20</span><span class="sb-r"><span>5G</span><i></i></span></div>
+        <div class="screen">
+          <div class="tabbar">
+            <div class="tab on"><span class="lb">任务区</span></div>
+            <div class="tab"><span class="lb">待审批</span><span class="cnt">3</span></div>
+            <div class="tab"><span class="lb">历史记录</span></div>
+          </div>
+          <div class="card">
+            <div class="shd" style="margin-bottom:10px">
+              <span class="t">今日任务</span>
+              <span class="x"><b style="font-size:16px;color:var(--primary)">3</b><span style="color:var(--text3)">/8</span></span>
+            </div>
+            <div class="prog"><span class="bar"><span style="width:38%"></span></span></div>
+
+            <div class="seg-ctl">
+              <div class="it on">赚钱任务</div>
+              <div class="it">消费 / 罚款</div>
+            </div>
+
+            <div class="row-task armed">
+              <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-moon"/></svg></div>
+              <div class="main">
+                <div class="nm">按时睡觉</div>
+                <div class="meta"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-clock"/></svg>19:00–22:00 可以打卡</div>
+              </div>
+              <div class="val">+10<span class="unit">分</span></div>
+              <div class="chk"></div>
+            </div>
+
+            <div class="row-task">
+              <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-broom"/></svg></div>
+              <div class="main">
+                <div class="nm">整理房间</div>
+                <div class="meta">每天 2 次 · 今天还差 1 次</div>
+              </div>
+              <div class="val">+10<span class="unit">分</span></div>
+              <div class="chk"></div>
+            </div>
+
+            <div class="row-task">
+              <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-shirt"/></svg></div>
+              <div class="main">
+                <div class="nm">洗衣服</div>
+                <div class="meta">每天 1 次</div>
+              </div>
+              <div class="val">+15<span class="unit">分</span></div>
+              <div class="chk"></div>
+            </div>
+
+            <div class="row-task">
+              <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-trash"/></svg></div>
+              <div class="main">
+                <div class="nm">倒垃圾</div>
+                <div class="meta">每天 1 次</div>
+              </div>
+              <div class="val">+5<span class="unit">分</span></div>
+              <div class="chk"></div>
+            </div>
+
+            <div class="row-task done">
+              <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-dish"/></svg></div>
+              <div class="main">
+                <div class="nm">洗碗</div>
+                <div class="meta">今天 2/2 次 · 已完成</div>
+              </div>
+              <div class="val">+5<span class="unit">分</span></div>
+              <div class="chk done"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><use href="#g-check"/></svg></div>
+            </div>
+
+            <div class="fold">
+              <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-check"/></svg>
+              <span>今日已完成 <span class="n">2</span> 项</span><span class="sp"></span>
+              <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#g-down"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons">
+        <div class="pc pro"><b>收益</b>首屏色块 12 → 0；行高稳定 56dp；名称、规则、分值、状态四件事一眼扫完；已完成项不再抢注意力。</div>
+        <div class="pc con"><b>代价</b>需要新增一套行组件（<code>_TaskRow</code>）与 4 个状态；「点一下就打卡」的直觉要靠勾选圈 + 行高亮补回来，需要一次可用性验证。</div>
+        <div class="pc verdict"><b>判断</b>必做。这是「乱」的主因，改动集中在 <code>_taskButton()</code> 一个方法里。</div>
+      </div>
+    </div>
+
+    <!-- ========== 方案 B ========== -->
+    <div class="col-mock" id="planB">
+      <span class="plan-badge">方案 B</span>
+      <h3 class="plan-title">分组折叠：只摊未完成</h3>
+      <p class="plan-sub">结构对齐 Web 版：赚钱 / 消费各一张子卡，只列今天没做完的，做完的进折叠行；家长管理卡默认收起。</p>
+      <div class="phone" data-theme="classic">
+        <div class="statusbar"><span>15:20</span><span class="sb-r"><span>5G</span><i></i></span></div>
+        <div class="screen">
+          <div class="tabbar">
+            <div class="tab on"><span class="lb">任务区</span></div>
+            <div class="tab"><span class="lb">待审批</span><span class="cnt">3</span></div>
+            <div class="tab"><span class="lb">历史记录</span></div>
+          </div>
+
+          <div class="card" style="margin-bottom:12px">
+            <div class="flexrow">
+              <div class="flexcol" style="flex:1">
+                <span style="font-size:16px;font-weight:700">今天做了 3 / 8 件</span>
+                <span class="kv">继续加油，还有 5 件 · 连续 6 天</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;color:var(--danger-ink);font-size:16px;font-weight:700">
+                <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-fire"/></svg>6
+              </div>
+            </div>
+            <div class="prog" style="margin:10px 0 0"><span class="bar"><span style="width:38%"></span></span></div>
+          </div>
+
+          <div class="groupcard">
+            <div class="gh" style="color:var(--success-ink)">
+              <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-rise"/></svg>
+              赚钱任务<span style="flex:1"></span><span class="pill">还差 5 件</span>
+            </div>
+            <div class="row-task soft" style="margin-bottom:6px;min-height:50px">
+              <div class="ibox" style="width:32px;height:32px"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-moon"/></svg></div>
+              <div class="main"><div class="nm">按时睡觉</div><div class="meta">19:00–22:00</div></div>
+              <div class="val">+10</div><div class="chk"></div>
+            </div>
+            <div class="row-task soft" style="margin-bottom:6px;min-height:50px">
+              <div class="ibox" style="width:32px;height:32px"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-broom"/></svg></div>
+              <div class="main"><div class="nm">整理房间</div>
+                <div class="meta"><span class="limitdots"><i class="on"></i><i></i></span>还差 1 次</div>
+              </div>
+              <div class="val">+10</div><div class="chk"></div>
+            </div>
+            <div class="row-task soft" style="margin-bottom:6px;min-height:50px">
+              <div class="ibox" style="width:32px;height:32px"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-shirt"/></svg></div>
+              <div class="main"><div class="nm">洗衣服</div>
+                <div class="meta"><span class="limitdots"><i></i></span>每天 1 次</div>
+              </div>
+              <div class="val">+15</div><div class="chk"></div>
+            </div>
+            <div class="row-task soft" style="margin-bottom:0;min-height:50px">
+              <div class="ibox" style="width:32px;height:32px"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-edit"/></svg></div>
+              <div class="main"><div class="nm">按时完成作业</div><div class="meta">每天 1 次</div></div>
+              <div class="val">+20</div><div class="chk"></div>
+            </div>
+          </div>
+
+          <div class="groupcard">
+            <div class="gh" style="color:var(--danger-ink)">
+              <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-fall"/></svg>
+              消费 / 罚款<span style="flex:1"></span><span class="pill red">4 项可记</span>
+            </div>
+            <div class="row-task soft spend" style="margin-bottom:6px;min-height:50px">
+              <div class="ibox" style="width:32px;height:32px"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-tablet"/></svg></div>
+              <div class="main"><div class="nm">看 iPad 30 分钟</div><div class="meta">每天 4 次 · 今天 0/4</div></div>
+              <div class="val">−10</div><div class="chk"></div>
+            </div>
+            <div class="row-task soft spend" style="margin-bottom:0;min-height:50px">
+              <div class="ibox" style="width:32px;height:32px"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-alert"/></svg></div>
+              <div class="main"><div class="nm">作业未完成</div><div class="meta">每天 1 次</div></div>
+              <div class="val">−50</div><div class="chk"></div>
+            </div>
+          </div>
+
+          <div class="fold" style="margin-top:12px">
+            <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-check"/></svg>
+            <span>今日已完成 <span class="n">3</span> 项</span><span class="sp"></span>
+            <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#g-down"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons">
+        <div class="pc pro"><b>收益</b>每天自动变短：做完一件列表就少一行；分组有计数，进度有落点；结构已经过 Web 端验证。</div>
+        <div class="pc con"><b>代价</b>多做一层「子卡套卡」时需要靠底色/边框把层次分开，否则容易变成三张一样的白卡堆叠（见下方「嵌套规则」）。</div>
+        <div class="pc verdict"><b>判断</b>与 A 一起做：A 提供行，B 提供分区与折叠。改动集中在 <code>_buildTasksArea()</code>。</div>
+      </div>
+    </div>
+
+    <!-- ========== 方案 C ========== -->
+    <div class="col-mock" id="planC">
+      <span class="plan-badge">方案 C</span>
+      <h3 class="plan-title">今日节奏：按「此刻能不能做」排</h3>
+      <p class="plan-sub">直接用 <code>checkTask()</code> 已经返回的原因文案排序，不新增任何规则：能做的置顶、没到点的标注、做满的沉底并说明原因。</p>
+      <div class="phone" data-theme="classic">
+        <div class="statusbar"><span>15:20</span><span class="sb-r"><span>5G</span><i></i></span></div>
+        <div class="screen">
+          <div class="tabbar">
+            <div class="tab on"><span class="lb">任务区</span></div>
+            <div class="tab"><span class="lb">待审批</span><span class="cnt">3</span></div>
+            <div class="tab"><span class="lb">历史记录</span></div>
+          </div>
+
+          <div class="card" style="margin-bottom:12px">
+            <div class="flexrow">
+              <div class="ring"><b>3/8</b></div>
+              <div class="flexcol" style="flex:1">
+                <span style="font-size:15px;font-weight:700">现在能做 2 件</span>
+                <span class="kv">19:00 之后还能打卡 1 件</span>
+                <span class="kv">今天已经做满 2 件</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="grp" style="color:var(--success-ink)"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-check"/></svg>现在可以打卡</div>
+            <div class="row-task armed">
+              <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-broom"/></svg></div>
+              <div class="main"><div class="nm">整理房间</div><div class="meta">还差 1 次 · 随时可做</div></div>
+              <div class="val">+10</div><div class="chk"></div>
+            </div>
+            <div class="row-task armed" style="margin-bottom:12px">
+              <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-trash"/></svg></div>
+              <div class="main"><div class="nm">倒垃圾</div><div class="meta">随时可做</div></div>
+              <div class="val">+5</div><div class="chk"></div>
+            </div>
+
+            <div class="grp" style="color:var(--text2)"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-clock"/></svg>还没到时间</div>
+            <div class="row-task off" style="margin-bottom:12px">
+              <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-moon"/></svg></div>
+              <div class="main"><div class="nm">按时睡觉</div><div class="meta">19:00 开始可以打卡</div></div>
+              <div class="val">+10</div><div class="chk lock"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-clock"/></svg></div>
+            </div>
+
+            <div class="grp" style="color:var(--text2)"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-check"/></svg>今天已经做满</div>
+            <div class="row-task off" style="margin-bottom:2px">
+              <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-dish"/></svg></div>
+              <div class="main"><div class="nm">洗碗</div><div class="meta">2/2 次已经用完</div></div>
+              <div class="val">+5</div><div class="chk done"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><use href="#g-check"/></svg></div>
+            </div>
+            <div class="row-task off" style="margin-bottom:0">
+              <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-book"/></svg></div>
+              <div class="main"><div class="nm">课外阅读 30 分钟</div><div class="meta">2/2 次已经用完</div></div>
+              <div class="val">+10</div><div class="chk done"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><use href="#g-check"/></svg></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons">
+        <div class="pc pro"><b>收益</b>不用再猜「为什么点了没反应」；时间窗规则第一次变成可见信息；对孩子而言这是「今天还该做什么」的行动清单。</div>
+        <div class="pc con"><b>代价</b>需要每行调一次 <code>checkTask()</code>（O(n)，12 条任务无性能问题）；分区标题变多，卡片更高，需要配合折叠。且时间窗任务只有「按时睡觉」一条，收益要在任务表扩充后才明显。</div>
+        <div class="pc verdict"><b>判断</b>值得做但不急：先 A+B，把 <code>checkTask()</code> 的文案接到行上只是几行代码，P2 单独发一版更稳。</div>
+      </div>
+    </div>
+
+    <!-- ========== 方案 D ========== -->
+    <div class="col-mock" id="planD">
+      <span class="plan-badge">方案 D · 家长端</span>
+      <h3 class="plan-title">管理区收起：默认一行，点开再编辑</h3>
+      <p class="plan-sub">任务区的第一职责是「打卡」，不是「配置」。管理员默认折叠，展开后表单也压成一行两列。</p>
+      <div class="phone" data-theme="classic">
+        <div class="statusbar"><span>15:20</span><span class="sb-r"><span>5G</span><i></i></span></div>
+        <div class="screen">
+          <div class="tabbar">
+            <div class="tab on"><span class="lb">任务区</span></div>
+            <div class="tab"><span class="lb">待审批</span><span class="cnt">3</span></div>
+            <div class="tab"><span class="lb">历史记录</span></div>
+          </div>
+
+          <div class="card" style="margin-bottom:12px">
+            <div class="shd"><span class="t">今日任务</span><span class="x"><b style="font-size:16px;color:var(--primary)">3</b><span style="color:var(--text3)">/8</span></span></div>
+            <div class="prog" style="margin-bottom:12px"><span class="bar"><span style="width:38%"></span></span></div>
+            <div class="row-task armed" style="margin-bottom:6px">
+              <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-broom"/></svg></div>
+              <div class="main"><div class="nm">整理房间</div><div class="meta">还差 1 次</div></div>
+              <div class="val">+10</div><div class="chk"></div>
+            </div>
+            <div class="row-task" style="margin-bottom:0">
+              <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-moon"/></svg></div>
+              <div class="main"><div class="nm">按时睡觉</div><div class="meta">19:00–22:00</div></div>
+              <div class="val">+10</div><div class="chk"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <!-- 收起态 -->
+            <div class="fold" style="margin:0 0 8px">
+              <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-plus-c"/></svg>
+              <span>自定义任务 · <span class="n">2</span> 个</span><span class="sp"></span>
+              <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#g-up"/></svg>
+            </div>
+            <div class="hr" style="margin:10px 0 12px"></div>
+
+            <!-- 展开态 -->
+            <div style="font-size:12.5px;color:var(--text2);margin-bottom:6px">类型</div>
+            <div class="seg-ctl" style="margin-bottom:10px">
+              <div class="it on">赚钱</div>
+              <div class="it">消费 / 罚款</div>
+            </div>
+            <div class="formrow" style="gap:10px">
+              <div style="flex:0 0 104px">
+                <div style="font-size:12.5px;color:var(--text2);margin-bottom:6px">价格</div>
+                <div class="fld">积分</div>
+              </div>
+              <div style="flex:1">
+                <div style="font-size:12.5px;color:var(--text2);margin-bottom:6px">名称</div>
+                <div class="fld">例如：帮忙浇花</div>
+              </div>
+            </div>
+            <button class="btn-fill">添加任务</button>
+
+            <div class="hr"></div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px">
+              <svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="var(--success-ink)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-sun"/></svg>
+              <span style="flex:1">浇花</span><span class="pill blue">孩子提的</span><span style="font-weight:700;color:var(--success-ink)">+5</span>
+              <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.8" stroke-linecap="round"><use href="#g-trash"/></svg>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+              <svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="var(--danger-ink)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-phone"/></svg>
+              <span style="flex:1">多玩 10 分钟手机</span><span class="pill grey">自定义</span><span style="font-weight:700;color:var(--danger-ink)">−3</span>
+              <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.8" stroke-linecap="round"><use href="#g-trash"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons">
+        <div class="pc pro"><b>收益</b>孩子端完全不受影响；家长端首屏少掉约 300dp 的表单高度；表单两列后视线只走两行。</div>
+        <div class="pc con"><b>代价</b>家长多一次点击才能加任务；<code>_CustomTaskForm</code> 的校验与错误提示位置要跟着改（错误文案现在挂在表单底部）。</div>
+        <div class="pc verdict"><b>判断</b>建议做（P1）。折叠头直接复用方案 B 的折叠行组件，成本很低。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-card" style="margin-top:26px;max-width:1100px">
+    <h4>嵌套规则（方案 B / D 的必要约束）</h4>
+    <p>一张卡里再放卡片必须换底：<b>外层卡白底 + 1px 描边；内层分组用 <code>surfaceSoft</code> 底、去掉描边</b>，否则三张一样的白卡叠起来又变成「看不出层级」。
+    任务行本身用 <code>surface</code> 底 + 描边（在软底分组里）或 <code>surfaceSoft</code> 底（在白卡里），二选一，不要同时用底色和描边表达两件事。</p>
+  </div>
+</section>
+
+<!-- ==================== 04 任务行规范 ==================== -->
+<section class="sec" id="anatomy">
+  <div class="sec-head"><span class="sec-num">04</span><h2>统一任务行：一套 anatomy，四套状态，全 App 复用</h2></div>
+  <p class="sec-sub">
+    现在「一条任务」在全 App 有 <b>4 种不同排版</b>：家庭页任务区是实色按钮（<code>family_dashboard_page.dart:1193</code>）、
+    花园页是「勾选圈 + 图标 + 名称/描述/时长 + 阳光奖励」（<code>garden_page.dart:750</code>）、
+    首页「今日学习任务」是「图标块 + 名称 + 时长·积分 + 完成」（<code>kid_home_page.dart:1264</code>）、
+    首页「我的任务」又是「软底卡 + 名称/meta + 分值」（<code>kid_home_page.dart:1574</code>）。
+    统一成下面这一个组件，四处的差异只保留「数据源」与「点击行为」。
+  </p>
+
+  <div class="anatomy">
+    <div class="zoom">
+      <div class="demo" style="--bg:#F5F6FA;--surface:#fff;--soft:#F9FAFB;--text:#1A1A2E;--text2:#6B7280;--text3:#727780;--border:#E5E7EB;--primary:#1A1A2E;--success:#0F9B6C;--success-ink:#0A6B4A;--danger:#E94560;--danger-ink:#AE2C42;--on-success:#fff;--on-danger:#fff;--tint:.12">
+        <div class="row-task armed" style="margin-bottom:0">
+          <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-broom"/></svg></div>
+          <div class="main">
+            <div class="nm">整理房间</div>
+            <div class="meta">每天 2 次 · 今天还差 1 次</div>
+          </div>
+          <div class="val">+10<span class="unit">分</span></div>
+          <div class="chk"></div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1 1 520px;min-width:320px">
+      <ul class="spec">
+        <li><span class="k">整行</span><span>高 56dp（内容 40 + 上下 padding 8），圆角 <code>AppRadius.md(12)</code>，整行可点 —— 触达区 ≥ 48dp，比按钮更好按。</span></li>
+        <li><span class="k">图标块</span><span>36×36dp，圆角 12，底色 = 语义色 12% 混合底，前景色走 <code>_readableAccent</code> / <code>palette.ink()</code>：<b>颜色只在这里和分值上出现</b>。</span></li>
+        <li><span class="k">名称</span><span><code>AppFontSize.sm(14)</code> / w600 / <code>text</code>，单行省略。一行只放任务名，不放规则。</span></li>
+        <li><span class="k">元信息</span><span><code>AppFontSize.xs(12)</code> / <code>textTertiary</code>，最多一段：时间窗优先 → 日限 → 说明。<code>tabular-nums</code> 保证数字不抖。</span></li>
+        <li><span class="k">分值</span><span><code>AppFontSize.md(16)</code> / w700 / 用 <code>palette.successInk</code> 或 <code>dangerInk</code>（<code>app_theme.dart:150-165</code>）—— 中性底上的语义色必须走 ink()，否则出厂 warning 在白卡上只有 1.7:1。</span></li>
+        <li><span class="k">状态圈</span><span>24dp：待做 = 空圈（<code>border</code>）；现在可做 = 语义色描边 + 整行描边加亮；已完成 = 淡绿底 + 勾；暂不可做 = 灰底 + 原因图标。</span></li>
+        <li><span class="k">间距</span><span>行间 8dp（<code>AppSpacing.sm</code>），分组间 12dp，卡片内 16dp —— 全部落在 <code>tokens.dart</code> 的 4/8/16 栅格上，不再有「M3 默认 40dp 按钮」这种外来尺寸。</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <h4 style="margin:26px 0 4px;font-size:14px">四种状态（同一行组件，只换参数）</h4>
+  <div class="states">
+    <div class="state">
+      <h5>① 待做</h5>
+      <div class="demo" style="--bg:#F5F6FA;--surface:#fff;--soft:#F9FAFB;--text:#1A1A2E;--text3:#727780;--border:#E5E7EB;--success:#0F9B6C;--success-ink:#0A6B4A;--danger:#E94560;--danger-ink:#AE2C42;--tint:.12">
+        <div class="row-task" style="margin:0;min-height:50px">
+          <div class="ibox" style="width:32px;height:32px"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-shirt"/></svg></div>
+          <div class="main"><div class="nm">洗衣服</div><div class="meta">每天 1 次</div></div>
+          <div class="val">+15</div><div class="chk"></div>
+        </div>
+      </div>
+    </div>
+    <div class="state">
+      <h5>② 现在可做（时间窗内）</h5>
+      <div class="demo" style="--bg:#F5F6FA;--surface:#fff;--soft:#F9FAFB;--text:#1A1A2E;--text3:#727780;--border:#E5E7EB;--success:#0F9B6C;--success-ink:#0A6B4A;--danger:#E94560;--danger-ink:#AE2C42;--tint:.12">
+        <div class="row-task armed" style="margin:0;min-height:50px">
+          <div class="ibox" style="width:32px;height:32px"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-moon"/></svg></div>
+          <div class="main"><div class="nm">按时睡觉</div><div class="meta">19:00–22:00 可以打卡</div></div>
+          <div class="val">+10</div><div class="chk"></div>
+        </div>
+      </div>
+    </div>
+    <div class="state">
+      <h5>③ 已完成</h5>
+      <div class="demo" style="--bg:#F5F6FA;--surface:#fff;--soft:#F9FAFB;--text:#1A1A2E;--text3:#727780;--border:#E5E7EB;--success:#0F9B6C;--success-ink:#0A6B4A;--danger:#E94560;--danger-ink:#AE2C42;--tint:.12">
+        <div class="row-task done" style="margin:0;min-height:50px">
+          <div class="ibox" style="width:32px;height:32px"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-dish"/></svg></div>
+          <div class="main"><div class="nm">洗碗</div><div class="meta">今天 2/2 次</div></div>
+          <div class="val">+5</div><div class="chk done"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><use href="#g-check"/></svg></div>
+        </div>
+      </div>
+    </div>
+    <div class="state">
+      <h5>④ 暂时不能做（原因可见）</h5>
+      <div class="demo" style="--bg:#F5F6FA;--surface:#fff;--soft:#F9FAFB;--text:#1A1A2E;--text3:#727780;--border:#E5E7EB;--success:#0F9B6C;--success-ink:#0A6B4A;--danger:#E94560;--danger-ink:#AE2C42;--tint:.12">
+        <div class="row-task off" style="margin:0;min-height:50px">
+          <div class="ibox" style="width:32px;height:32px"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#g-moon"/></svg></div>
+          <div class="main"><div class="nm">按时睡觉</div><div class="meta">19:00 之后才能打卡</div></div>
+          <div class="val">+10</div><div class="chk lock"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-clock"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-card" style="margin-top:20px;max-width:1100px">
+    <h4>为什么不是「一个任务一个大按钮」了</h4>
+    <p>实色按钮是「动作」的视觉语法，适合一屏 2–3 个决策点；任务区是「列表」的语法，一屏 12 条。
+    把列表项做成按钮，等于把 12 个平级动作都喊成同一音量 —— 这正是「乱」的感受来源。
+    改成清单行之后，<b>动作语义由状态圈 + 整行可点承担，颜色只承担语义标注</b>，两者不再互相打架。</p>
+  </div>
+</section>
+
+<!-- ==================== 05 落地 ==================== -->
+<section class="sec" id="landing">
+  <div class="sec-head"><span class="sec-num">05</span><h2>落地清单：改哪几个方法，分成几版发</h2></div>
+  <p class="sec-sub">
+    全部改动集中在 <b>两个文件</b>：<code>lib/ui/pages/family/family_dashboard_page.dart</code>（页面结构）与
+    <code>lib/ui/widgets/app_card.dart</code>（新增可复用的任务行组件）。规则与数据都不用动 ——
+    <code>checkTask()</code> / <code>isTaskDone()</code> / <code>todayProgress()</code> 已经提供所需的一切。
+  </p>
+
+  <div class="phase">
+    <span class="p p0">P0 · 结构 + 行样式（建议单独发一版）</span>
+    <span class="p p1">P1 · 家长管理区折叠</span>
+    <span class="p p2">P2 · 时间窗节奏 + 跨页统一</span>
+  </div>
+
+  <table class="tbl">
+    <thead>
+      <tr><th style="width:64px">版本</th><th style="width:290px">位置</th><th>现状</th><th>改成</th></tr>
+    </thead>
+    <tbody>
+      <tr class="hi">
+        <td>P0</td>
+        <td class="mono">family_dashboard_page.dart:1081-1176<br>_buildTasksArea()</td>
+        <td>单个 AppCard 内：SectionHeader → _groupLabel → 实色按钮循环 → _groupLabel → 实色按钮循环。</td>
+        <td>拆三层：① 进度头（读 <code>todayProgress(FamilyRules.taskRules, records)</code>，与首页同口径）；② 两个分组容器（<code>surfaceSoft</code> 底、无描边），组内只渲染 <code>!done</code> 的任务；③ 末尾「今日已完成 N 项」折叠行。</td>
+      </tr>
+      <tr class="hi">
+        <td>P0</td>
+        <td class="mono">family_dashboard_page.dart:1193-1237<br>_taskButton()</td>
+        <td>FilledButton 实色全宽 + Icon + Expanded(名称) + 分值。</td>
+        <td>替换为新的 <code>_TaskRow</code>（建议落到 <code>app_card.dart</code> 旁的 <code>task_row.dart</code>）：图标块 36 + 名称 14/w600 + 元信息 12 + 分值（<code>successInk</code>/<code>dangerInk</code>）+ 状态圈 24。四状态由 <code>done</code> / <code>blockedReason</code> / <code>armed</code> 三个参数决定。</td>
+      </tr>
+      <tr>
+        <td>P0</td>
+        <td class="mono">family_dashboard_page.dart:1178-1191<br>_groupLabel()</td>
+        <td>14px / <code>textSecondary</code> / 带 14px 图标。</td>
+        <td>提升为 16px / <code>fontWeight 700</code>，颜色用语义色（<code>successInk</code> / <code>dangerInk</code>），右端加计数胶囊「还差 5 件」。</td>
+      </tr>
+      <tr>
+        <td>P0</td>
+        <td class="mono">family_dashboard_page.dart:1108-1133 / 1141-1165</td>
+        <td>赚钱与消费两组各自 for 循环铺满全部任务。</td>
+        <td>先过滤 <code>where((t) =&gt; !_isDone(t, records))</code>；完成项收集后交给折叠行；每组全空时给一句「今天的都做完啦」（对齐 Web 版 <code>.groupAllDone</code>）。</td>
+      </tr>
+      <tr>
+        <td>P1</td>
+        <td class="mono">family_dashboard_page.dart:1170-1173 + 1240-1304<br>_buildCustomTaskCard()</td>
+        <td>家长端一张常驻卡：表单 + 任务列表，占据任务区下半屏。</td>
+        <td>外面包一个默认收起的折叠头「自定义任务 · N 个」（复用 P0 的折叠行组件）；展开后 <code>_CustomTaskForm.build()</code>（<code>:2109-2162</code>）的「价格 / 名称」改成一行两列。</td>
+      </tr>
+      <tr>
+        <td>P2</td>
+        <td class="mono">core/task_rules.dart:31-47<br>checkTask()</td>
+        <td>返回值只在点击打卡时被当作 toast 文案用掉。</td>
+        <td>把返回值提到渲染期：<code>final reason = checkTask(task, records)</code>，非空则行进入「暂不可做」状态并把 reason 显示在 meta 行 —— 不新增规则，只是让已有判定可见。</td>
+      </tr>
+      <tr>
+        <td>P2</td>
+        <td class="mono">kid_home_page.dart:1264-1325 / 1574-1653<br>garden_page.dart:750-841</td>
+        <td>另外三处任务行各有各的排版（图标块+「完成」文字 / 软底卡+数值 / 勾选+描述+阳光）。</td>
+        <td>逐步换成同一个 <code>_TaskRow</code>：只替换行渲染，保留各自的数据源与点击行为。统一后「任务」在整个 App 只有一种长相。</td>
+      </tr>
+      <tr>
+        <td>P2</td>
+        <td class="mono">lib/config/changelog.ts</td>
+        <td>—</td>
+        <td>按仓库约定在 <code>CHANGELOG</code> 头部插一条（例：任务区不再是一屏实色按钮；做完的自动收进「今日已完成 N 项」；任务行开始显示时间窗与每日次数）。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note-card" style="margin-top:18px;max-width:1100px">
+    <h4>不建议做的事</h4>
+    <ul>
+      <li><b>不要继续加颜色。</b>用更多色相区分任务类型只会更花；分类靠分组标题，语义靠分值正负。</li>
+      <li><b>不要把 12 条任务折叠成一层层手风琴。</b>打卡是高频动作，多一次展开就多一次摩擦；只折「已完成」与「配置」。</li>
+      <li><b>不要为手机上双列。</b>390dp 宽下双列行放不下「名称 + 元信息 + 分值」，Web 端自己也在手机上退回单列。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== 06 验收 ==================== -->
+<section class="sec" id="accept">
+  <div class="sec-head"><span class="sec-num">06</span><h2>验收清单（改完逐条自检）</h2></div>
+  <ul class="issues" style="max-width:1100px">
+    <li><span class="pin">A</span><span>任务区首屏<b>不再出现任何全宽实色块</b>；红绿不再相邻出现（分类靠标题/间距）。</span></li>
+    <li><span class="pin">B</span><span>已完成任务默认不进主列表；折叠行显示<b>准确计数</b>，展开后与主列表行样式完全一致。</span></li>
+    <li><span class="pin">C</span><span>每行至少显示 <code>window</code> / <code>dailyLimit</code> / <code>description</code> 三者中<b>存在的那一个</b>；「按时睡觉」必须能看到 19:00–22:00。</span></li>
+    <li><span class="pin">D</span><span>所有可点元素触达区 ≥ 48dp；分值/文字在 4 个出厂主题下都走 <code>palette.ink()</code> 系，不直接拿语义色当字色。</span></li>
+    <li><span class="pin">E</span><span>深色主题（午夜蓝 / 暗夜红 / 石墨黑）下卡片、分组、行三层底色仍能分辨；跑 <code>test/palette_contrast_test.dart</code> 不回归。</span></li>
+    <li><span class="pin">F</span><span>家长端任务区首屏高度比现在减少 ≥ 30%（管理卡折叠）；孩子端与家长端的打卡行为完全不变（复用的是同一套 <code>_startCheckIn()</code>）。</span></li>
+    <li><span class="pin">G</span><span><code>flutter analyze</code> 干净；改完按仓库约定发版（改 <code>changelog.ts</code> → 同步 D1 → 升 App 版本号构建 APK），否则手机端看不到变化。</span></li>
+  </ul>
+</section>
+
+<div class="foot">
+  生成于 SekaiNook 任务区排版评审 · 现状复刻来源：
+  <code>lib/ui/pages/family/family_dashboard_page.dart</code>（<code>_buildTasksArea</code> / <code>_taskButton</code> / <code>_buildCustomTaskCard</code>）、
+  <code>lib/config/family_rules.dart</code>（12 条任务与分值）、<code>lib/core/task_rules.dart</code>（打卡判定）、
+  <code>lib/theme/app_theme.dart</code> + <code>lib/theme/tokens.dart</code>（四套出厂主题与尺寸令牌）、
+  <code>src/views/family/FamilyDashboard.tsx</code>（Web 端参照）。所有 mockup 按 Flutter 实际 dp 绘制，右上角可切换主题核对配色。
+</div>
+
+</div>
+
+<script>
+document.querySelectorAll('.themebar button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var th = b.dataset.th;
+    document.querySelectorAll('.themebar button').forEach(function (x) {
+      x.setAttribute('aria-pressed', String(x === b));
+    });
+    document.querySelectorAll('.phone').forEach(function (p) { p.dataset.theme = th; });
+  });
+});
+</script>
+</body>
+</html>

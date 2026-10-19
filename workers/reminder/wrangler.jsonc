@@ -20,7 +20,7 @@
   },
   "vars": {
     "NTFY_SERVER": "https://ntfy.sh",
-    "APP_URL": "https://sekainook.pages.dev/home",
+    "APP_URL": "https://sn.starrymiku.com/home",
     // 默认走 Web Push（孩子安卓 Chrome 开网站、妈妈 iPhone 把网站加到主屏幕，都不用装 App）。
     // 想临时换通道：手动触发时带 ?channel=ntfy / ?channel=bark / ?channel=webhook
     "PUSH_CHANNEL": "webpush",
@@ -28,7 +28,7 @@
     //   npx wrangler secret put VAPID_PRIVATE_KEY
     // 这份公钥必须与 Pages 项目 wrangler.jsonc 里那份完全一致（浏览器订阅时用它）
     "VAPID_PUBLIC_KEY": "BD4ePdfDf4U2Q5pFQuJ85o6bFNuUhKaiwvF-VAUyKRS-S8epOpLggQirGEV1RzMnmLM6ZrtBHH0_yLebZ-6hGsQ",
-    "VAPID_SUBJECT": "https://sekainook.pages.dev"
+    "VAPID_SUBJECT": "https://sn.starrymiku.com"
   }
   // NTFY_TOPIC / REMIND_TOKEN / NTFY_TOKEN / VAPID_PRIVATE_KEY 是 secret，不进这个文件：
   //   npx wrangler secret put NTFY_TOPIC

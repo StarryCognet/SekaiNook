@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Image, message, Badge, Popconfirm, Segmented, Modal, Spin } from 'antd';
+import { Button, Card, List, Tag, Tabs, Form, Input, Select, InputNumber, Image, message, Badge, Popconfirm, Segmented, Modal, Spin, Switch } from 'antd';
 import {
   PlusOutlined,
   MinusOutlined,
@@ -19,6 +19,7 @@ import {
   DownloadOutlined,
   DownOutlined,
   UpOutlined,
+  CameraOutlined,
 } from '@ant-design/icons';
 import { addLedgerRecord, LedgerApprovalError, describeSettleApplied, resubmitRequest, settleLedgerOncePerDay } from '../../api/familyLedger';
 import { useViewState } from '../../utils/useViewState';
@@ -55,6 +56,8 @@ interface CustomTaskForm {
   type: TaskType;
   name: string;
   value: number;
+  /** 提交这条任务是否必须带一张照片（仅赚钱类可见 / 生效） */
+  requirePhoto?: boolean;
 }
 
 /**
@@ -126,6 +129,8 @@ export default function FamilyDashboard() {
   // 当前分页（任务区 / 待审批 / 历史记录）—— 切到别的页面再回来要还在原来那页
   const [activeTab, setActiveTab] = useViewState('family.activeTab', 'tasks');
   const [form] = Form.useForm<CustomTaskForm>();
+  /** 「添加任务」表单里选中的类型 —— 「必须添加照片」这个开关只在赚钱类下出现 */
+  const customFormType = Form.useWatch('type', form);
   /** 驳回弹窗：正在驳回哪一条 + 家长写给孩子的那句话 */
   const [rejectTarget, setRejectTarget] = useState<LedgerRecord | null>(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -160,8 +165,6 @@ export default function FamilyDashboard() {
    * 这里清了 onSuccess 就找不到它了）。
    */
   const modalCustomTaskRef = useRef<CustomTask | null>(null);
-  /** 正在提交的任务 id（防止手机连点重复入账） */
-  const [submittingId, setSubmittingId] = useState<string | null>(null);
   /** 正在兑换现金（家长） */
   const [settling, setSettling] = useState(false);
   /** 兑换区输入框里的积分数（null = 还没填，视为 0） */
@@ -199,6 +202,8 @@ export default function FamilyDashboard() {
     type: task.type,
     value: task.value,
     unit: '积分',
+    // 家长在「添加任务」里定的照片要求，原样带进打卡弹窗
+    requirePhoto: task.requirePhoto,
   });
 
   /** 自定义任务今天是否已经做过（账本里已有流水，或本机标记过） */
@@ -407,42 +412,15 @@ export default function FamilyDashboard() {
   };
 
   /**
-   * 记账失败的处理：`LedgerApprovalError` 表示账已经记上了、只是自动审批那一步没成功 ——
-   * 这笔钱并没有入账，记录正以 pending 躺在待审批里。这里重新拉一次账本让那条 pending
-   * 真的显示出来，并明确告诉家长去点「通过」；绝不能再报成成功。
+   * 打开打卡弹窗 —— 内置任务与自定义任务都走这一条路。
+   *
+   * 以前「按时完成作业」「按时睡觉」两个快捷按钮是**直接写流水**的（点一下就入账），
+   * 现在统一改成弹窗：赚钱类任务必须拍一张照片（或从相册选）才能提交。
+   * custom 传进来是为了提交成功后标「今天做过」（内置任务传 null）。
    */
-  const handleWriteError = async (e: unknown, fallback: string) => {
-    if (e instanceof LedgerApprovalError) {
-      await loadLedger().catch(() => undefined);
-      message.warning(e.message);
-      return;
-    }
-    message.error(e instanceof Error ? e.message : fallback);
-  };
-
-  /** 打卡：写入流水（小孩端为待审批申请）并刷新余额 */
-  const handleTask = async (task: TaskConfig) => {
-    const blocked = guardTask(task);
-    if (blocked) {
-      message.warning(blocked);
-      return;
-    }
-    if (submittingId) return; // 提交中忽略重复点击
-    setSubmittingId(task.id);
-    try {
-      const recordId = await addLedgerRecord(
-        task,
-        undefined,
-        // 家长自己记的账让服务端立刻入账，女儿提交的一律进待审批
-        { autoApprove: isParent }
-      );
-      await loadLedger();
-      notifySuccess(task, recordId);
-    } catch (e) {
-      await handleWriteError(e, '操作失败，请重试');
-    } finally {
-      setSubmittingId(null);
-    }
+  const openCheckIn = (task: TaskConfig, custom: CustomTask | null = null) => {
+    modalCustomTaskRef.current = custom;
+    setActiveTask(task);
   };
 
   /**
@@ -455,6 +433,8 @@ export default function FamilyDashboard() {
       value: values.value,
       type: values.type,
       createdBy: 'parent',
+      // 表单里没渲染这个开关（消费 / 罚款）时给 undefined，store 按类型兜底
+      requirePhoto: values.requirePhoto,
     });
     form.resetFields();
     message.success(`「${created.name}」已加进快捷任务，点一下就能打卡`);
@@ -648,11 +628,7 @@ export default function FamilyDashboard() {
         }
         icon={entry.done ? <CheckCircleOutlined /> : earning ? <PlusOutlined /> : <MinusOutlined />}
         disabled={entry.done}
-        onClick={() => {
-          // 从自定义任务按钮进来的：提交成功后要标成「今天做过」
-          modalCustomTaskRef.current = entry.custom;
-          setActiveTask(entry.task);
-        }}
+        onClick={() => openCheckIn(entry.task, entry.custom)}
       >
         <span className={styles.actionBtnText}>{entry.task.name}</span>
         <span className={`num ${styles.actionBtnValue}`}>
@@ -749,6 +725,19 @@ export default function FamilyDashboard() {
             <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入任务名称' }]}>
               <Input placeholder="例如：帮忙浇花" maxLength={20} />
             </Form.Item>
+            {/* 照片要求：需求「添加自定义任务里加一个选项，是否必须添加照片」。
+                默认开启 —— 孩子交的任务大多得看见东西才算数；消费 / 罚款只要写清原因，不需要照片。 */}
+            {customFormType === 'earning' && (
+              <Form.Item
+                name="requirePhoto"
+                label="必须添加照片"
+                valuePropName="checked"
+                initialValue={true}
+                extra="开启后，提交这条任务要先拍照或从相册选一张照片；关闭则可以直接提交"
+              >
+                <Switch />
+              </Form.Item>
+            )}
             <Button type="primary" htmlType="submit" block className={styles.customSubmit}>
               添加任务
             </Button>
@@ -783,6 +772,12 @@ export default function FamilyDashboard() {
                 <Tag color={task.kind === 'preset' ? 'blue' : task.createdBy === 'child' ? 'orange' : 'default'}>
                   {task.kind === 'preset' ? '预置' : task.createdBy === 'child' ? '孩子提的' : '自定义'}
                 </Tag>
+                {/* 要照片的任务标出来：家长一眼能看出哪几条孩子得拍照才能交 */}
+                {task.requirePhoto && (
+                  <Tag icon={<CameraOutlined />} color="purple">
+                    需照片
+                  </Tag>
+                )}
                 <span
                   className="num"
                   style={{
@@ -1177,8 +1172,7 @@ export default function FamilyDashboard() {
               }}
               icon={<CheckCircleOutlined />}
               disabled={!homeworkTask || isDone(homeworkTask)}
-              loading={submittingId === homeworkTask?.id}
-              onClick={() => homeworkTask && handleTask(homeworkTask)}
+              onClick={() => homeworkTask && openCheckIn(homeworkTask)}
             >
               按时完成作业
             </Button>
@@ -1191,8 +1185,7 @@ export default function FamilyDashboard() {
               }}
               icon={<MoonOutlined />}
               disabled={!sleepTask || isDone(sleepTask)}
-              loading={submittingId === sleepTask?.id}
-              onClick={() => sleepTask && handleTask(sleepTask)}
+              onClick={() => sleepTask && openCheckIn(sleepTask)}
             >
               按时睡觉
             </Button>

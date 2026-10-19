@@ -1,11 +1,24 @@
 /**
- * 任务打卡规则：每日次数上限与时间窗。
+ * 任务打卡规则：每日次数上限、时间窗，以及「要不要带照片」。
  *
  * 从账本页里抽出来，让账本页与首页（妹妹版）用同一套判断 ——
  * 规则写在两处迟早会写歪（一边让打卡、一边说超限）。
  */
 
 import type { LedgerRecord, TaskConfig } from '../types/family';
+
+/**
+ * 提交这条任务是否必须带一张照片（拍照 / 相册）。
+ *
+ * 规则：任务自己声明了 `requirePhoto` 就听它的（自定义任务就是这么定的），
+ * 否则按类型兜底 —— **赚钱类必须，消费与罚款不强制**。
+ * 全站只有这一处判断：打卡弹窗的按钮置灰与提交前的兜底校验、
+ * 家长端「添加自定义任务」表单的默认值都从这里取，免得两边说法不一致。
+ */
+export function taskRequiresPhoto(task: Pick<TaskConfig, 'requirePhoto' | 'type'>): boolean {
+  if (task.requirePhoto !== undefined) return task.requirePhoto;
+  return task.type === 'earning';
+}
 
 /** 当天该任务已提交次数（含待审批，不含被驳回；被驳回的不占名额） */
 export function countTodaySubmissions(

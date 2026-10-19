@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, InputNumber, Progress, message } from 'antd';
-import { addLedgerRecord, LedgerApprovalError, describeSettleApplied, settleLedgerOncePerDay } from '../../api/familyLedger';
+import { describeSettleApplied, settleLedgerOncePerDay } from '../../api/familyLedger';
 import {
   AccountBookOutlined,
   BookOutlined,
@@ -117,6 +117,11 @@ export default function KidHome() {
   const palette = useThemePalette();
 
   const [activeTask, setActiveTask] = useState<TaskConfig | null>(null);
+  /**
+   * 这次打卡来自哪条本地任务（内置快捷任务为 null）。
+   * 用途有两个：提交成功后标「今天做过」；妈妈加的 / 预置的即时到账，其余走待审批。
+   */
+  const [activeCustom, setActiveCustom] = useState<CustomTask | null>(null);
   /** 拉取失败时页面要说话：不能把「没拉到」显示成「这周一分没赚」 */
   const [loadFailed, setLoadFailed] = useState(false);
   // 被妈妈退回的申请，看过一次就别老在孩子眼前晃（记在本机，不影响妈妈那边）
@@ -134,8 +139,6 @@ export default function KidHome() {
   // 自己加任务的小表单：只写进任务列表，不入账
   const [wishName, setWishName] = useState('');
   const [wishValue, setWishValue] = useState<number | null>(5);
-  /** 正在打卡的任务 id：防连点 */
-  const [checkingId, setCheckingId] = useState<string | null>(null);
 
   // 花园存档放在 localStorage 里，原来只有花园页会 init —— 首页要用它，就得自己装一次
   useEffect(() => {
@@ -246,47 +249,32 @@ export default function KidHome() {
   };
 
   /**
-   * 我的任务打卡：写一条 `user_task_exec` 流水（预置任务用服务端登记的 id，各自独立、即时到账）。
+   * 本地任务 → 交给账本的执行任务。
    *
    * ⚠️ 绝不自造 `custom_<ts>` 之类的 id 去写账本 —— 服务端对未知 task_id 一律 403。
-   * 妈妈加的任务打完卡直接入账；我自己加的要走 pending 等妈妈批，
-   * 否则就成了「自己加任务自己发钱」，是刷分口子。
+   * 预置两条在服务端有各自登记的 id（各自日限 1、即时到账），其余都走 `user_task_exec`。
    */
-  const handleMyTaskCheckIn = async (task: CustomTask) => {
-    if (checkingId) return;
-    setCheckingId(task.id);
-    try {
-      const execTask: TaskConfig = {
-        // 预置两条在服务端有各自登记的 id（各自日限 1、autoApprove 即时到账）
-        id: task.kind === 'preset' ? task.id : USER_TASK_EXEC_ID,
-        name: task.name,
-        type: task.type,
-        value: task.value,
-        unit: '积分',
-      };
-      await addLedgerRecord(execTask, undefined, { autoApprove: task.createdBy === 'parent' });
-      markTaskDone(task.id);
-      await loadLedger();
-      message.success(
-        task.createdBy === 'parent'
-          ? `「${task.name}」打卡成功`
-          : `「${task.name}」已提交，等${momName}审批`
-      );
-    } catch (e) {
-      if (e instanceof LedgerApprovalError) {
-        // 账其实已经记上了，只是「立即入账」那一步没成功：这条以 pending 躺在待审批里，
-        // 所以本地也要算今天已完成 —— 不然孩子再点一次，只会撞上服务端的同名日限。
-        markTaskDone(task.id);
-        await loadLedger().catch(() => undefined);
-        message.warning({ content: e.message, duration: 6 });
-        return;
-      }
-      // 服务端的三层日限闸门（同名当日重复 / 当日条数 ≥20 / 当日正分累计 ≥50）都返回 409，
-      // 文案照实提示 —— 本地置灰只是省一次白跑的请求，权威永远在服务端。
-      message.error(e instanceof Error ? e.message : '打卡失败，请重试');
-    } finally {
-      setCheckingId(null);
-    }
+  const toExecTask = (task: CustomTask): TaskConfig => ({
+    id: task.kind === 'preset' ? task.id : USER_TASK_EXEC_ID,
+    name: task.name,
+    type: task.type,
+    value: task.value,
+    unit: '积分',
+    // 要不要拍照由妈妈添加任务时决定（老任务按类型兜底：赚钱类要照片）
+    requirePhoto: task.requirePhoto,
+  });
+
+  /**
+   * 打开打卡弹窗 —— 「我的任务」、被驳回后重交、上面的快捷按钮都走这一条路。
+   *
+   * 以前「我的任务」是点一下**直接写流水**，现在统一改成弹窗提交：
+   * 赚钱类任务必须拍一张照片（或从相册选）才能交上去。
+   * custom 传进来有两个用处：提交成功后标「今天做过」；
+   * 妈妈加的 / 预置任务即时到账，我自己加的要等妈妈批。
+   */
+  const openCheckIn = (task: TaskConfig, custom: CustomTask | null = null) => {
+    setActiveCustom(custom);
+    setActiveTask(task);
   };
 
   /** 自己加一个任务：只写进任务列表，**不入账**；完成时提交，等妈妈批了才加分 */
@@ -398,7 +386,7 @@ export default function KidHome() {
               className={styles.rejectRetry}
               onClick={() => {
                 dismissReject(rejected.id);
-                setActiveTask(rejectedTask);
+                openCheckIn(rejectedTask);
               }}
             >
               重新交一次 <RightOutlined />
@@ -529,7 +517,7 @@ export default function KidHome() {
                 key={task.id}
                 className={styles.checkinBtn}
                 disabled={done}
-                onClick={() => setActiveTask(task)}
+                onClick={() => openCheckIn(task)}
               >
                 <span className={styles.checkinName}>{task.name}</span>
                 <span className={`num ${styles.checkinValue}`}>{done ? '✓' : `+${task.value}`}</span>
@@ -560,8 +548,8 @@ export default function KidHome() {
                 <button
                   key={task.id}
                   className={styles.taskItem}
-                  disabled={done || checkingId === task.id}
-                  onClick={() => void handleMyTaskCheckIn(task)}
+                  disabled={done}
+                  onClick={() => openCheckIn(toExecTask(task), task)}
                 >
                   <span className={styles.taskBody}>
                     <span className={styles.taskName}>{task.name}</span>
@@ -634,12 +622,23 @@ export default function KidHome() {
 
       <CheckInModal
         task={activeTask}
-        isParent={false}
+        // 妈妈加的任务与两条预置任务即时到账；我自己加的、以及快捷按钮进来的都走待审批
+        isParent={activeCustom?.createdBy === 'parent'}
         guard={(task) => checkTask(task, records, now)}
-        onClose={() => setActiveTask(null)}
-        onSuccess={async () => {
+        onClose={() => {
+          setActiveTask(null);
+          setActiveCustom(null);
+        }}
+        onSuccess={async (task) => {
+          // 自定义任务要标「今天做过」：它提交时用的是 user_task_exec，账本流水对不上本地 id，
+          // 少了这一笔标记按钮就一直是可点的
+          if (activeCustom) markTaskDone(activeCustom.id);
           await loadLedger();
-          message.success(`已提交，等${momName}审批`);
+          message.success(
+            activeCustom?.createdBy === 'parent'
+              ? `「${task.name}」打卡成功`
+              : `「${task.name}」已提交，等${momName}审批`
+          );
         }}
       />
       {/* 解锁新勋章的仪式感：压暗整屏，中间弹一张卡，点掉即收下 */}

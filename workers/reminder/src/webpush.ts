@@ -42,7 +42,7 @@ export async function sendWebPush(env: ReminderEnv, msg: PushMessage): Promise<P
         'VAPID 密钥未配置：公钥写在 wrangler.jsonc 的 vars 里，私钥用 npx wrangler secret put VAPID_PRIVATE_KEY',
     };
   }
-  const subject = env.VAPID_SUBJECT?.trim() || 'https://sekainook.pages.dev';
+  const subject = env.VAPID_SUBJECT?.trim() || 'https://sn.starrymiku.com';
 
   let rows: SubscriptionRow[];
   try {
