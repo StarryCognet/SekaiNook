@@ -114,10 +114,15 @@ if ($apksigner) {
     Write-Warning "没找到 apksigner，跳过签名校验 —— 请自己确认这个包不是 debug 签名"
 }
 
-$fileName = "SekaiNook-$($main.VersionName)-android-$abiTag.apk"
+# 文件名带上内容指纹（sha256 前 8 位）：
+# R2 这套资源是 `immutable` + 一年强缓存，同一个 URL 换了内容之后，浏览器 / CDN / 代理
+# 仍会继续发旧包 —— 2026-10-19 连踩两次：先是我重打签名后线上同 URL 还是旧的 debug 包，
+# 接着家里人手机上应用内更新一直报「安装包校验未通过」（下到的旧包 sha256 对不上清单）。
+# 内容变了 URL 就变，从根上绕开缓存，不用再让用户「关掉 VPN 再试」。
+$sha256 = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
+$fileName = "SekaiNook-$($main.VersionName)-android-$abiTag-$($sha256.Substring(0, 8)).apk"
 Publish-File $apk "$Prefix/$fileName" 'application/vnd.android.package-archive' 'public, max-age=31536000, immutable'
 
-$sha256 = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
 $size = (Get-Item $apk).Length
 $url = "$PublicBaseUrl/$Prefix/$fileName"
 
