@@ -85,6 +85,35 @@ $main = Get-ApkVersionInfo $apk
 Write-Host "[apk] $apk" -ForegroundColor Cyan
 Write-Host "[apk] versionName=$($main.VersionName) versionCode=$($main.VersionCode) ($abiTag)"
 
+# ---- 签名闸门：debug 签名的包绝不能发出去 ----
+# 2026-10-19 的教训：git subtree 搬家时 key.properties 与 .jks（两个都在 .gitignore 里）
+# 没跟着过来，Gradle 按设计静默退回 debug 签名，2.0.0 发出去后家里人在手机上覆盖安装
+# 直接失败 ——「安装失败(-7) 与已安装应用签名不同」。当时 build.gradle.kts 的注释里
+# 写着「publish_apk.ps1 会拒绝上传 debug 签名的包」，但这个脚本里并没有那道检查。
+if (-not $SkipBuild) {
+    $keyProps = Join-Path (Get-Location) 'android\app\key.properties'
+    if (-not (Test-Path $keyProps)) {
+        throw "缺少 android/app/key.properties（正式签名）—— 现在打出来的会是 debug 包。补上 key.properties + sekainook-release.jks 再发（两个都在 .gitignore 里，换机器要手动拷）"
+    }
+}
+
+$buildToolsDir = Join-Path $env:ANDROID_HOME 'build-tools'
+$apksigner = Get-ChildItem $buildToolsDir -Directory -ErrorAction SilentlyContinue |
+    Sort-Object { [version]$_.Name } -Descending |
+    ForEach-Object { Join-Path $_.FullName 'apksigner.bat' } |
+    Where-Object { Test-Path $_ } |
+    Select-Object -First 1
+if ($apksigner) {
+    $certs = (& $apksigner verify --print-certs $apk 2>&1) -join "`n"
+    if ($certs -match 'Android Debug') {
+        throw "这个 APK 是 debug 签名，发出去用户手机上会「安装失败(-7) 签名不同」。请补上 android/app/key.properties + sekainook-release.jks 后重打"
+    }
+    $sha = [regex]::Match($certs, 'SHA-256 digest:\s*([0-9a-fA-F]+)').Groups[1].Value
+    Write-Host "[sign] 非 debug 签名（证书 SHA-256 ${sha}）" -ForegroundColor Green
+} else {
+    Write-Warning "没找到 apksigner，跳过签名校验 —— 请自己确认这个包不是 debug 签名"
+}
+
 $fileName = "SekaiNook-$($main.VersionName)-android-$abiTag.apk"
 Publish-File $apk "$Prefix/$fileName" 'application/vnd.android.package-archive' 'public, max-age=31536000, immutable'
 
