@@ -27,6 +27,7 @@ import '../../../state/family_state.dart';
 import '../../../state/garden_state.dart';
 import '../../../state/notification_state.dart';
 import '../../../state/settings_state.dart';
+import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
@@ -1794,7 +1795,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
       barrierColor: palette.text.withValues(alpha: 0.6),
       builder: (BuildContext dialogContext) => Dialog(
         backgroundColor: palette.cardColor(hasBackground: false),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        shape: AppShape.dialog(),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
@@ -2129,7 +2130,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
     return Dialog(
       insetPadding: const EdgeInsets.all(AppSpacing.md),
       backgroundColor: palette.cardColor(hasBackground: false),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+      shape: AppShape.dialog(),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height - AppSpacing.xl * 2,

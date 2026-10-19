@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
+import 'motion/shape_loader.dart';
 import 'motion_widgets.dart';
 
 /// 加载中（小范围用，比如按钮旁边、列表尾部）
+///
+/// 图形是 FlClash 那种「会变形的块」（[ShapeLoader]），不是 Material 的转圈：
+/// 转圈是匀速圆周运动，看久了像卡住；变形块每 650ms 换一个形状，
+/// 有明确的「还在推进」的节奏。
 ///
 /// 整页加载优先用 [SkeletonList] —— 骨架屏比转圈更不打断视线。
 class LoadingView extends StatelessWidget {
@@ -22,11 +27,7 @@ class LoadingView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(strokeWidth: 2.5, color: palette.primary),
-            ),
+            ShapeLoader(size: 30, color: palette.primary),
             if (message != null) ...<Widget>[
               const SizedBox(height: AppSpacing.md),
               Text(

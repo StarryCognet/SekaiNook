@@ -2,14 +2,24 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import '../../theme/app_shape.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
 import '../widgets/motion/spring_driver.dart';
 
 /// 一个底部 Tab 的图标、文案与角标。
+/// 透镜物理常量 —— 父级画底色、子项算「染色区域」共用同一套，别各写一份。
+const double _kLensJellySpeed = 8;
+const double _kLensJellyStretch = 0.25;
+const double _kLensGrowth = 14;
+
+/// 透镜盖住某格时，那一格的内容放大多少（FlClash `_lensMagnify`）
+const double _kLensMagnify = 0.12;
+
 class AppNavDestination {
   const AppNavDestination({
     required this.icon,
@@ -100,11 +110,12 @@ class _AppNavBarState extends State<AppNavBar> with TickerProviderStateMixin {
   static const double _bottomMargin = AppNavBar.bottomMargin;
 
   /// 透镜随速度拉伸（果冻感）的中心速度与最大拉伸比例
-  static const double _jellySpeed = 8;
-  static const double _jellyStretch = 0.25;
+  static const double _jellySpeed = _kLensJellySpeed;
+  static const double _jellyStretch = _kLensJellyStretch;
 
   /// 按下时透镜与外框一起「膨胀」的幅度
-  static const double _lensGrowth = 14;
+  static const double _lensGrowth = _kLensGrowth;
+
   static const double _pressGrowth = 1 / 8;
   static const double _maxPressGrowth = 16;
 
@@ -293,9 +304,7 @@ class _AppNavBarState extends State<AppNavBar> with TickerProviderStateMixin {
             color: palette
                 .cardColor(hasBackground: widget.hasBackground)
                 .withValues(alpha: widget.opacity),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.full),
-            ),
+            shape: AppShape.pill(),
             shadows: _shadows(context),
           ),
           child: Material(
@@ -336,10 +345,7 @@ class _AppNavBarState extends State<AppNavBar> with TickerProviderStateMixin {
                                 child: DecoratedBox(
                                   decoration: ShapeDecoration(
                                     color: palette.primarySoft,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(AppRadius.full),
-                                    ),
+                                    shape: AppShape.pill(),
                                   ),
                                 ),
                               );
@@ -354,6 +360,11 @@ class _AppNavBarState extends State<AppNavBar> with TickerProviderStateMixin {
                                     selected: i == widget.selectedIndex,
                                     reduceMotion: _reduceMotion,
                                     onTap: () => widget.onSelected(i),
+                                    lens: _lens,
+                                    lift: _lift,
+                                    index: i,
+                                    extent: extent,
+                                    innerHeight: _innerHeight,
                                   ),
                                 ),
                             ],
@@ -378,6 +389,11 @@ class _NavItem extends StatelessWidget {
     required this.selected,
     required this.reduceMotion,
     required this.onTap,
+    required this.lens,
+    required this.lift,
+    required this.index,
+    required this.extent,
+    required this.innerHeight,
   });
 
   final AppNavDestination destination;
@@ -385,9 +401,41 @@ class _NavItem extends StatelessWidget {
   final bool reduceMotion;
   final VoidCallback onTap;
 
+  /// 透镜位置（跟手 + 弹簧）与按下量
+  final SpringDriver lens;
+  final SpringDriver lift;
+
+  /// 自己是第几格、每格多宽多高 —— 用来算「透镜有没有盖到我」
+  final int index;
+  final double extent;
+  final double innerHeight;
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final Widget content = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        _NavIcon(
+          destination: destination,
+          selected: selected,
+          color: selected ? palette.onSoft : palette.textSecondary,
+          danger: palette.danger,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          destination.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: AppFontSize.xs,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: selected ? palette.onSoft : palette.textSecondary,
+          ),
+        ),
+      ],
+    );
+
     return Semantics(
       container: true,
       // 图标与文字只是画出来的，语义由这里统一给（免得「首页 首页」念两遍，角标也能念出来）
@@ -398,40 +446,273 @@ class _NavItem extends StatelessWidget {
           ? '${destination.label}，${destination.badge} 条未读'
           : destination.label,
       onTap: onTap,
-      child: TweenAnimationBuilder<double>(
-        // 选中 = 图标弹一下并微微上浮
-        tween: Tween<double>(begin: 0, end: selected ? 1 : 0),
-        duration: reduceMotion ? Duration.zero : AppMotion.normal,
-        curve: AppMotion.spring,
-        builder: (BuildContext context, double t, Widget? child) {
-          return Transform.translate(
-            offset: Offset(0, -1.5 * t),
-            child: Transform.scale(scale: 1 + 0.14 * t, child: child),
-          );
-        },
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            _NavIcon(
-              destination: destination,
-              selected: selected,
-              color: selected ? palette.onSoft : palette.textSecondary,
-              danger: palette.danger,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              destination.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: AppFontSize.xs,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                color: selected ? palette.onSoft : palette.textSecondary,
-              ),
-            ),
-          ],
+      child: _LensTint(
+        lens: lens,
+        lift: lift,
+        index: index,
+        extent: extent,
+        innerHeight: innerHeight,
+        // 染色用的必须是「透镜底色上的前景色」：
+        // SekaiNook 的透镜底是 primarySoft（深色），若染成 primary 会和底色糊在一起；
+        // 染 onSoft 才是「透镜扫过时，这一格被点亮成选中态」。
+        color: palette.onSoft,
+        reduceMotion: reduceMotion,
+        child: TweenAnimationBuilder<double>(
+          // 选中 = 图标弹一下并微微上浮
+          tween: Tween<double>(begin: 0, end: selected ? 1 : 0),
+          duration: reduceMotion ? Duration.zero : AppMotion.normal,
+          curve: AppMotion.spring,
+          builder: (BuildContext context, double t, Widget? child) {
+            return Transform.translate(
+              offset: Offset(0, -1.5 * t),
+              child: Transform.scale(scale: 1 + 0.14 * t, child: child),
+            );
+          },
+          child: content,
         ),
       ),
+    );
+  }
+}
+
+/// 透镜染色：**同一个 child 画两遍** —— 透镜外原样，透镜内染主色并微微放大。
+///
+/// 为什么不用 `Stack` 叠一份 widget：那样树里会有两份文字
+/// （`find.text('首页')` 会找到两个），语义、测试、无障碍全受影响；
+/// 而且覆盖层会把点击吃掉（dock 的按下判定在父级 `Listener` 上）。
+/// 走 paint 阶段就没有这些副作用，代价是要自己写 RenderObject。
+class _LensTint extends SingleChildRenderObjectWidget {
+  const _LensTint({
+    required this.lens,
+    required this.lift,
+    required this.index,
+    required this.extent,
+    required this.innerHeight,
+    required this.color,
+    required this.reduceMotion,
+    super.child,
+  });
+
+  final SpringDriver lens;
+  final SpringDriver lift;
+  final int index;
+  final double extent;
+  final double innerHeight;
+  final Color color;
+  final bool reduceMotion;
+
+  @override
+  _RenderLensTint createRenderObject(BuildContext context) {
+    return _RenderLensTint(
+      lens: lens,
+      lift: lift,
+      index: index,
+      extent: extent,
+      innerHeight: innerHeight,
+      color: color,
+      reduceMotion: reduceMotion,
+    );
+  }
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderLensTint renderObject) {
+    renderObject
+      ..lens = lens
+      ..lift = lift
+      ..index = index
+      ..extent = extent
+      ..innerHeight = innerHeight
+      ..color = color
+      ..reduceMotion = reduceMotion;
+  }
+}
+
+class _RenderLensTint extends RenderProxyBox {
+  _RenderLensTint({
+    required SpringDriver lens,
+    required SpringDriver lift,
+    required int index,
+    required double extent,
+    required double innerHeight,
+    required Color color,
+    required bool reduceMotion,
+  })  : _lens = lens,
+        _lift = lift,
+        _index = index,
+        _extent = extent,
+        _innerHeight = innerHeight,
+        _color = color,
+        _reduceMotion = reduceMotion;
+
+  final LayerHandle<ClipPathLayer> _outside = LayerHandle<ClipPathLayer>();
+  final LayerHandle<ClipPathLayer> _inside = LayerHandle<ClipPathLayer>();
+  final LayerHandle<ColorFilterLayer> _tint = LayerHandle<ColorFilterLayer>();
+  final LayerHandle<TransformLayer> _motion = LayerHandle<TransformLayer>();
+
+  SpringDriver _lens;
+  set lens(SpringDriver value) {
+    if (value == _lens) return;
+    if (attached) {
+      _lens.removeListener(markNeedsPaint);
+      value.addListener(markNeedsPaint);
+    }
+    _lens = value;
+    markNeedsPaint();
+  }
+
+  SpringDriver _lift;
+  set lift(SpringDriver value) {
+    if (value == _lift) return;
+    if (attached) {
+      _lift.removeListener(markNeedsPaint);
+      value.addListener(markNeedsPaint);
+    }
+    _lift = value;
+    markNeedsPaint();
+  }
+
+  int _index;
+  set index(int value) {
+    if (value == _index) return;
+    _index = value;
+    markNeedsPaint();
+  }
+
+  double _extent;
+  set extent(double value) {
+    if (value == _extent) return;
+    _extent = value;
+    markNeedsPaint();
+  }
+
+  double _innerHeight;
+  set innerHeight(double value) {
+    if (value == _innerHeight) return;
+    _innerHeight = value;
+    markNeedsPaint();
+  }
+
+  Color _color;
+  set color(Color value) {
+    if (value == _color) return;
+    _color = value;
+    markNeedsPaint();
+  }
+
+  bool _reduceMotion;
+  set reduceMotion(bool value) {
+    if (value == _reduceMotion) return;
+    _reduceMotion = value;
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _lens.addListener(markNeedsPaint);
+    _lift.addListener(markNeedsPaint);
+  }
+
+  @override
+  void detach() {
+    _lens.removeListener(markNeedsPaint);
+    _lift.removeListener(markNeedsPaint);
+    super.detach();
+  }
+
+  /// 透镜矩形换算到**本格**坐标系（父级按整条 Row 算的）
+  Rect get _localLens {
+    final double stretch =
+        (_lens.velocity.abs() / _kLensJellySpeed).clamp(0.0, 1.0) * _kLensJellyStretch;
+    final double growth = _kLensGrowth * 2 * _lift.value;
+    final double width = (_extent + growth) * (1 + stretch);
+    final double height = (_innerHeight + growth) * (1 - stretch / 2);
+    return Rect.fromLTWH(
+      (_lens.value + 0.5) * _extent - width / 2 - _index * _extent,
+      (_innerHeight - height) / 2,
+      width,
+      height,
+    );
+  }
+
+  double get _scale {
+    if (_reduceMotion) return 1;
+    final double emphasis = (1 - (_lens.value - _index).abs()).clamp(0.0, 1.0);
+    return 1 + _kLensMagnify * emphasis * _lift.value;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (child == null) return;
+    final Rect bounds = Offset.zero & size;
+    final Rect lens = _localLens;
+    // 透镜和自己不沾边：原样画，不建任何层（滚动/静止时零开销）
+    if (!lens.overlaps(bounds)) {
+      _outside.layer = null;
+      _inside.layer = null;
+      _tint.layer = null;
+      _motion.layer = null;
+      super.paint(context, offset);
+      return;
+    }
+    final Path lensPath = AppShape.pill().getOuterPath(lens);
+    // 外：evenOdd 把透镜那块挖掉
+    _outside.layer = context.pushClipPath(
+      needsCompositing,
+      offset,
+      bounds,
+      Path()
+        ..fillType = PathFillType.evenOdd
+        ..addRect(bounds)
+        ..addPath(lensPath, Offset.zero),
+      (PaintingContext inner, Offset innerOffset) => super.paint(inner, innerOffset),
+      oldLayer: _outside.layer,
+    );
+    // 内：染色 + 放大
+    _inside.layer = context.pushClipPath(
+      needsCompositing,
+      offset,
+      lens,
+      lensPath,
+      (PaintingContext inner, Offset innerOffset) => _paintTinted(inner, innerOffset, lens),
+      oldLayer: _inside.layer,
+    );
+  }
+
+  void _paintTinted(PaintingContext context, Offset offset, Rect lens) {
+    final ColorFilter filter = ColorFilter.mode(_color, BlendMode.srcIn);
+    if (needsCompositing) {
+      _tint.layer = context.pushColorFilter(
+        offset,
+        filter,
+        (PaintingContext inner, Offset innerOffset) => _paintScaled(inner, innerOffset),
+        oldLayer: _tint.layer,
+      );
+      return;
+    }
+    _tint.layer = null;
+    final Canvas canvas = context.canvas
+      ..saveLayer(lens.shift(offset), Paint()..colorFilter = filter);
+    _paintScaled(context, offset);
+    canvas.restore();
+  }
+
+  void _paintScaled(PaintingContext context, Offset offset) {
+    final double scale = _scale;
+    if (scale == 1) {
+      _motion.layer = null;
+      super.paint(context, offset);
+      return;
+    }
+    final Offset center = size.center(Offset.zero);
+    final Matrix4 motion = Matrix4.diagonal3Values(scale, scale, 1)
+      ..setTranslationRaw(center.dx * (1 - scale), center.dy * (1 - scale), 0);
+    _motion.layer = context.pushTransform(
+      needsCompositing,
+      offset,
+      motion,
+      super.paint,
+      oldLayer: _motion.layer,
     );
   }
 }

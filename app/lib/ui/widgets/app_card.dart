@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/theme_state.dart';
+import '../../theme/app_shape.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
@@ -62,11 +63,15 @@ class _AppCardState extends State<AppCard> {
       duration: AppMotion.fast,
       curve: AppMotion.standard,
       padding: widget.padding,
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        border: Border.all(
-          color: emphasize ? palette.primary : palette.border,
-          width: widget.highlight ? 1.5 : 1,
+      // 超椭圆描边：ShapeDecoration 而不是 BoxDecoration —— 后者只吃
+      // BorderRadius，画出来是普通圆角，和全站其余形状对不上。
+      decoration: ShapeDecoration(
+        shape: AppShape.of(
+          radius,
+          side: BorderSide(
+            color: emphasize ? palette.primary : palette.border,
+            width: widget.highlight ? 1.5 : 1,
+          ),
         ),
       ),
       child: widget.child,
@@ -78,7 +83,7 @@ class _AppCardState extends State<AppCard> {
       padding: widget.margin ?? EdgeInsets.zero,
       child: Material(
         color: fill,
-        borderRadius: radius,
+        shape: AppShape.of(radius),
         clipBehavior: Clip.antiAlias,
         child: !tappable
             ? inner

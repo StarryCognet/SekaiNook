@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_shape.dart';
 import 'motion.dart';
 import 'tokens.dart';
 
@@ -534,7 +535,9 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: hasBackground ? Colors.transparent : p.bg,
       canvasColor: p.cardColor(hasBackground: hasBackground),
       dividerColor: p.border,
-      splashFactory: InkSparkle.splashFactory,
+      // 全站去水波纹：点击反馈交给按压缩放（motion/press_scale.dart）。
+      // FlClash 也是这么做的 —— 水波纹与缩放叠加会显得脏，二选一时选形变。
+      splashFactory: NoSplash.splashFactory,
     );
 
     return base.copyWith(
@@ -559,50 +562,33 @@ abstract final class AppTheme {
         color: p.cardColor(hasBackground: hasBackground),
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          side: BorderSide(color: p.border),
-        ),
+        shape: AppShape.card(p.border),
       ),
       dividerTheme: DividerThemeData(color: p.border, thickness: 1, space: 1),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: p.cardColor(hasBackground: hasBackground),
         surfaceTintColor: Colors.transparent,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
-        ),
+        shape: AppShape.sheet(),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: p.cardColor(hasBackground: hasBackground),
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.xxl),
-        ),
+        shape: AppShape.dialog(),
       ),
+      // 输入框也走超椭圆：InputBorder 得自己实现（见 app_shape.dart 的 AppInputBorder）
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: p.softColor(hasBackground: hasBackground),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(color: p.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(color: p.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(color: p.primary, width: 1.5),
-        ),
+        border: AppInputBorder(borderSide: BorderSide(color: p.border)),
+        enabledBorder: AppInputBorder(borderSide: BorderSide(color: p.border)),
+        focusedBorder: AppInputBorder(borderSide: BorderSide(color: p.primary, width: 1.5)),
         hintStyle: TextStyle(color: p.textTertiary),
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: themePreset.dark ? p.surfaceSoft : const Color(0xFF303030),
         contentTextStyle: const TextStyle(color: Colors.white, fontSize: AppFontSize.sm),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
+        shape: AppShape.all(AppRadius.md),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: p.primary,
@@ -618,6 +604,7 @@ abstract final class AppTheme {
         labelStyle: TextStyle(color: p.text, fontSize: AppFontSize.sm),
         secondaryLabelStyle: TextStyle(color: p.onSoft, fontSize: AppFontSize.sm),
         side: BorderSide(color: p.border),
+        shape: AppShape.all(AppRadius.sm),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
@@ -630,6 +617,7 @@ abstract final class AppTheme {
                 states.contains(WidgetState.selected) ? p.primarySoft : Colors.transparent,
           ),
           side: WidgetStatePropertyAll(BorderSide(color: p.border)),
+          shape: WidgetStatePropertyAll<OutlinedBorder>(AppShape.all(AppRadius.sm)),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -638,29 +626,36 @@ abstract final class AppTheme {
           foregroundColor: p.onPrimary,
           disabledBackgroundColor: p.softColor(hasBackground: hasBackground),
           disabledForegroundColor: p.textTertiary,
+          shape: AppShape.pill(),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: p.primary,
           side: BorderSide(color: p.border),
+          shape: AppShape.pill(),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: p.primary),
+        style: TextButton.styleFrom(
+          foregroundColor: p.primary,
+          shape: AppShape.pill(),
+        ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: p.primary,
         foregroundColor: p.onPrimary,
+        shape: AppShape.all(AppRadius.lg),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: p.cardColor(hasBackground: hasBackground),
         textStyle: TextStyle(color: p.text, fontSize: AppFontSize.sm),
+        shape: AppShape.all(AppRadius.lg),
       ),
       tooltipTheme: TooltipThemeData(
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: p.text,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
+          shape: AppShape.all(AppRadius.sm),
         ),
         textStyle: TextStyle(color: p.bg, fontSize: AppFontSize.xs),
       ),
@@ -669,6 +664,7 @@ abstract final class AppTheme {
         backgroundColor: p.cardColor(hasBackground: hasBackground),
         indicatorColor: p.primarySoft,
         surfaceTintColor: Colors.transparent,
+        indicatorShape: AppShape.pill(),
       ),
       tabBarTheme: TabBarThemeData(
         labelColor: p.primary,

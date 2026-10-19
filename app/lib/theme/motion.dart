@@ -108,8 +108,20 @@ abstract final class AppMotion {
   /// 我们列表更密，取一半。
   static const double enterOffset = 14;
 
-  /// 按压时缩放到的比例
-  static const double pressScale = 0.97;
+  /// 按压膨胀的上限 —— 56px 的小控件封顶 25%（FlClash ElasticPress 同值）
+  static const double pressGrowCap = 0.25;
+
+  /// 按压时「每边长出多少像素」的预算：`grow = min(cap, room / 长边)`。
+  ///
+  /// 用固定像素而不是固定百分比，是为了让 56px 的圆钮和 300px 的卡片
+  /// 看起来一样「鼓」—— 百分比对两者是差 5 倍的观感。
+  static const double pressGrowRoom = 16;
+
+  /// 拿不到约束时的兜底膨胀量
+  static const double pressGrow = 0.02;
+
+  /// 旧语义（按下缩到某个比例）已废弃；现在按压一律是**放大**。
+  static const double pressScale = 1.02;
 
   /// 按压「膨胀」的最大幅度（长边归一化，大卡片不会夸张地胀起来）
   static const double pressLift = 0.02;

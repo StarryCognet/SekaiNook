@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/notification_state.dart';
 import '../../state/theme_state.dart';
+import '../../theme/app_shape.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
@@ -167,9 +168,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
           child: DecoratedBox(
             decoration: ShapeDecoration(
               color: palette.cardColor(hasBackground: hasBackground),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.full),
-              ),
+              shape: AppShape.pill(),
               shadows: _shadows(context),
             ),
             child: Padding(
