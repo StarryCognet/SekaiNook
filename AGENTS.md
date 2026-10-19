@@ -54,6 +54,19 @@ Invoke-RestMethod https://pub.starrymiku.com/sekainook/latest.json
 - 用户端首次装完会有一次系统「允许安装未知应用」，之后就能一路点下去。
 - 版本日志改一处两端生效：网页版读 `/api/changelog`，Flutter 端读同一份，云端够不着才退回 bundle 里的兜底。
 
+### 本机网络：wrangler 的 D1 / R2 要走直连
+
+`wrangler d1 execute --remote`（`changelog:sync`）与 `wrangler r2 object put --remote`（发 APK）
+在本机 `HTTP_PROXY=http://127.0.0.1:7890` 下都会 `✘ fetch failed`，发版会断在这两处；临时清掉代理就通：
+
+```powershell
+$env:HTTP_PROXY=''; $env:HTTPS_PROXY=''; $env:NO_PROXY='*'
+```
+
+`wrangler pages deploy` 不受影响（能过代理）。curl 同理 —— 加 `--noproxy '*'` 才不会空手回来。
+另：`app/tool/publish_apk.ps1` 的 `flutter build apk` 带 `--no-pub`，正是因为隐式 `pub get`
+在同样的代理环境下会 `SocketException: 远程计算机拒绝网络连接` 直接断掉。
+
 ## 改图标（工作台 `.icon-work/`，已 gitignore，不进版本库）
 
 ```powershell
