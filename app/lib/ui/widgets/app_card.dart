@@ -119,9 +119,9 @@ class SectionHeader extends StatelessWidget {
             width: 3,
             height: 16,
             margin: const EdgeInsets.only(right: AppSpacing.sm),
-            decoration: BoxDecoration(
+            decoration: ShapeDecoration(
               color: palette.primary,
-              borderRadius: BorderRadius.circular(AppRadius.full),
+              shape: AppShape.all(AppRadius.full),
             ),
           ),
           Expanded(

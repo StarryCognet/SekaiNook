@@ -11,6 +11,7 @@ import '../../../data/models/notification_record.dart';
 import '../../../state/family_state.dart';
 import '../../../state/notification_state.dart';
 import '../../../state/settings_state.dart';
+import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
@@ -269,10 +270,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: palette.warning.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: palette.warning.withValues(alpha: 0.4)),
+        shape: AppShape.all(AppRadius.md, side: BorderSide(color: palette.warning.withValues(alpha: 0.4))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,9 +307,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
         horizontal: AppSpacing.sm,
         vertical: AppSpacing.xs,
       ),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: palette.danger.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        shape: AppShape.all(AppRadius.md),
       ),
       child: Row(
         children: <Widget>[
@@ -392,10 +392,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
     return AnimatedContainer(
       duration: AppMotion.fast,
       curve: AppMotion.standard,
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: selected ? palette.segmentedSelected : palette.surfaceSoft,
-        borderRadius: BorderRadius.circular(AppRadius.full),
-        border: Border.all(color: selected ? palette.primary : palette.border),
+        shape: AppShape.all(AppRadius.full, side: BorderSide(color: selected ? palette.primary : palette.border)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -508,9 +507,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
             width: 32,
             height: 32,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
+            decoration: ShapeDecoration(
               color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppRadius.md),
+              shape: AppShape.all(AppRadius.md),
             ),
             child: Icon(_iconFor(item.type), size: 18, color: color),
           ),
@@ -618,11 +617,10 @@ class _NotifySkeleton extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
+                decoration: ShapeDecoration(
                   // 骨架屏只在加载的那一两秒出现，用实色卡底即可
                   color: palette.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(color: palette.border),
+                  shape: AppShape.all(AppRadius.lg, side: BorderSide(color: palette.border)),
                 ),
                 child: const Row(
                   crossAxisAlignment: CrossAxisAlignment.start,

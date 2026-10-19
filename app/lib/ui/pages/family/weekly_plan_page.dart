@@ -13,6 +13,7 @@ import '../../../core/week.dart';
 import '../../../data/api/plans_api.dart';
 import '../../../data/models/weekly_plan.dart';
 import '../../../state/theme_state.dart';
+import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
@@ -538,9 +539,9 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
                               horizontal: AppSpacing.xs,
                               vertical: 2,
                             ),
-                            decoration: BoxDecoration(
+                            decoration: ShapeDecoration(
                               color: palette.surfaceSoft,
-                              borderRadius: BorderRadius.circular(AppRadius.sm),
+                              shape: AppShape.all(AppRadius.sm),
                             ),
                             child: Text(
                               '未初始化',
@@ -563,9 +564,9 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
                     horizontal: AppSpacing.sm,
                     vertical: 2,
                   ),
-                  decoration: BoxDecoration(
+                  decoration: ShapeDecoration(
                     color: palette.success.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    shape: AppShape.all(AppRadius.sm),
                   ),
                   child: Text(
                     '已完成',
@@ -775,10 +776,9 @@ class _WeeklySkeleton extends StatelessWidget {
 Widget _skeletonCard(AppPalette palette, List<Widget> children) {
   return Container(
     padding: const EdgeInsets.all(AppSpacing.md),
-    decoration: BoxDecoration(
+    decoration: ShapeDecoration(
       color: palette.surface,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      border: Border.all(color: palette.border),
+      shape: AppShape.all(AppRadius.lg, side: BorderSide(color: palette.border)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -22,6 +22,7 @@ import '../../../data/models/task_config.dart';
 import '../../../state/custom_tasks_state.dart';
 import '../../../state/family_state.dart';
 import '../../../state/theme_state.dart';
+import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
@@ -1086,10 +1087,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           labelColor: palette.onColor(palette.segmentedSelected),
           unselectedLabelColor: palette.textSecondary,
           // 高亮块在选项之间滑动 —— 仍由 URL 派生出来的 controller 驱动，没有自持状态
-          indicator: BoxDecoration(
+          indicator: ShapeDecoration(
             color: palette.segmentedSelected,
-            borderRadius: BorderRadius.circular(AppRadius.full),
-            border: Border.all(color: palette.primary.withValues(alpha: 0.35)),
+            shape: AppShape.all(AppRadius.full, side: BorderSide(color: palette.primary.withValues(alpha: 0.35))),
           ),
           indicatorSize: TabBarIndicatorSize.tab,
           dividerColor: Colors.transparent,
@@ -1109,9 +1109,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                           horizontal: AppSpacing.xs,
                           vertical: 1,
                         ),
-                        decoration: BoxDecoration(
+                        decoration: ShapeDecoration(
                           color: palette.danger,
-                          borderRadius: BorderRadius.circular(AppRadius.full),
+                          shape: AppShape.all(AppRadius.full),
                         ),
                         child: Text(
                           '${state.pendingCount}',
@@ -1382,9 +1382,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     ];
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xs),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: palette.softColor(hasBackground: hasBackground),
-        borderRadius: BorderRadius.circular(AppRadius.full),
+        shape: AppShape.all(AppRadius.full),
       ),
       child: Row(
         children: <Widget>[
@@ -1403,14 +1403,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   duration: AppMotion.fast,
                   curve: AppMotion.standard,
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  decoration: BoxDecoration(
+                  decoration: ShapeDecoration(
                     color: _taskFilter == type ? palette.segmentedSelected : Colors.transparent,
-                    borderRadius: BorderRadius.circular(AppRadius.full),
-                    border: Border.all(
-                      color: _taskFilter == type
+                    shape: AppShape.all(AppRadius.full, side: BorderSide(color: _taskFilter == type
                           ? palette.primary.withValues(alpha: 0.35)
-                          : Colors.transparent,
-                    ),
+                          : Colors.transparent)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1783,9 +1780,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             width: 32,
             height: 32,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
+            decoration: ShapeDecoration(
               color: palette.primarySoft,
-              borderRadius: BorderRadius.circular(AppRadius.md),
+              shape: AppShape.all(AppRadius.md),
             ),
             // primarySoft 是实色有色底：原始主题里 primary 与它是同一族的深 navy
             // （#1A1A2E 写 #2A2A4A 上），这个图标原来等于看不见（约 1.1:1）
@@ -1983,9 +1980,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             width: 32,
             height: 32,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
+            decoration: ShapeDecoration(
               color: (positive ? palette.success : palette.danger).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppRadius.md),
+              shape: AppShape.all(AppRadius.md),
             ),
             child: Icon(
               positive ? Icons.trending_up : Icons.trending_down,
@@ -2165,10 +2162,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final Color onPill = palette.onColor(pillFill);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadius.full),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
+        shape: AppShape.all(AppRadius.full, side: BorderSide(color: color.withValues(alpha: 0.4))),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2780,10 +2776,9 @@ class _LedgerSkeleton extends StatelessWidget {
 Widget _skeletonCard(AppPalette palette, List<Widget> children) {
   return Container(
     padding: const EdgeInsets.all(AppSpacing.md),
-    decoration: BoxDecoration(
+    decoration: ShapeDecoration(
       color: palette.surface,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      border: Border.all(color: palette.border),
+      shape: AppShape.all(AppRadius.lg, side: BorderSide(color: palette.border)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,

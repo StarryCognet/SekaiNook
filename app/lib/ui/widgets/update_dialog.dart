@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../config/changelog.dart';
 import '../../data/models/app_update.dart';
 import '../../state/update_state.dart';
+import '../../theme/app_shape.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 
@@ -212,8 +213,8 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ClipPath(
+                  clipper: ShapeBorderClipper(shape: AppShape.all(AppRadius.sm)),
                   child: LinearProgressIndicator(
                     value: known ? progress : null,
                     minHeight: 6,

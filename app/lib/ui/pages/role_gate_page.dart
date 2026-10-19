@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../config/family_rules.dart';
 import '../../state/family_state.dart';
 import '../../state/settings_state.dart';
+import '../../theme/app_shape.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
@@ -173,15 +174,11 @@ class _RoleCard extends StatelessWidget {
             duration: AppMotion.fast,
             curve: AppMotion.standard,
             padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
+            decoration: ShapeDecoration(
               // 选中底用「算好的实色」而不是半透明色：设了背景图时半透明会透出照片，
               // 卡片和上面的字都跟着糊；这层实色 = 12% 强调色合到 surface 上，观感一致、对比度可算
               color: selected ? selectedBase : palette.surface,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              border: Border.all(
-                color: selected ? color : palette.border,
-                width: selected ? 2 : 1,
-              ),
+              shape: AppShape.all(AppRadius.lg, side: BorderSide(color: selected ? color : palette.border, width: selected ? 2 : 1)),
             ),
             child: Row(
               children: <Widget>[
@@ -189,9 +186,9 @@ class _RoleCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(
+                  decoration: ShapeDecoration(
                     color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    shape: AppShape.all(AppRadius.md),
                   ),
                   child: Text(emoji, style: const TextStyle(fontSize: 24)),
                 ),

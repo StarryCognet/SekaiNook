@@ -11,6 +11,7 @@ import '../../../config/app_constants.dart';
 import '../../../core/api_exception.dart';
 import '../../../core/image_compress.dart';
 import '../../../data/api/selftest_api.dart';
+import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
@@ -1084,10 +1085,9 @@ class _SelftestPanelState extends State<SelftestPanel> {
         : (picked == group.items.length ? true : null);
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: palette.surfaceSoft,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: palette.border),
+        shape: AppShape.all(AppRadius.md, side: BorderSide(color: palette.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1489,10 +1489,9 @@ class _SelftestPanelState extends State<SelftestPanel> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(AppSpacing.sm),
-                decoration: BoxDecoration(
+                decoration: ShapeDecoration(
                   color: palette.surfaceSoft,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  border: Border.all(color: palette.border),
+                  shape: AppShape.all(AppRadius.sm, side: BorderSide(color: palette.border)),
                 ),
                 child: SelectableText(
                   _prettyJson(result.data),
@@ -1737,9 +1736,8 @@ class _PresetChip extends StatelessWidget {
                 horizontal: AppSpacing.sm,
                 vertical: AppSpacing.xs,
               ),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppRadius.full),
-                border: Border.all(color: active ? palette.primary : palette.border),
+              decoration: ShapeDecoration(
+                  shape: AppShape.all(AppRadius.full, side: BorderSide(color: active ? palette.primary : palette.border)),
               ),
               child: Text(
                 preset.name,
@@ -1777,9 +1775,8 @@ class _OptionChip extends StatelessWidget {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.full),
-            border: Border.all(color: selected ? palette.primary : palette.border),
+          decoration: ShapeDecoration(
+              shape: AppShape.all(AppRadius.full, side: BorderSide(color: selected ? palette.primary : palette.border)),
           ),
           child: Text(
             label,
@@ -1806,9 +1803,9 @@ class _MiniTag extends StatelessWidget {
     final AppPalette palette = context.palette;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: 1),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: palette.primarySoft,
-        borderRadius: BorderRadius.circular(AppRadius.xs),
+        shape: AppShape.all(AppRadius.xs),
       ),
       child: Text(
         text,

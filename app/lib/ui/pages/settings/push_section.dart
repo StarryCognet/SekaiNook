@@ -8,6 +8,7 @@ import '../../../data/models/local_reminder.dart';
 import '../../../data/models/notification_record.dart';
 import '../../../state/family_state.dart';
 import '../../../state/local_notify_state.dart';
+import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
@@ -444,9 +445,9 @@ class _PreviewBox extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: palette.softColor(hasBackground: false),
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        shape: AppShape.all(AppRadius.md),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

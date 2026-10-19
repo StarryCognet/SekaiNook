@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../data/models/local_reminder.dart';
 import '../../../state/local_notify_state.dart';
+import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
@@ -238,9 +239,9 @@ class _KindTag extends StatelessWidget {
     final AppPalette palette = context.palette;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: palette.softColor(hasBackground: false),
-        borderRadius: BorderRadius.circular(AppRadius.full),
+        shape: AppShape.all(AppRadius.full),
       ),
       child: Text(
         kind.label,

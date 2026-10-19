@@ -703,15 +703,14 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     final Color titleChipText = palette.onColor(palette.warning);
 
     return Container(
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[palette.primary, palette.primarySoft],
         ),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: palette.primary),
-        boxShadow: const <BoxShadow>[_glowSoft],
+        shadows: const <BoxShadow>[_glowSoft],
+        shape: AppShape.all(AppRadius.lg, side: BorderSide(color: palette.primary)),
       ),
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
@@ -743,10 +742,9 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                               horizontal: AppSpacing.sm,
                               vertical: AppSpacing.xs,
                             ),
-                            decoration: BoxDecoration(
+                            decoration: ShapeDecoration(
                               color: palette.warning,
-                              borderRadius: BorderRadius.circular(AppRadius.full),
-                              border: Border.all(color: palette.warning),
+                              shape: AppShape.all(AppRadius.full, side: BorderSide(color: palette.warning)),
                             ),
                             child: Text(
                               titleItem.shortName,
@@ -779,13 +777,9 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                       width: AppSpacing.xl + AppSpacing.md,
                       height: AppSpacing.xl + AppSpacing.md,
                       alignment: Alignment.center,
-                      decoration: BoxDecoration(
+                      decoration: ShapeDecoration(
                         color: palette.cardColor(hasBackground: false),
-                        borderRadius: BorderRadius.circular(AppRadius.full),
-                        border: Border.all(
-                          color: avatarItem == null ? palette.border : palette.primary,
-                          width: avatarItem == null ? 1 : 2,
-                        ),
+                        shape: AppShape.all(AppRadius.full, side: BorderSide(color: avatarItem == null ? palette.border : palette.primary, width: avatarItem == null ? 1 : 2)),
                       ),
                       child: const Text('🏅', style: TextStyle(fontSize: AppFontSize.lg)),
                     ),
@@ -795,10 +789,9 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                         bottom: -AppSpacing.xs,
                         child: Container(
                           padding: const EdgeInsets.all(AppSpacing.xs),
-                          decoration: BoxDecoration(
+                          decoration: ShapeDecoration(
                             color: palette.cardColor(hasBackground: false),
-                            borderRadius: BorderRadius.circular(AppRadius.full),
-                            border: Border.all(color: palette.primary),
+                            shape: AppShape.all(AppRadius.full, side: BorderSide(color: palette.primary)),
                           ),
                           child: Icon(
                             _gardenIcon(avatarItem.icon),
@@ -893,10 +886,9 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
   Widget _chip(AppPalette palette, Widget icon, Widget label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: palette.softColor(hasBackground: false),
-        borderRadius: BorderRadius.circular(AppRadius.full),
-        border: Border.all(color: palette.border),
+        shape: AppShape.all(AppRadius.full, side: BorderSide(color: palette.border)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1222,9 +1214,9 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                 width: AppSpacing.xl,
                 height: AppSpacing.xl,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(
+                decoration: ShapeDecoration(
                   color: _accentTint(palette.primary),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  shape: AppShape.all(AppRadius.md),
                 ),
                 child: Icon(
                   _gardenIcon(task.icon),
@@ -1423,9 +1415,8 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             horizontal: AppSpacing.sm,
             vertical: AppSpacing.sm,
           ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: done ? palette.border : palette.primary),
+          decoration: ShapeDecoration(
+              shape: AppShape.all(AppRadius.md, side: BorderSide(color: done ? palette.border : palette.primary)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1550,9 +1541,8 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             horizontal: AppSpacing.sm,
             vertical: AppSpacing.sm,
           ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: palette.border),
+          decoration: ShapeDecoration(
+              shape: AppShape.all(AppRadius.md, side: BorderSide(color: palette.border)),
           ),
           child: Row(
             children: <Widget>[
@@ -1726,9 +1716,9 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                   width: AppSpacing.xl + AppSpacing.sm,
                   height: AppSpacing.xl + AppSpacing.sm,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(
+                  decoration: ShapeDecoration(
                     color: _accentTint(palette.primary),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    shape: AppShape.all(AppRadius.md),
                   ),
                   child: Icon(
                     entry.icon,
@@ -1744,9 +1734,9 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.xs,
                       ),
-                      decoration: BoxDecoration(
+                      decoration: ShapeDecoration(
                         color: palette.danger,
-                        borderRadius: BorderRadius.circular(AppRadius.full),
+                        shape: AppShape.all(AppRadius.full),
                       ),
                       child: Text(
                         entry.badge > 99 ? '99+' : '${entry.badge}',
@@ -2153,9 +2143,9 @@ class _CheckInSheetState extends State<_CheckInSheet> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(AppSpacing.sm),
-                decoration: BoxDecoration(
+                decoration: ShapeDecoration(
                   color: summaryTint,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  shape: AppShape.all(AppRadius.md),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

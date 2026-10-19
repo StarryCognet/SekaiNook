@@ -214,10 +214,10 @@ class _PageChip extends StatelessWidget {
           Container(
             width: AppTopBar.pageIconSize,
             height: AppTopBar.pageIconSize,
-            decoration: BoxDecoration(
+            decoration: ShapeDecoration(
               // 与底栏选中项同一个色（底栏选中是 primarySoft 底 + onSoft 前景）
               color: palette.primarySoft,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
+              shape: AppShape.all(AppRadius.sm),
             ),
             child: Icon(
               page.icon,
@@ -325,10 +325,10 @@ class _BrightnessSwitch extends StatelessWidget {
       container: true,
       child: Container(
         padding: const EdgeInsets.all(trackPadding),
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           // 与底栏选中项同一个底：深色主题下是蓝，浅色主题下是「深蓝主色」
           color: palette.primarySoft,
-          borderRadius: BorderRadius.circular(AppRadius.full),
+          shape: AppShape.all(AppRadius.full),
         ),
         child: SizedBox(
           width: optionSize * 2,

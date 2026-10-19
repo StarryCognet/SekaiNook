@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_shape.dart';
 import '../theme/tokens.dart';
 
 /// 出错兜底卡片上「重新加载」按钮的钩子。
@@ -61,12 +62,12 @@ class AppErrorCard extends StatelessWidget {
             horizontal: AppSpacing.lg,
             vertical: compact ? AppSpacing.lg : AppSpacing.xl,
           ),
-          decoration: BoxDecoration(
+          decoration: ShapeDecoration(
             color: _surface,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            boxShadow: const <BoxShadow>[
+            shadows: const <BoxShadow>[
               BoxShadow(color: Color(0x14000000), blurRadius: 24, offset: Offset(0, 6)),
             ],
+            shape: AppShape.all(AppRadius.lg),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -101,9 +102,9 @@ class AppErrorCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     alignment: Alignment.center,
-                    decoration: BoxDecoration(
+                    decoration: ShapeDecoration(
                       color: _primary,
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      shape: AppShape.all(AppRadius.sm),
                     ),
                     child: const Text(
                       '重新加载',

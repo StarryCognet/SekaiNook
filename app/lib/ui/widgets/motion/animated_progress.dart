@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
@@ -49,8 +50,9 @@ class AnimatedProgressBar extends StatelessWidget {
   }
 
   Widget _build(Color track, BorderRadius shape, Color barColor, double factor) {
-    return ClipRRect(
-      borderRadius: shape,
+    // 裁剪也走超椭圆：ClipRRect 只切普通圆角，进度条两头会露折点
+    return ClipPath(
+      clipper: ShapeBorderClipper(shape: AppShape.of(shape)),
       child: Container(
         height: height,
         color: track,
@@ -60,8 +62,8 @@ class AnimatedProgressBar extends StatelessWidget {
             widthFactor: factor,
             heightFactor: 1,
             child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: shape,
+              decoration: ShapeDecoration(
+                shape: AppShape.of(shape),
                 gradient: LinearGradient(
                   colors: <Color>[barColor.withValues(alpha: 0.72), barColor],
                 ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/theme_state.dart';
+import '../../theme/app_shape.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
@@ -96,17 +97,19 @@ class TaskRow extends StatelessWidget {
     final Color titleColor = dimmed ? palette.textSecondary : palette.text;
     final Color valueColor = dimmed ? palette.textTertiary : palette.ink(accent, fill);
 
-    final BorderRadius radius = BorderRadius.circular(AppRadius.md);
+    // 超椭圆（不是普通圆角）：这里半径只有 12，普通圆角在直线与圆弧的相接处
+    // 会有一个能看出来的折点，超椭圆整条边曲率连续。
+    final RoundedSuperellipseBorder shape = AppShape.all(AppRadius.md);
 
     return Material(
       color: fill,
-      borderRadius: radius,
+      shape: shape,
       clipBehavior: Clip.antiAlias,
       // 底色在 Material 上、描边在内层容器上 —— 与 AppCard 同一套分工，
       // 否则水波纹会被底色压住看不见
       child: PressInkWell(
         onTap: tappable ? onTap : null,
-        borderRadius: radius,
+        borderRadius: BorderRadius.circular(AppRadius.md),
         child: AnimatedContainer(
           duration: AppMotion.fast,
           curve: AppMotion.standard,
@@ -115,18 +118,17 @@ class TaskRow extends StatelessWidget {
             horizontal: AppSpacing.sm,
             vertical: AppSpacing.sm,
           ),
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            border: Border.all(color: borderColor),
+          decoration: ShapeDecoration(
+            shape: AppShape.all(AppRadius.md, side: BorderSide(color: borderColor)),
           ),
           child: Row(
             children: <Widget>[
               Container(
                 width: 36,
                 height: 36,
-                decoration: BoxDecoration(
+                decoration: ShapeDecoration(
                   color: iconFill,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  shape: AppShape.all(AppRadius.sm),
                 ),
                 child: Icon(icon, size: 20, color: iconColor),
               ),

@@ -9,6 +9,7 @@ import '../../../config/garden_config.dart';
 import '../../../data/models/garden.dart';
 import '../../../data/models/ledger_record.dart';
 import '../../../state/garden_state.dart';
+import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
@@ -691,9 +692,9 @@ class _GardenPageState extends State<GardenPage> {
             width: 32,
             height: 32,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
+            decoration: ShapeDecoration(
               color: color.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(AppRadius.md),
+              shape: AppShape.all(AppRadius.md),
             ),
             child: Icon(icon, size: 18, color: iconColor),
           ),
@@ -766,9 +767,9 @@ class _GardenPageState extends State<GardenPage> {
             width: 36,
             height: 36,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
+            decoration: ShapeDecoration(
               color: accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppRadius.md),
+              shape: AppShape.all(AppRadius.md),
             ),
             child: Icon(
               _gardenIcon(task.icon),
@@ -1091,9 +1092,9 @@ class _GardenPageState extends State<GardenPage> {
                   width: 44,
                   height: 44,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(
+                  decoration: ShapeDecoration(
                     color: palette.warning.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(AppRadius.full),
+                    shape: AppShape.all(AppRadius.full),
                   ),
                   child: Icon(
                     Icons.wb_sunny_outlined,
@@ -1153,9 +1154,9 @@ class _GardenPageState extends State<GardenPage> {
                   width: 44,
                   height: 44,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(
+                  decoration: ShapeDecoration(
                     color: palette.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppRadius.full),
+                    shape: AppShape.all(AppRadius.full),
                   ),
                   child: Icon(
                     Icons.park_outlined,
@@ -1234,9 +1235,9 @@ class _GardenPageState extends State<GardenPage> {
               width: 44,
               height: 44,
               alignment: Alignment.center,
-              decoration: BoxDecoration(
+              decoration: ShapeDecoration(
                 color: palette.success.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppRadius.full),
+                shape: AppShape.all(AppRadius.full),
               ),
               child: Icon(
                 plant.icon,
@@ -1298,9 +1299,9 @@ class _GardenPageState extends State<GardenPage> {
               width: 44,
               height: 44,
               alignment: Alignment.center,
-              decoration: BoxDecoration(
+              decoration: ShapeDecoration(
                 color: palette.warning.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(AppRadius.full),
+                shape: AppShape.all(AppRadius.full),
               ),
               child: Icon(
                 Icons.wb_sunny_outlined,
@@ -1481,9 +1482,9 @@ class _GardenPageState extends State<GardenPage> {
             width: 44,
             height: 44,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
+            decoration: ShapeDecoration(
               color: palette.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppRadius.md),
+              shape: AppShape.all(AppRadius.md),
             ),
             child: Icon(
               _gardenIcon(item.icon),
@@ -1667,9 +1668,9 @@ class _GardenPageState extends State<GardenPage> {
               width: 48,
               height: 48,
               alignment: Alignment.center,
-              decoration: BoxDecoration(
+              decoration: ShapeDecoration(
                 color: palette.warning.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(AppRadius.full),
+                shape: AppShape.all(AppRadius.full),
               ),
               child: Icon(Icons.emoji_events_outlined, size: 24, color: palette.warning),
             ),
@@ -1794,9 +1795,9 @@ class _GardenPageState extends State<GardenPage> {
                 width: 36,
                 height: 36,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(
+                decoration: ShapeDecoration(
                   color: accent.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  shape: AppShape.all(AppRadius.md),
                 ),
                 child: Icon(
                   _gardenIcon(badge.icon),
@@ -2259,10 +2260,9 @@ class _CheckButton extends StatelessWidget {
         width: 40,
         height: 40,
         alignment: Alignment.center,
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: done ? palette.success : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppRadius.full),
-          border: Border.all(color: done ? palette.success : palette.border, width: 2),
+          shape: AppShape.all(AppRadius.full, side: BorderSide(color: done ? palette.success : palette.border, width: 2)),
         ),
         // 勾压在实心 success 底上：字色跟底色算，别拿卡片底色（surface）当字色
         child: done ? Icon(Icons.check, size: 22, color: palette.onColor(palette.success)) : null,
@@ -2286,9 +2286,9 @@ class _StatusChip extends StatelessWidget {
     final AppPalette palette = context.palette;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(AppRadius.full),
+        shape: AppShape.all(AppRadius.full),
       ),
       child: Text(
         label,

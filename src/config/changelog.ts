@@ -14,10 +14,19 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.1.0';
+export const APP_VERSION = '2.1.1';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.1.1',
+    date: '2026-10-19 22:15:00',
+    title: '上一版没换完的圆角，这一版扫干净了',
+    changes: [
+      '任务卡、顶部导航栏、加载时的灰条、进度条、更新弹窗，还有设置页里那些小方块 —— 上一版漏掉的角这一版全换成同一种画法了。现在整页的弧度是一致的，不会卡片是软的、旁边那一小块是硬的',
+      '换的只是「圆角怎么画」这一件事，位置、大小、颜色一个都没动：升级后布局和以前一模一样，只是角更顺，小屏幕上看着会比以前鼓一点、软一点',
+    ],
+  },
   {
     version: '2.1.0',
     date: '2026-10-19 21:40:00',

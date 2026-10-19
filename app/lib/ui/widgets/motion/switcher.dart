@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
@@ -121,9 +122,9 @@ class SlidingHighlight extends StatelessWidget {
               child: Container(
                 width: slot - padding * 2,
                 height: height - padding * 2,
-                decoration: BoxDecoration(
+                decoration: ShapeDecoration(
                   color: color ?? palette.surface,
-                  borderRadius: BorderRadius.circular(radius),
+                  shape: AppShape.all(radius),
                 ),
               ),
             ),

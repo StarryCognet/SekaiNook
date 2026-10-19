@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
@@ -77,10 +78,10 @@ class SkeletonBox extends StatelessWidget {
       child: Container(
         width: width,
         height: height,
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: color,
-          shape: shape,
-          borderRadius: shape == BoxShape.circle ? null : BorderRadius.circular(radius),
+          // 正圆用 CircleBorder（超椭圆在正圆上没区别），其余一律超椭圆
+          shape: shape == BoxShape.circle ? const CircleBorder() : AppShape.all(radius),
         ),
       ),
     );
@@ -120,11 +121,10 @@ class SkeletonCard extends StatelessWidget {
     final AppPalette palette = context.palette;
     return Container(
       padding: padding ?? const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         // 骨架屏只在加载的那一两秒出现，用实色底即可，不必依赖全局背景图状态
         color: palette.surface,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: palette.border, width: 1),
+        shape: AppShape.all(AppRadius.md, side: BorderSide(color: palette.border)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

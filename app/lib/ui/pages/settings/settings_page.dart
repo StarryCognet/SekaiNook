@@ -21,6 +21,7 @@ import '../../../data/models/family_names.dart';
 import '../../../state/family_state.dart';
 import '../../../state/settings_state.dart';
 import '../../../state/theme_state.dart';
+import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
@@ -1212,9 +1213,9 @@ class _SettingsPageState extends State<SettingsPage> {
                               errorBuilder: (context, error, stackTrace) => Container(
                                 height: 140,
                                 alignment: Alignment.center,
-                                decoration: BoxDecoration(
+                                decoration: ShapeDecoration(
                                   color: palette.surfaceSoft,
-                                  borderRadius: BorderRadius.circular(AppRadius.md),
+                                  shape: AppShape.all(AppRadius.md),
                                 ),
                                 child: Text(
                                   '这张图打不开了，换一张吧',
@@ -1301,13 +1302,9 @@ class _SettingsPageState extends State<SettingsPage> {
         child: AnimatedContainer(
           duration: AppMotion.fast,
           curve: AppMotion.standard,
-          decoration: BoxDecoration(
+          decoration: ShapeDecoration(
             color: selected ? palette.primarySoft : palette.surface,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(
-              color: selected ? palette.primary : palette.border,
-              width: selected ? 1.6 : 1,
-            ),
+            shape: AppShape.all(AppRadius.md, side: BorderSide(color: selected ? palette.primary : palette.border, width: selected ? 1.6 : 1)),
           ),
           child: Material(
             color: Colors.transparent,
@@ -2037,9 +2034,9 @@ class _EntryRow extends StatelessWidget {
           width: 36,
           height: 36,
           alignment: Alignment.center,
-          decoration: BoxDecoration(
+          decoration: ShapeDecoration(
             color: accent.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(AppRadius.md),
+            shape: AppShape.all(AppRadius.md),
           ),
           child: Icon(icon, size: 18, color: accent),
         ),
@@ -2156,12 +2153,9 @@ class _ChoiceRow extends StatelessWidget {
               child: AnimatedContainer(
                 duration: AppMotion.fast,
                 curve: AppMotion.standard,
-                decoration: BoxDecoration(
+                decoration: ShapeDecoration(
                   color: index == selectedIndex ? palette.segmentedSelected : palette.surfaceSoft,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(
-                    color: index == selectedIndex ? palette.primary : palette.border,
-                  ),
+                  shape: AppShape.all(AppRadius.md, side: BorderSide(color: index == selectedIndex ? palette.primary : palette.border)),
                 ),
                 child: Material(
                   color: Colors.transparent,
@@ -2205,9 +2199,9 @@ class _Tag extends StatelessWidget {
     final palette = context.palette;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: palette.primarySoft,
-        borderRadius: BorderRadius.circular(AppRadius.full),
+        shape: AppShape.all(AppRadius.full),
       ),
       child: Text(
         text,
