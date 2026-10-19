@@ -13,6 +13,7 @@ import '../../../core/api_client.dart';
 import '../../../core/api_exception.dart';
 import '../../../core/image_compress.dart';
 import '../../../core/ledger_csv.dart';
+import '../../../core/ledger_export.dart';
 import '../../../core/task_rules.dart';
 import '../../../data/api/upload_api.dart';
 import '../../../data/models/custom_task.dart';
@@ -562,12 +563,18 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   /// 导出 CSV（仅家长）：按当前筛选导出全部记录。
   ///
-  /// Web 版走浏览器下载；移动端没有 share_plus / path_provider（不允许新增依赖），
-  /// 因此把同一份 CSV 内容放进剪贴板，家长粘到表格软件里即可。
+  /// 落成真文件（安卓/iOS 走系统分享面板，Web 触发浏览器下载），
+  /// 详细分流见 `core/ledger_export.dart`。
   Future<void> _exportCsv(List<LedgerRecord> records) async {
     if (records.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: buildLedgerCsv(records)));
-    _toast(exportToastText(records.length));
+    try {
+      final LedgerExportResult result = await saveLedgerCsv(buildLedgerCsv(records));
+      if (!mounted) return;
+      _toast(ledgerExportToastText(records.length, result));
+    } catch (e) {
+      if (!mounted) return;
+      _toast('导出失败：$e', warning: true);
+    }
   }
 
   // ---- 展示辅助 ----

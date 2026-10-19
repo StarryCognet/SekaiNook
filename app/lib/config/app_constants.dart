@@ -88,6 +88,23 @@ abstract final class AppConstants {
   /// 已经庆祝过的勋章 id（避免每次进页面都弹一次庆祝动画）
   static const String keyBadgesCelebrated = 'sekainook_badges_celebrated';
 
+  // ---- 设置 ----
+
+  /// 称呼草稿的存储键前缀（后面接 `:kid` / `:mom`）。
+  ///
+  /// 对应 Web 版 `sekainook_name_draft:<target>`：称呼改了一半就走开
+  /// （切身份 / 关掉标签）也不丢。真正保存成功之后这份草稿就退休。
+  static const String keyNameDraftPrefix = 'sekainook_name_draft';
+
+  // ---- 首页与通知 ----
+
+  /// 通知页上次选的筛选（`all` / `unread`）。
+  ///
+  /// Web 版这一项落在 sessionStorage（`useViewState('home.noticeFilter')`）；
+  /// Flutter 侧地址栏的 `?filter=` 才是落地时的唯一真相，这个键只是**设备记忆**：
+  /// 从铃铛 / 首页宫格进来时（那些入口不带 query）拿它兜底，省得每次重选一遍。
+  static const String keyNoticeFilter = 'sekainook_notice_filter';
+
   // ---- App 本地通知（安卓系统通知栏）----
 
   /// 本地提醒开关（开着的设备每天 21:30 弹一条「今天还差几个任务」）

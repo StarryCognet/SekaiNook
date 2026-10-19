@@ -16,9 +16,10 @@ import '../../state/update_state.dart';
 import '../widgets/motion_widgets.dart';
 import '../widgets/update_dialog.dart';
 import 'app_nav_bar.dart';
+import 'app_top_bar.dart';
 import 'back_intent.dart';
 
-/// 主壳：底部导航 + 通知轮询（对应 Web 版 `src/layouts/MainLayout.tsx`）。
+/// 主壳：全局顶栏 + 底部导航 + 通知轮询（对应 Web 版 `src/layouts/MainLayout.tsx`）。
 ///
 /// 轮询**不在 store 里**，在这里：15 秒一次，页面不可见时跳过，
 /// 回到前台立刻补一次；家长身份额外刷新待审批。
@@ -170,6 +171,14 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           _handleSystemBack();
         },
         child: Scaffold(
+          // 全局顶栏（Web 版 MainLayout 的 Header）：挂 `appBar` 而不是包住 body ——
+          // ① Scaffold 会把状态栏高度算进 appBar 那一条（`preferredSize.height` 只报
+          //    条自身高度，顶栏内部自己套 SafeArea 让状态栏），包 body 的话得手算；
+          // ② `appBar != null` 时 Scaffold 会把 body 的 MediaQuery 顶部 padding 抹掉
+          //    （`removeTopPadding`），各页现有的 `SafeArea` 因此自动不再重复让位 ——
+          //    包 body 的话这层得自己抹，迟早漏一个页面。
+          // 内容区照旧从顶栏下方开始：`extendBody` 只管底栏那一侧，不掀顶栏。
+          appBar: AppTopBarHost(location: location),
           // 真悬浮：body 铺到屏幕底，底栏是浮在内容之上的一层 ——
           // 内容能从胶囊后面滚过去，底部不再被硬切走 98dp。
           //

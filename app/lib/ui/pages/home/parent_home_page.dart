@@ -2,12 +2,13 @@ import 'dart:async';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../config/family_rules.dart';
 import '../../../core/ledger_csv.dart';
+import '../../../core/ledger_export.dart';
+import '../../../core/time_text.dart';
 import '../../../data/models/ledger_record.dart';
 import '../../../data/models/task_config.dart';
 import '../../../state/family_state.dart';
@@ -98,16 +99,6 @@ List<LedgerRecord> _todayRecords(List<LedgerRecord> records, DateTime now) {
     }
   }
   return (income: income, expense: expense, net: income + expense, count: count, checkins: checkins);
-}
-
-/// 相对时间（对应 Web 版 `relativeTime`）
-String _relativeTime(DateTime at, DateTime now) {
-  final String hh = at.hour.toString().padLeft(2, '0');
-  final String mm = at.minute.toString().padLeft(2, '0');
-  final String day = _dayKey(at);
-  if (day == _dayKey(now)) return '今天 $hh:$mm';
-  if (day == _dayKey(now.subtract(const Duration(days: 1)))) return '昨天 $hh:$mm';
-  return '${at.month}月${at.day}日 $hh:$mm';
 }
 
 /// 带符号金额（与 `LedgerRecord.signedAmount` 同口径）
@@ -349,14 +340,24 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
     }
   }
 
-  /// 导出流水：把同一份 CSV 放进剪贴板（Android 没有浏览器下载，见 `core/ledger_csv.dart`）
+  /// 导出流水：把 CSV 落成真文件 —— 安卓/iOS 交给系统分享面板（用户自己挑存哪 / 发给谁），
+  /// Web 触发浏览器下载。为什么不是直接写「下载」目录，见 `core/ledger_export_io.dart` 开头。
+  ///
+  /// 详细分流见 `core/ledger_export.dart`。这里只负责三件事：空账本别导、
+  /// 成功说清文件在哪、失败如实报错（不静默吞）。
   Future<void> _export(List<LedgerRecord> records) async {
     if (records.isEmpty) {
       _toast('还没有流水可以导出');
       return;
     }
-    await Clipboard.setData(ClipboardData(text: buildLedgerCsv(records)));
-    if (mounted) _toast(exportToastText(records.length));
+    try {
+      final LedgerExportResult result = await saveLedgerCsv(buildLedgerCsv(records));
+      if (mounted) {
+        _toast(ledgerExportToastText(records.length, result), success: true);
+      }
+    } catch (e) {
+      if (mounted) _toast('导出失败：$e', error: true);
+    }
   }
 
   // ---- 页面骨架 ----
@@ -1048,7 +1049,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                             style: TextStyle(fontSize: AppFontSize.sm, color: palette.text),
                           ),
                           Text(
-                            '${_relativeTime(record.createdAt, now)}${_statusSuffix(record)}',
+                            '${relativeDayTime(record.createdAt, now: now)}${_statusSuffix(record)}',
                             style: TextStyle(
                               fontSize: AppFontSize.xs,
                               color: palette.textTertiary,

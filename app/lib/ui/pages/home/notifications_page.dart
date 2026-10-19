@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../config/app_constants.dart';
+import '../../../core/time_text.dart';
 import '../../../data/models/notification_record.dart';
 import '../../../state/family_state.dart';
 import '../../../state/notification_state.dart';
@@ -29,11 +32,31 @@ class NotificationsPage extends StatefulWidget {
 }
 
 class _NotificationsPageState extends State<NotificationsPage> {
-  /// 筛选（全部 / 未读）**不存字段** —— 唯一真相是地址栏的 `filter` 查询参数，
-  /// 在 `build` 里派生（见 [_goFilter] 的写入侧）。
+  /// 地址栏的 `?filter=` 仍是落地时的唯一真相（在 `build` 里派生，见 [_goFilter] 的写入侧）；
+  /// 这个字段只是**设备记忆**：从铃铛 / 首页宫格进来时那些入口不带 query，
+  /// 用它兜底，省得每次都要重选一遍（对应 Web 版的 `useViewState('home.noticeFilter')`）。
+  String? _rememberedFilter;
 
   /// 已经发起过加载的信箱 —— 身份变了要换一格重新拉
   NotifyAudience? _loadedAudience;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadRememberedFilter());
+  }
+
+  Future<void> _loadRememberedFilter() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? saved = prefs.getString(AppConstants.keyNoticeFilter);
+      if (!mounted || saved == null) return;
+      if (saved != 'all' && saved != 'unread') return;
+      setState(() => _rememberedFilter = saved);
+    } catch (_) {
+      // 读不到就当没记过，按「全部」显示
+    }
+  }
 
   bool _markingAll = false;
 
@@ -116,11 +139,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final audience = audienceOf(family.role);
     final items = state.items;
 
-    // 筛选状态的唯一真相：地址栏 `/home/notifications?filter=all|unread`（缺省 all）。
-    // 非法值（手输 / 旧链接）一律回落到 all。
+    // 筛选状态的唯一真相：地址栏 `/home/notifications?filter=all|unread`。
+    // 地址栏没带（铃铛 / 首页宫格这些入口都不带）才回落到设备记忆，再没有就是 all；
+    // 非法值（手输 / 旧链接）同样回落到 all。
     final String rawFilter = GoRouterState.of(context).uri.queryParameters['filter'] ?? '';
+    final String effective = rawFilter.isEmpty ? (_rememberedFilter ?? 'all') : rawFilter;
     final String filter =
-        const <String>{'all', 'unread'}.contains(rawFilter) ? rawFilter : 'all';
+        const <String>{'all', 'unread'}.contains(effective) ? effective : 'all';
     final bool unreadOnly = filter == 'unread';
 
     final visible = unreadOnly
@@ -313,9 +338,20 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   /// 切换筛选：写回地址栏（`context.go` 是 replace 语义，不堆历史），
-  /// 选中态由 URL 派生，所以这里不再 setState。
+  /// 选中态由 URL 派生；同时记进设备，下次从铃铛进来还认这个选择。
   void _goFilter(String filter) {
+    unawaited(_rememberFilter(filter));
     context.go('/home/notifications?filter=$filter');
+  }
+
+  Future<void> _rememberFilter(String filter) async {
+    if (mounted) setState(() => _rememberedFilter = filter);
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString(AppConstants.keyNoticeFilter, filter);
+    } catch (_) {
+      // 存不住不影响这次切换
+    }
   }
 
   Widget _buildFilter(AppPalette palette, int unreadCount, bool unreadOnly) {
@@ -499,7 +535,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 ],
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  _relativeTime(item.createdAt),
+                  relativeDayTime(item.createdAt),
                   style: TextStyle(
                     fontSize: AppFontSize.xs,
                     color: metaColor,
@@ -554,21 +590,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
       case null:
         return palette.textSecondary;
     }
-  }
-
-  /// 相对时间（对着 Web 版的时间显示口径；超过一周就直接写日期）
-  static String _relativeTime(DateTime time) {
-    final now = DateTime.now();
-    final diff = now.difference(time);
-    if (diff.isNegative || diff.inMinutes < 1) return '刚刚';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
-    if (diff.inHours < 24) return '${diff.inHours} 小时前';
-    if (diff.inDays < 7) return '${diff.inDays} 天前';
-    final month = time.month.toString().padLeft(2, '0');
-    final day = time.day.toString().padLeft(2, '0');
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$month-$day $hour:$minute';
   }
 }
 

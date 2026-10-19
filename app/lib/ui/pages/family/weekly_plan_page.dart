@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../../config/family_rules.dart';
 import '../../../core/api_client.dart';
 import '../../../core/api_exception.dart';
+import '../../../core/app_foreground.dart';
 import '../../../core/week.dart';
 import '../../../data/api/plans_api.dart';
 import '../../../data/models/weekly_plan.dart';
@@ -41,7 +42,7 @@ class WeeklyPlanPage extends StatefulWidget {
   State<WeeklyPlanPage> createState() => _WeeklyPlanPageState();
 }
 
-class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
+class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObserver {
   final PlansApi _api = PlansApi(ApiClient());
 
   List<WeeklyPlan> _plans = const <WeeklyPlan>[];
@@ -60,21 +61,41 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // 每分钟走一次：周日晚上挂着页面跨周，周标签要跟着变
     _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
       if (!mounted) return;
-      final next = WeekUtil.currentWeekLabel();
-      if (next == _weekLabel) return;
-      setState(() => _weekLabel = next);
-      unawaited(_init());
+      // 后台不问（对应 Web 版轮询里的 document.hidden 判断），回前台时补一次
+      if (!isAppInForeground) return;
+      _tick();
     });
     unawaited(_init());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
     super.dispose();
+  }
+
+  /// 回到前台立刻补一次：后台期间跳过的 tick 不用再等下一分钟
+  /// （周日晚上退在后台、周一早上打开，这一下就把周标签和新一周的计划补上）。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    _tick();
+  }
+
+  /// 一分钟一跳要做的事：周标签没跨周就到此为止。
+  ///
+  /// 跨周才重新拉（`_init` 是 `POST /api/plans`，幂等但终究是写请求，
+  /// 不值得每次切回前台都打一次；本页数据也只在跨周时才是旧的）。
+  void _tick() {
+    final next = WeekUtil.currentWeekLabel();
+    if (next == _weekLabel) return;
+    setState(() => _weekLabel = next);
+    unawaited(_init());
   }
 
   /// 幂等初始化整周计划（对应 Web 的 ensureWeeklyPlans）

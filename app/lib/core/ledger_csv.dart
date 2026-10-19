@@ -5,9 +5,11 @@ import '../data/models/task_config.dart';
 ///
 /// 家庭账本页与家长版首页共用这一份实现 —— 表头/列序/转义规则写两处迟早写歪。
 ///
-/// 注意：Web 版是「浏览器下载文件」，Flutter 侧（Android 没有下载目录概念，
-/// 又不引 share_plus / path_provider）统一改成把这份文本放进剪贴板，
-/// 家长粘到表格软件里即可。导出的内容本身与 Web 版同构。
+/// 这里只负责**文本**：写文件 / 触发下载交给 `core/ledger_export.dart`
+/// （安卓写进系统「下载」目录，Web 走浏览器下载）。
+///
+/// 注意返回值里**不带 BOM** —— BOM 由 ledger_export 那边补在最终落盘的内容上，
+/// 免得别处引用这份文本时多出一个看不见的字符。
 String buildLedgerCsv(List<LedgerRecord> records) {
   final buffer = StringBuffer();
   buffer.write(_csvRow(<String>['时间', '任务', '类型', '积分', '状态', '备注', '图片']));
@@ -44,6 +46,3 @@ String formatCsvTime(DateTime date) {
   return '${local.year}-${two(local.month)}-${two(local.day)} '
       '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
 }
-
-/// 「导出流水」的统一反馈文案：两种入口说同一句话
-String exportToastText(int count) => '已导出 $count 条记录（CSV 已复制到剪贴板）';

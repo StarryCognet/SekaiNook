@@ -1,5 +1,10 @@
 # SekaiNook 功能对齐审计报告（Flutter 客户端 vs Web 版）
 
+> ⚠️ **本报告写于两个仓库合并之前**（那时 Flutter 端还在 `E:\Git\SekaiNook-App`），
+> 里面的行号与部分结论**已经过时** —— 例如它记的「无全局错误边界」「底部导航少『学习计划』」
+> 「未读角标挂设置 Tab」，在逐项核验时发现都早已修好。
+> **每条问题的最终处置以 [parity-fixes.md](parity-fixes.md) 为准**，本文件只当那份差异清单的出处。
+
 - 被审对象：`E:\Git\SekaiNook-App`（Flutter）与 `E:\Git\SekaiNook`（React + antd + zustand，同一套 Cloudflare Pages Functions 后端）
 - 审计方式：只读逐文件对照，结论全部附 `文件:行号`；已按要求排除 6 条有意差异（`shared_preferences` 代替 `localStorage`、口令摘要存储、裸二进制上传、`fl_chart` 代替 `echarts`、通知轮询 15 秒且退后台跳过、中文文案措辞微调）
 - 审计范围：孩子端首页 / 家长端首页 / 通知页 / 家庭账本 / 周计划 / 设置页 / 身份门 / 花园 8 个菜单，以及 `state/`、`data/`、`core/`、`config/`、`ui/widgets/`、`ui/shell/`、路由层

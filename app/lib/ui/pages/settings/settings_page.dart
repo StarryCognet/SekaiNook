@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../config/app_constants.dart';
 import '../../../config/changelog.dart';
@@ -95,6 +97,10 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _syncingNames = false;
   bool _savingNames = false;
 
+  /// 本机存着的称呼草稿（改了一半、还没保存的那半截）。
+  /// 服务端那份到位时**草稿优先** —— 对应 Web 版的 `readNameDraft(nameTarget)`。
+  ({String call, String nickname})? _nameDraft;
+
   // 家长管理：闲置照片清理
   bool _scanning = false;
   bool _cleaning = false;
@@ -135,6 +141,7 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     _callCtrl.addListener(_onNameInputChanged);
     _nicknameCtrl.addListener(_onNameInputChanged);
+    unawaited(_loadNameDraft());
     // 版本日志以云端为准（D1 那张表网页版和 App 共用）；读不到就继续用本机那份，不阻塞渲染
     unawaited(_loadChangelog());
     // 口令锁定时每秒把倒计时刷出来（和引导页同一套口径）
@@ -162,6 +169,68 @@ class _SettingsPageState extends State<SettingsPage> {
     if (_syncingNames) return;
     if (!mounted) return;
     setState(() => _namesTouched = true);
+    unawaited(_writeNameDraft());
+  }
+
+  /// 草稿记在谁名下：家长编辑的是**孩子**的称呼，孩子编辑的是**妈妈**的
+  /// （与 Web 版 `nameTarget` 同口径）。
+  String get _nameDraftKey {
+    final bool isParent = context.read<FamilyState>().role == FamilyRole.parent;
+    return '${AppConstants.keyNameDraftPrefix}:${isParent ? 'kid' : 'mom'}';
+  }
+
+  /// 读本机草稿。读不出来 / 格式坏了都当没草稿，不影响页面。
+  Future<void> _loadNameDraft() async {
+    if (!mounted) return;
+    ({String call, String nickname})? draft;
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? raw = prefs.getString(_nameDraftKey);
+      if (raw != null) {
+        final Object? parsed = jsonDecode(raw);
+        if (parsed is Map) {
+          final Object? call = parsed['call'];
+          final Object? nickname = parsed['nickname'];
+          if (call is String && nickname is String) {
+            draft = (call: call, nickname: nickname);
+          }
+        }
+      }
+    } catch (_) {
+      // 当没草稿
+    }
+    if (!mounted) return;
+    _nameDraft = draft;
+    // 草稿到了就填进输入框：服务端那份可能已经先填过一次，这里以草稿为准
+    if (draft != null && !_namesTouched) {
+      _syncingNames = true;
+      _callCtrl.text = draft.call;
+      _nicknameCtrl.text = draft.nickname;
+      _syncingNames = false;
+      _namesInitialized = true;
+    }
+  }
+
+  /// 有改动就自动留一份草稿（对应 Web 版 `writeNameDraft`）。
+  /// 存不下就算了，绝不拦着用户输入。
+  Future<void> _writeNameDraft() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _nameDraftKey,
+        jsonEncode(<String, String>{'call': _callCtrl.text, 'nickname': _nicknameCtrl.text}),
+      );
+      _nameDraft = (call: _callCtrl.text, nickname: _nicknameCtrl.text);
+    } catch (_) {}
+  }
+
+  /// 已经进服务端了，草稿退休（对应 Web 版 `clearNameDraft`）。
+  Future<void> _clearNameDraft() async {
+    _nameDraft = null;
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_nameDraftKey);
+    } catch (_) {}
   }
 
   /// 读云端版本日志（`GET /api/changelog`）。
@@ -185,8 +254,20 @@ class _SettingsPageState extends State<SettingsPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final settings = context.read<SettingsState>();
-    // 云端称呼到了就填进输入框；用户已经动过手就不再覆盖
+    // 云端称呼到了就填进输入框；用户已经动过手就不再覆盖。
+    // 本机草稿优先于服务端那份（改了一半就走开也不丢，与 Web 版同口径）。
     if (settings.ready && !_namesTouched) {
+      final ({String call, String nickname})? draft = _nameDraft;
+      if (draft != null) {
+        if (!_namesInitialized) {
+          _namesInitialized = true;
+          _syncingNames = true;
+          _callCtrl.text = draft.call;
+          _nicknameCtrl.text = draft.nickname;
+          _syncingNames = false;
+        }
+        return;
+      }
       if (!_namesInitialized || !_sameAsInputs(settings.names)) {
         _namesInitialized = true;
         _fillNameInputs(settings.names);
@@ -401,6 +482,7 @@ class _SettingsPageState extends State<SettingsPage> {
       final saved = await settings.save(patch);
       if (!mounted) return;
       final who = isParent ? FamilyWho.kid : FamilyWho.mom;
+      unawaited(_clearNameDraft()); // 已经进服务端了，草稿退休
       setState(() {
         _savingNames = false;
         _namesTouched = false;

@@ -52,6 +52,7 @@ dependencies:
   # 以及把下载好的 APK 落到本机临时目录（见 lib/core/apk_installer_io.dart）
   package_info_plus: ^10.2.2
   path_provider: ^2.1.6
+  share_plus: ^13.3.1
 
 dev_dependencies:
   flutter_test:

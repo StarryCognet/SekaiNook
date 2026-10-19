@@ -14,6 +14,7 @@ import '../../../config/garden_config.dart';
 import '../../../core/api_client.dart';
 import '../../../core/image_compress.dart';
 import '../../../core/task_rules.dart';
+import '../../../core/time_text.dart';
 import '../../../data/api/ledger_api.dart';
 import '../../../data/api/upload_api.dart';
 import '../../../data/models/custom_task.dart';
@@ -138,16 +139,6 @@ List<LedgerRecord> _todayRecords(List<LedgerRecord> records, DateTime now) {
     }
   }
   return (income: income, expense: expense, net: income + expense, count: count, checkins: checkins);
-}
-
-/// 相对时间（对应 Web 版 `relativeTime`）
-String _relativeTime(DateTime at, DateTime now) {
-  final String hh = at.hour.toString().padLeft(2, '0');
-  final String mm = at.minute.toString().padLeft(2, '0');
-  final String day = _dayKey(at);
-  if (day == _dayKey(now)) return '今天 $hh:$mm';
-  if (day == _dayKey(now.subtract(const Duration(days: 1)))) return '昨天 $hh:$mm';
-  return '${at.month}月${at.day}日 $hh:$mm';
 }
 
 /// 带符号金额（与 `LedgerRecord.signedAmount` 同口径）
@@ -542,11 +533,6 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     final int learningLeft = gardenTotal - gardenDone;
     final int earnedBadges = garden.badges.where((garden_models.Badge b) => b.earned).length;
 
-    // 今日任务进度（只统计设了日限的任务，与账本页同口径）
-    final TaskProgress progress = todayProgress(FamilyRules.taskRules, family.records, now: now);
-    final int progressDone = progress.done;
-    final int progressTotal = progress.total;
-
     final ({int income, int expense, int net, int count, int checkins}) week =
         _recentSummary(family.records, 7, now);
     final int todayCount = _todayRecords(family.records, now).length;
@@ -661,8 +647,8 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             _gapSm,
             EnterBox(
               index: 8,
-              child: _moneyCard(palette, momName, family.balance, week, todayCount, progressDone,
-                  progressTotal, quickTasks, family.records, now),
+              child: _moneyCard(palette, momName, family.balance, week, todayCount,
+                  quickTasks, family.records, now),
             ),
             _gapSm,
             EnterBox(
@@ -1108,7 +1094,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
-                    _relativeTime(record.createdAt, now),
+                    relativeDayTime(record.createdAt, now: now),
                     style: TextStyle(
                       fontSize: AppFontSize.xs,
                       color: palette.textTertiary,
@@ -1291,8 +1277,6 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     num balance,
     ({int income, int expense, int net, int count, int checkins}) week,
     int todayCount,
-    int progressDone,
-    int progressTotal,
     List<TaskConfig> quickTasks,
     List<LedgerRecord> records,
     DateTime now,
@@ -1316,8 +1300,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             ],
           ),
           Text(
-            '攒够可以跟$momName兑现 · 今日任务 $progressDone/$progressTotal · '
-            '今天打卡 $todayCount 次',
+            '攒够可以跟$momName兑现 · 今天打卡 $todayCount 次',
             style: TextStyle(
               fontSize: AppFontSize.xs,
               color: palette.textSecondary,
@@ -1655,7 +1638,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                 ),
               ),
               Text(
-                _relativeTime(notice.createdAt, now),
+                relativeDayTime(notice.createdAt, now: now),
                 style: TextStyle(
                   fontSize: AppFontSize.xs,
                   color: palette.textTertiary,
@@ -2041,22 +2024,28 @@ class _CheckInSheetState extends State<_CheckInSheet> {
         _photo = compressed;
         _photoUrl = null;
       });
-      await _uploadPhoto();
     } catch (_) {
       if (mounted) _toast('照片选不了，换一张试试');
     }
   }
 
-  Future<void> _uploadPhoto() async {
+  /// 上传当前选中的照片，成功返回它的地址（没选照片则返回 null）。
+  ///
+  /// **只在提交那一刻调用**（对应 Web 版 `CheckInModal`）：选完图就上传的话，
+  /// 用户选了又取消就会在图床上留下永远没人引用的孤儿图片 ——
+  /// 那正是设置页里「打卡照片清理」要扫的东西。
+  Future<String?> _uploadPhoto() async {
     final Uint8List? bytes = _photo;
-    if (bytes == null) return;
+    if (bytes == null) return null;
     setState(() => _uploading = true);
     try {
       final UploadResult result = await widget.upload.upload(bytes);
-      if (!mounted) return;
+      if (!mounted) return null;
       setState(() => _photoUrl = result.url);
+      return result.url;
     } catch (e) {
       if (mounted) _toast('照片没传上去：$e', error: true);
+      return null;
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -2068,27 +2057,38 @@ class _CheckInSheetState extends State<_CheckInSheet> {
       _toast('写一句原因，让女儿知道为什么扣分', warning: true);
       return;
     }
-    if (_needPhoto && _photoUrl == null) {
-      _toast(
-        _photo == null
-            ? '这项任务要拍一张照片，或者从相册选一张，才能提交'
-            : '照片还没传上去，稍等一下再提交',
-        warning: true,
-      );
+    if (_needPhoto && _photo == null) {
+      _toast('这项任务要拍一张照片，或者从相册选一张，才能提交', warning: true);
       return;
     }
     setState(() => _submitting = true);
     try {
+      // 照片到这一步才上传（对应 Web 版 CheckInModal）：选了又取消不会在图床留孤儿图
+      String? imageUrl = _photoUrl;
+      if (_photo != null && imageUrl == null) {
+        imageUrl = await _uploadPhoto();
+        if (imageUrl == null) {
+          // 失败的提示已经由 _uploadPhoto 报过，这里只把按钮解冻
+          if (mounted) setState(() => _submitting = false);
+          return;
+        }
+      }
       await widget.onSubmitted(
         widget.task,
         note: note.isEmpty ? null : note,
-        imageUrl: _photoUrl,
+        imageUrl: imageUrl,
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
+      // 记账可能已经成功了，只是审批那一步没走通（LedgerApprovalException）。
+      // 这种情况也要把账本拉一次，否则孩子看不到自己刚交的申请，
+      // 会以为没交上而重复提交（对应 Web 版 CheckInModal 的处理）。
+      if (e is LedgerApprovalException) {
+        unawaited(context.read<FamilyState>().loadLedger());
+      }
       _toast(
         e is LedgerApprovalException ? LedgerApprovalException.message : '$e',
         error: true,
@@ -2140,7 +2140,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Text(
-                '打卡/申请打卡：${task.name}',
+                '${widget.isParent ? '打卡' : '申请打卡'}：${task.name}',
                 style: TextStyle(
                   fontSize: AppFontSize.md,
                   fontWeight: FontWeight.w700,
@@ -2288,7 +2288,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   FilledButton(
-                    onPressed: _submitting || _uploading || (_needPhoto && _photoUrl == null)
+                    onPressed: _submitting || (_needPhoto && _photo == null)
                         ? null
                         : () => unawaited(_submit()),
                     child: Text(
