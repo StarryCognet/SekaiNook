@@ -115,8 +115,12 @@ Flutter Web 产物是纯静态文件，丢给任意静态托管即可。它默�
 （`https://sn.starrymiku.com`，属跨域调用，后端已加 CORS 中间件）：
 
 ```bash
-# Cloudflare Pages（首次会创建新项目）
-npx wrangler pages deploy build/web --project-name sekainook-app
+# 在仓库根跑（app/ 的上一级）—— 构建 + 部署一条命令
+npm run web:deploy
+
+# 等价于：
+#   cd app && flutter build web --release --no-pub --dart-define=API_BASE=https://sn.starrymiku.com
+#   npx wrangler pages deploy app/build/web --project-name sekainook-app
 ```
 
 > 应用用的是 hash 路由（`#/home`），所以**不需要** SPA 的 `_redirects` 兜底规则。

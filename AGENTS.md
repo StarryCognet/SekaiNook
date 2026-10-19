@@ -1,7 +1,15 @@
 # SekaiNook · 仓库与发版约定（给 AI 助手看）
 
-本目录 `E:\Git\SekaiNook` 是 **网页端 + 后端**（Cloudflare Pages Functions + D1 + R2 + React 18）。
-Flutter 客户端（Android + Web）在隔壁：**`E:\Git\SekaiNook-App`**，它有自己的 `AGENTS.md`，改动那边的代码先读它。
+本仓库 `E:\Git\SekaiNook` 同时住着三样东西：
+
+| 目录 | 是什么 | 规则 |
+|---|---|---|
+| `app/` | **Flutter 客户端**（Android + Web 一套代码） | 看 `app/AGENTS.md`，改那里的代码先读它 |
+| `functions/` `migrations/` `workers/` | **后端**（Cloudflare Pages Functions + D1 + R2） | 看 `.trae/rules/project_rules.md` |
+| `src/` `public/` | React 版网页端（过渡期保留） | 切到 Flutter Web 后退役 |
+
+> 2026-10 已把原先游离的 `E:\Git\SekaiNook-App` 用 `git subtree` 并入 `app/`（完整历史保留）。
+> 原目录在文件系统上还留着当退路，但**不再是开发入口** —— 所有命令都在本仓库根执行。
 
 后端接口/建表/前端调用的规范见 `.trae/rules/project_rules.md` 与 `README.md` 的「开发规则（铁律）」，不在这里重复。
 
@@ -10,21 +18,23 @@ Flutter 客户端（Android + Web）在隔壁：**`E:\Git\SekaiNook-App`**，它
 ## ⭐ 发版（更新推送）—— 改完 Flutter 端就不能忘
 
 家里人用的是**手机上装的 APK**。Flutter 端改完代码**不发版 = 用户手机上毫无变化**。
-版本日志的唯一真源在**本仓库** `src/config/changelog.ts`，所以发版必然跨这两个仓库：
+版本日志的唯一真源是 `src/config/changelog.ts`，所有命令都在**仓库根**执行：
 
 ```powershell
-# 1) 本仓库：改 APP_VERSION + 在 CHANGELOG 头部插一条 {version, date, title, changes}
-#    多条需求可以拆成两版发，让每版日志都名副其实
 cd E:\Git\SekaiNook
-npm run changelog:fallback     # → 重新生成 E:\Git\SekaiNook-App\lib\config\changelog.dart（别手改）
+
+# 1) 改 src/config/changelog.ts：APP_VERSION + 在 CHANGELOG 头部插一条 {version, date, title, changes}
+#    多条需求可以拆成两版发，让每版日志都名副其实
+npm run changelog:fallback     # → 重新生成 app/lib/config/changelog.dart（别手改）
 npm run changelog:sync         # → 写进线上 D1；核对 https://sn.starrymiku.com/api/changelog
 
-# 2) App 仓库：升 pubspec.yaml 的 version（+ 后面必须递增，那是安卓 versionCode）
-cd E:\Git\SekaiNook-App
-$env:ANDROID_HOME='E:\IDE\Android\Sdk'
-.\tool\publish_apk.ps1 -Changelog '这一版改了什么（会显示在更新弹窗里）'
+# 2) 升 app/pubspec.yaml 的 version（+ 后面必须递增，那是安卓 versionCode）
 
-# 3) 核对线上清单与本地 APK 完全一致
+# 3) 打包发布（脚本自带 Set-Location，从仓库根调即可）
+$env:ANDROID_HOME='E:\IDE\Android\Sdk'
+.\app\tool\publish_apk.ps1 -Changelog '这一版改了什么（会显示在更新弹窗里）'
+
+# 4) 核对线上清单与本地 APK 完全一致
 Invoke-RestMethod https://pub.starrymiku.com/sekainook/latest.json
 ```
 
@@ -40,7 +50,7 @@ Invoke-RestMethod https://pub.starrymiku.com/sekainook/latest.json
 cd E:\Git\SekaiNook\.icon-work
 python icon-v3.py          # 改几何 / 配色：出 v3\taper-detail.png 与 v3\palettes.png 供挑选
 python export-v3.py cyber  # 导出 out\ 全套尺寸（cyber / bsky / klein / plum / emerald … 也可用序号）
-python land.py --apply     # 落进两个仓库（覆盖前自动备份到 .icon-work\backup\<时间戳>\）
+python land.py --apply     # 落进 app/ 与 public/（覆盖前自动备份到 .icon-work\backup\<时间戳>\）
 cp icon-v3.svg E:\Git\SekaiNook\public\icon.svg   # 网页端矢量版
 ```
 
@@ -56,11 +66,14 @@ cp icon-v3.svg E:\Git\SekaiNook\public\icon.svg   # 网页端矢量版
 
 ## 别忘的两件事
 
-- **签名库在 App 仓库**：`android/app/sekainook-release.jks` + `android/app/key.properties`（都在 `.gitignore` 里）。
+- **签名库在 `app/android/`**：`app/android/app/sekainook-release.jks` + `app/android/app/key.properties`（都在 `.gitignore` 里）。
   丢了就再也无法覆盖升级，只能全家卸载重装 —— 别删、别覆盖，提醒用户备份。
 - **`versionCode` 必须变大**：只改 `versionName` 不改 `+N`，没人会收到更新；Flutter 的 `--split-per-abi` 会给版本号加
-  `1000 × ABI 序号` 偏移，所以发版脚本固定单 ABI 构建（详见 App 仓库 `docs/android-update.md` 第 6 节）。
+  `1000 × ABI 序号` 偏移，所以发版脚本固定单 ABI 构建（详见 `app/docs/android-update.md` 第 6 节）。
 
-## 网页版不用发版
+## 网页端
 
-网页版 `git push` 后由 Cloudflare Pages 自动构建，用户刷新页面就是最新版 —— 上面这一整套只为安卓端。
+- **React 版（当前主域名 `sn.starrymiku.com`）**：`git push` 后由 Cloudflare Pages 自动构建，用户刷新就是最新版。
+  ⚠️ 该项目的 Git 集成监听**整个仓库** —— 改了 `app/` 再 push 也会触发一次构建（白烧构建次数）。
+- **Flutter Web 版**（预览 `sekainook-app.pages.dev`）：纯静态产物，手动部署 —— `npm run web:deploy`。
+- 上面那套 APK 发版流程只为安卓端。

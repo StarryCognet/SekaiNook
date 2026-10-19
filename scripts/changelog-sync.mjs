@@ -17,7 +17,7 @@
  *   npm run changelog:sync               # 同步到线上库（部署前跑）
  *   npm run changelog:sync -- --local    # 同步到本地库（wrangler pages dev 时用）
  *   npm run changelog:sync -- --dry      # 只生成 SQL、打印命令，不真的写库
- *   npm run changelog:fallback           # 重新生成 Flutter 仓库里那份兜底
+ *   npm run changelog:fallback           # 重新生成 app/ 里那份兜底
  *   npm run changelog:fallback -- --check # 只检查有没有漂移（不写文件，漂移则退出码 1）
  *
  * 环境变量：
@@ -35,7 +35,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SQL_PATH = resolve(ROOT, 'migrations/.changelog-sync.sql');
 const CHANGELOG_TS = resolve(ROOT, 'src/config/changelog.ts');
 const DB_NAME = process.env.SEKAINOOK_DB ?? 'sekainook';
-const APP_DIR = process.env.SEKAINOOK_APP ?? resolve(ROOT, '../SekaiNook-App');
+const APP_DIR = process.env.SEKAINOOK_APP ?? resolve(ROOT, 'app');
 const DART_PATH = resolve(APP_DIR, 'lib/config/changelog.dart');
 
 /* ---------------------------------- 读取 ---------------------------------- */

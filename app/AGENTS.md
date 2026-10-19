@@ -1,7 +1,8 @@
 # SekaiNook App（Flutter 端）· 工作约定
 
-这个仓库是 SekaiNook 的 Flutter 客户端（Android + Flutter Web，一套代码）。
-网页端 / 后端 / 管理端在 `E:\Git\SekaiNook`（Cloudflare Pages + D1 + R2）。
+`app/` 是 SekaiNook 的 Flutter 客户端（Android + Flutter Web，一套代码）。
+它现在是主仓库 **`E:\Git\SekaiNook`** 的子目录（2026-10 用 `git subtree` 并入，完整历史保留），
+后端（Cloudflare Pages Functions + D1 + R2）在同一仓库根的 `functions/`、`migrations/`。
 
 功能面见 `README.md`；应用内更新与发版的完整说明见 `docs/android-update.md`。
 
@@ -12,28 +13,28 @@
 家里人用的是**手机上那个 APK**。只改代码不发版 = 用户手机上**一点变化都没有**。
 做完任何用户看得见的改动，默认把下面这条走完（除非用户明说「先不发」）：
 
-1. **写版本日志**（唯一真源在网页仓库，改一处两端都看得见）
-   `E:\Git\SekaiNook\src\config\changelog.ts`：`APP_VERSION` 改成新版本号，并在 `CHANGELOG` 头部插一条
+1. **写版本日志**（唯一真源在仓库根，改一处两端都看得见）
+   `../src/config/changelog.ts`：`APP_VERSION` 改成新版本号，并在 `CHANGELOG` 头部插一条
    `{ version, date, title, changes: [...] }`。多条需求可以拆成两版发，让每版日志都名副其实。
-2. `cd E:\Git\SekaiNook && npm run changelog:fallback`
-   → 重新生成本仓库 `lib/config/changelog.dart`（本机兜底，**别手改这个文件**）
+2. 在**仓库根**（`E:\Git\SekaiNook`）跑 `npm run changelog:fallback`
+   → 重新生成 `app/lib/config/changelog.dart`（本机兜底，**别手改这个文件**）
 3. `npm run changelog:sync`
    → 写进线上 D1；核对 `https://sn.starrymiku.com/api/changelog` 的 `version` 已经是新版
-4. **升版本号**：本仓库 `pubspec.yaml` 的 `version: 1.31.6+8` → `1.31.7+9`
+4. **升版本号**：`app/pubspec.yaml` 的 `version: <版本>+<N>` → 新版本号 + `N+1`
    （`+` 后面是安卓 `versionCode`，App 就是拿它比大小，**必须递增**）
-5. **发布**
+5. **发布**（命令在仓库根跑；脚本自带 `Set-Location`，从哪儿调都行）
    ```powershell
    $env:ANDROID_HOME='E:\IDE\Android\Sdk'
-   .\tool\publish_apk.ps1 -Changelog '这一版改了什么（这句话会进更新弹窗）'
+   .\app\tool\publish_apk.ps1 -Changelog '这一版改了什么（这句话会进更新弹窗）'
    ```
 6. **核对线上**：`Invoke-RestMethod https://pub.starrymiku.com/sekainook/latest.json` 的
    `versionName` / `versionCode` / `sha256` / `size` 与本地 APK 一致
-   （本地：`build/app/outputs/flutter-apk/app-release.apk`，`aapt2 dump badging` + `Get-FileHash -Algorithm SHA256`）
+   （本地：`app/build/app/outputs/flutter-apk/app-release.apk`，`aapt2 dump badging` + `Get-FileHash -Algorithm SHA256`）
 
 清单 `https://pub.starrymiku.com/sekainook/latest.json`；APK 存 R2 桶 `flclash-updates` 前缀 `sekainook/`（wrangler 已登录，
 `r2 object put` **必须带 `--remote`**，否则只写本地模拟存储）。
 
-> **签名库 `android/app/sekainook-release.jks` 与 `android/app/key.properties` 丢了就再也无法覆盖升级**
+> **签名库 `app/android/app/sekainook-release.jks` 与 `app/android/app/key.properties` 丢了就再也无法覆盖升级**
 > （只能让全家卸载重装）。两者都在 `.gitignore` 里，别删、别覆盖、另行备份。
 
 ---
@@ -47,7 +48,7 @@
 - 导航一律 `context.go(...)`（go_router 的 replace 语义，历史只有一条）。**二级页面要让「系统返回」回上一级，挂 `BackIntentHandler`**（`lib/ui/shell/back_intent.dart`）；不要自己套 `PopScope` —— 外层 `MainShell` 已有一个 `PopScope(canPop: false)`，嵌套会两边同时触发。
 - 卡片一律走 `AppCard`。**别再往卡片上叠 `BackdropFilter` 做毛玻璃/液体玻璃**：1.31.6 试过一版（`GlassSurface` + 出厂毛玻璃），真机实测太卡，1.31.8 已整体回滚（相关文件、设置项、测试、文档全删）。底座导航栏同理 —— 可复用组件也别偷偷读 Provider（它得能在裸 pump 的 widget 测试里跑）。
 - 更新相关的文件别乱动：`lib/state/update_state.dart`（检查/跳过/下载状态机）、`lib/data/models/app_update.dart`（清单字段校验：缺字段、非 https、sha256 非 64 位一律当没读到）、`lib/core/apk_installer*.dart`（条件导入，Web 走 stub）。
-- **图标别手改**：`android/app/src/main/res/mipmap-*`、`web/icons/*`、`web/favicon.png`、`public/icon.svg` 都由网页仓库 `.icon-work/` 的管线生成（`icon-v3.py` → `export-v3.py <配色>` → `land.py --apply`），比例与做法见那边 `AGENTS.md` 的「改图标」一节。
+- **图标别手改**：`android/app/src/main/res/mipmap-*`、`web/icons/*`、`web/favicon.png`、`public/icon.svg` 都由仓库根 `.icon-work/` 的管线生成（`icon-v3.py` → `export-v3.py <配色>` → `land.py --apply`），比例与做法见根 `AGENTS.md` 的「改图标」一节。
 
 ## 交付习惯
 
