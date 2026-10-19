@@ -7,7 +7,7 @@
  * 把它推上库。这个脚本就是这个口子，做两件事：
  *
  *   sync      读 src/config/changelog.ts → 生成 SQL → 交给 wrangler d1 execute
- *   fallback  读 src/config/changelog.ts → 生成 Flutter 那份兜底（lib/config/changelog.dart）
+ *   fallback  读 src/config/changelog.ts → 生成 app/ 里那份兜底（app/lib/config/changelog.dart）
  *
  * 为什么是「UPSERT + 删多余」而不是「先清空再灌」：
  *   两条语句之间有一个空窗，这时候正好有人打开设置页，就会看到空日志（虽然会退回兜底，
@@ -22,7 +22,7 @@
  *
  * 环境变量：
  *   SEKAINOOK_DB   D1 库名，默认 sekainook（见 wrangler.jsonc 的 d1_databases）
- *   SEKAINOOK_APP  Flutter 仓库路径，默认 ../SekaiNook-App
+ *   SEKAINOOK_APP  Flutter 目录路径，默认仓库内的 app/（指到别处仍可用它覆盖）
  */
 
 import { spawnSync } from 'node:child_process';

@@ -1,7 +1,7 @@
 /**
  * 全局中间件：**只做 CORS，不碰业务逻辑**。
  *
- * 为什么需要：Flutter Web 版（独立仓库 SekaiNook-App）与 Web 版不是同一个 origin，
+ * 为什么需要：Flutter Web 版（app/）与 React 版（src/）部署在两个 Pages 项目、不是同一个 origin，
  * 浏览器会拦跨域请求 —— 而 functions/ 下此前只有 /api/images/[[key]].ts 设了 CORS 头。
  * 本文件只追加响应头、应答 OPTIONS 预检，**不读数据库、不写数据库、不做任何鉴权、
  * 不改任何状态码与响应体**（仓库铁律「不引入鉴权中间件」针对的是鉴权，这里刻意不做鉴权）。
