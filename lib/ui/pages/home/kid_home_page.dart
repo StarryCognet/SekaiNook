@@ -12,7 +12,6 @@ import '../../../config/app_constants.dart';
 import '../../../config/family_rules.dart';
 import '../../../config/garden_config.dart';
 import '../../../core/api_client.dart';
-import '../../../core/api_exception.dart';
 import '../../../core/image_compress.dart';
 import '../../../core/task_rules.dart';
 import '../../../data/api/ledger_api.dart';
@@ -29,6 +28,7 @@ import '../../../state/notification_state.dart';
 import '../../../state/settings_state.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/tokens.dart';
+import '../../shell/app_nav_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
@@ -212,9 +212,6 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
 
   /// 刚解锁的勋章：有一个就弹一次（仪式感），点掉就没了
   garden_models.Badge? _newBadge;
-
-  /// 正在打卡的「我的任务」id：防连点
-  String? _checkingId;
 
   Timer? _timer;
   bool _refreshing = false;
@@ -443,78 +440,35 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     unawaited(_openCheckInSheet(task));
   }
 
-  /// 我的任务打卡：写一条 `user_task_exec` 流水（预置任务用服务端登记的 id）。
+  /// 打开打卡弹窗（拍照 / 备注 → 压缩 → 上传 → 记账）。
   ///
-  /// ⚠️ 绝不自造 `custom_<ts>` 之类的 id 去写账本 —— 服务端对未知 task_id 一律 403。
-  /// 妈妈加的任务打完卡直接入账；我自己加的要走 pending 等妈妈批，
-  /// 否则就成了「自己加任务自己发钱」，是刷分口子。
-  Future<void> _checkInMyTask(CustomTask task) async {
-    if (_checkingId != null) return;
-    setState(() => _checkingId = task.id);
-    final String momName = context.read<SettingsState>().momName;
-    final FamilyState family = context.read<FamilyState>();
-    // 先把 store 引用取出来：下面有 await，之后再碰 context 会踩 async-gap 警告。
-    final CustomTasksState customTasks = context.read<CustomTasksState>();
-    try {
-      final TaskConfig execTask = task.toExecTask(userTaskExecId: CustomTasksState.userTaskExecId);
-      await family.api.addLedgerRecord(
-        execTask,
-        autoApprove: task.createdBy == TaskCreator.parent,
-      );
-      customTasks.markDone(task.id);
-      try {
-        await family.loadLedger();
-      } catch (_) {
-        // 打卡已经成功，刷新失败不该报成「打卡失败」
-      }
-      if (!mounted) return;
-      // 打卡真的成功了才报喜（提交失败的两条分支都不放）
-      showBurst(context);
-      _toast(
-        task.createdBy == TaskCreator.parent
-            ? '「${task.name}」打卡成功'
-            : '「${task.name}」已提交，等$momName审批',
-        success: true,
-      );
-    } on LedgerApprovalException {
-      // 账其实已经记上了，只是「立即入账」那一步没成功：这条以 pending 躺在待审批里，
-      // 所以本地也要算今天已完成 —— 不然孩子再点一次，只会撞上服务端的同名日限。
-      customTasks.markDone(task.id);
-      try {
-        await family.loadLedger();
-      } catch (_) {
-        // 刷新失败不影响下面的提示
-      }
-      if (!mounted) return;
-      _toast(LedgerApprovalException.message, warning: true);
-    } on ApiException catch (e) {
-      // 服务端的三层日限闸门（同名当日重复 / 当日条数 ≥20 / 当日正分累计 ≥50）都返回 409，
-      // 文案照实提示 —— 本地置灰只是省一次白跑的请求，权威永远在服务端。
-      if (mounted) _toast(e.message, error: true);
-    } catch (_) {
-      if (mounted) _toast('打卡失败，请重试', error: true);
-    } finally {
-      if (mounted) setState(() => _checkingId = null);
-    }
-  }
-
-  /// 打开打卡弹窗（拍照 / 备注 → 压缩 → 上传 → 记账）
-  Future<void> _openCheckInSheet(TaskConfig task) async {
+  /// 「我的任务」与上面的快捷按钮都走这里。`custom` 传进来表示这次打卡来自
+  /// 一条本地任务：妈妈加的 / 两条预置任务即时到账，我自己加的要等妈妈批；
+  /// 提交成功后还要把它标成「今天做过」。
+  Future<void> _openCheckInSheet(TaskConfig task, {CustomTask? custom}) async {
+    // 妈妈加的任务与预置任务走即时到账（与以前 `_checkInMyTask` 的判据一致）
+    final bool isParent = custom?.createdBy == TaskCreator.parent;
     final bool? submitted = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) => _CheckInSheet(
         task: task,
-        isParent: false,
+        isParent: isParent,
         upload: _uploadApi,
         onSubmitted: (TaskConfig submittedTask, {String? note, String? imageUrl}) =>
             context.read<FamilyState>().api.addLedgerRecord(
                   submittedTask,
                   note: note,
                   imageUrl: imageUrl,
+                  autoApprove: isParent,
                 ),
       ),
     );
     if (submitted != true || !mounted) return;
+    // 自定义任务要标「今天做过」：它提交时用的是 user_task_exec，
+    // 账本流水对不上本地 id，少了这一笔标记按钮就一直是可点的
+    if (custom != null) {
+      context.read<CustomTasksState>().markDone(custom.id);
+    }
     // 弹窗里提交真的成功了才报喜
     showBurst(context);
     try {
@@ -523,7 +477,11 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
       // 打卡已经成功，刷新失败不该把成功说成失败
     }
     if (!mounted) return;
-    _toast('已提交，等${context.read<SettingsState>().momName}审批', success: true);
+    final String momName = context.read<SettingsState>().momName;
+    _toast(
+      isParent ? '「${task.name}」打卡成功' : '「${task.name}」已提交，等$momName审批',
+      success: true,
+    );
   }
 
   // ---- 派生值 ----
@@ -615,11 +573,12 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(
+          // 底部让出底栏胶囊（MainShell 开了 extendBody，它浮在内容之上）
+          padding: EdgeInsets.fromLTRB(
             AppSpacing.md,
             AppSpacing.md,
             AppSpacing.md,
-            AppSpacing.xl,
+            AppSpacing.xl + AppNavBar.contentInset(context),
           ),
           children: <Widget>[
             EnterBox(index: 0, child: _hero(palette, now, kidName, garden, earnedBadges)),
@@ -1581,18 +1540,25 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
   ) {
     // 服务端才是权威：这里置灰只是省一次注定 409 的请求
     final bool done = isRecordedToday(task, records, now: now) || customTasks.isDoneToday(task.id);
-    final bool checking = _checkingId == task.id;
-    final String meta = task.kind == CustomTaskKind.preset
+    final String baseMeta = task.kind == CustomTaskKind.preset
         ? '每天可以做一次'
         : task.createdBy == TaskCreator.child
             ? '我加的 · 要${momName}批'
             : '${momName}加的';
+    // 要照片的任务提前说一声，别等点了进去才发现交不了
+    final String meta = task.requirePhoto ? '$baseMeta · 要拍照' : baseMeta;
 
     return Material(
       color: palette.softColor(hasBackground: false),
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: PressInkWell(
-        onTap: done || checking ? null : () => unawaited(_checkInMyTask(task)),
+        // 点一下先开打卡弹窗（拍照 / 备注），不再直接写流水
+        onTap: done
+            ? null
+            : () => unawaited(_openCheckInSheet(
+                  task.toExecTask(userTaskExecId: CustomTasksState.userTaskExecId),
+                  custom: task,
+                )),
         borderRadius: BorderRadius.circular(AppRadius.md),
         child: Container(
           padding: const EdgeInsets.symmetric(
@@ -1625,26 +1591,20 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              if (checking)
-                const SizedBox(
-                  width: AppFontSize.md,
-                  height: AppFontSize.md,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Text(
-                  done ? '✓' : _signed(task.value),
-                  style: TextStyle(
-                    fontSize: AppFontSize.md,
-                    fontWeight: FontWeight.w700,
-                    color: done
-                        ? palette.success
-                        : task.value > 0
-                            ? palette.primary
-                            : palette.danger,
-                    fontFeatures: kTabularNumbers,
-                  ),
+              // 提交态在弹窗里（弹窗自带转圈 / 置灰），这一行只显示结果
+              Text(
+                done ? '✓' : _signed(task.value),
+                style: TextStyle(
+                  fontSize: AppFontSize.md,
+                  fontWeight: FontWeight.w700,
+                  color: done
+                      ? palette.success
+                      : task.value > 0
+                          ? palette.primary
+                          : palette.danger,
+                  fontFeatures: kTabularNumbers,
                 ),
+              ),
             ],
           ),
         ),
@@ -2066,6 +2026,10 @@ class _CheckInSheetState extends State<_CheckInSheet> {
 
   bool get _isDeduct => widget.task.value < 0;
 
+  /// 照片是不是硬门槛：赚钱类必须（含家长勾了「必须添加照片」的自定义任务），
+  /// 消费 / 罚款写清原因即可。判定与网页版共用 core/task_rules.dart。
+  bool get _needPhoto => taskRequiresPhoto(widget.task);
+
   Future<void> _pick(ImageSource source) async {
     try {
       final XFile? picked = await _picker.pickImage(source: source, imageQuality: 90);
@@ -2102,6 +2066,15 @@ class _CheckInSheetState extends State<_CheckInSheet> {
     final String note = _note.text.trim();
     if (_isDeduct && note.isEmpty) {
       _toast('写一句原因，让女儿知道为什么扣分', warning: true);
+      return;
+    }
+    if (_needPhoto && _photoUrl == null) {
+      _toast(
+        _photo == null
+            ? '这项任务要拍一张照片，或者从相册选一张，才能提交'
+            : '照片还没传上去，稍等一下再提交',
+        warning: true,
+      );
       return;
     }
     setState(() => _submitting = true);
@@ -2205,6 +2178,14 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                 ),
               ),
               _gapSm,
+              Text(
+                _needPhoto ? '照片（必填）' : '照片（可选）',
+                style: TextStyle(
+                  fontSize: AppFontSize.sm,
+                  color: _needPhoto ? palette.danger : palette.textSecondary,
+                ),
+              ),
+              _gapXs,
               Row(
                 children: <Widget>[
                   OutlinedButton.icon(
@@ -2220,6 +2201,14 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                   ),
                 ],
               ),
+              // 必填照片还没选：把「为什么按钮点不动」写在这儿
+              if (_needPhoto && _photo == null) ...<Widget>[
+                _gapXs,
+                Text(
+                  '这项任务要拍一张照片，或者从相册选一张，才能提交',
+                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger),
+                ),
+              ],
               if (_photo != null) ...<Widget>[
                 _gapSm,
                 ClipRRect(
@@ -2299,7 +2288,9 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   FilledButton(
-                    onPressed: _submitting ? null : () => unawaited(_submit()),
+                    onPressed: _submitting || _uploading || (_needPhoto && _photoUrl == null)
+                        ? null
+                        : () => unawaited(_submit()),
                     child: Text(
                       _submitting
                           ? '提交中…'
@@ -2326,11 +2317,11 @@ class _HomeSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         AppSpacing.md,
         AppSpacing.md,
         AppSpacing.md,
-        AppSpacing.xl,
+        AppSpacing.xl + AppNavBar.contentInset(context),
       ),
       children: const <Widget>[
         // 顶部 hero：问候 + 日期 + 大数字 + 一行说明

@@ -14,6 +14,7 @@ import '../../../data/api/selftest_api.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
+import '../../shell/app_nav_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
@@ -814,7 +815,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
 
     if (_loading) {
       return ListView(
-        padding: _pagePadding,
+        padding: _pagePadding(context),
         children: <Widget>[
           _header(palette),
           const SizedBox(height: AppSpacing.md),
@@ -836,7 +837,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
 
     if (manifest == null) {
       return ListView(
-        padding: _pagePadding,
+        padding: _pagePadding(context),
         children: <Widget>[
           _header(palette),
           const SizedBox(height: AppSpacing.md),
@@ -848,7 +849,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
     }
 
     return ListView(
-      padding: _pagePadding,
+      padding: _pagePadding(context),
       children: <Widget>[
         _header(palette),
         const SizedBox(height: AppSpacing.xs),
@@ -1544,12 +1545,12 @@ class _SelftestPanelState extends State<SelftestPanel> {
 
 // -------------------------------------------------------------------- 小零件
 
-const EdgeInsets _pagePadding = EdgeInsets.fromLTRB(
-  AppSpacing.md,
-  AppSpacing.sm,
-  AppSpacing.md,
-  AppSpacing.xl,
-);
+EdgeInsets _pagePadding(BuildContext context) => EdgeInsets.fromLTRB(
+      AppSpacing.md,
+      AppSpacing.sm,
+      AppSpacing.md,
+      AppSpacing.xl + AppNavBar.contentInset(context),
+    );
 
 /// 卡片标题（与设置页里那几个卡片的标题同款）
 class _CardHead extends StatelessWidget {

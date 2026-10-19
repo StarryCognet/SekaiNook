@@ -13,11 +13,22 @@ abstract final class AppConstants {
   /// 后端根地址（不带尾斜杠）
   static const String apiBase = String.fromEnvironment(
     'API_BASE',
-    defaultValue: 'https://sekainook.pages.dev',
+    defaultValue: 'https://sn.starrymiku.com',
   );
 
   /// 单次请求超时（与 Web 版 DEFAULT_TIMEOUT_MS 一致）
   static const Duration requestTimeout = Duration(milliseconds: 12000);
+
+  /// 应用内更新的清单地址：Cloudflare R2 上的一个静态 `latest.json`，
+  /// 由 `tool/publish_apk.ps1` 发布（和 APK 放在一起，见 docs/android-update.md）。
+  ///
+  /// 走的是独立域名，不经过自家 API —— 更新这件事必须在 API 挂掉时也能用。
+  /// 构建时可覆盖，方便对着本地文件试：
+  /// `flutter build apk --dart-define=UPDATE_MANIFEST_URL=http://127.0.0.1:8788/latest.json`
+  static const String appUpdateManifestUrl = String.fromEnvironment(
+    'UPDATE_MANIFEST_URL',
+    defaultValue: 'https://pub.starrymiku.com/sekainook/latest.json',
+  );
 
   /// 通知信箱轮询间隔（与 Web 版一致：10 秒）
   static const Duration notificationPollInterval = Duration(seconds: 10);
@@ -94,4 +105,19 @@ abstract final class AppConstants {
 
   /// 准时模式（精确闹钟；关着时用省电模式，到点可能晚几分钟）
   static const String keyLocalNotifyExact = 'sekainook_local_notify_exact';
+
+  // ---- 应用内更新 ----
+
+  /// 用户点过「以后再说」的那个版本号（如 `1.31.1`）。
+  /// 效果只是**不再自动弹**：手动点「检查更新」照样能装。
+  static const String keySkipUpdateVersion = 'sekainook_skip_update_version';
+
+  /// 「自动检测更新」开关。没写过这个键时按开处理（默认开）。
+  static const String keyAutoCheckUpdate = 'sekainook_auto_check_update';
+
+  // ---- 外观 ----
+
+  /// 底部悬浮胶囊的不透明度（0.5 ~ 1.0）。
+  /// 没写过这个键 = 没调过 = 按 1.0（完全不透明）处理。
+  static const String keyNavBarOpacity = 'sekainook_nav_opacity';
 }

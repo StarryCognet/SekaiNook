@@ -45,6 +45,8 @@ class CustomTasksState extends ChangeNotifier {
   ];
 
   /// 预置任务定义（`createdBy` 硬编码 parent，这才是它们即时到账的根因）
+  ///
+  /// `requirePhoto` 默认 true（两条都是学习任务，照规矩要带照片才算完成）。
   static const List<CustomTask> presetTasks = <CustomTask>[
     CustomTask(
       id: 'custom:english_words10',
@@ -54,6 +56,7 @@ class CustomTasksState extends ChangeNotifier {
       createdBy: TaskCreator.parent,
       createdAt: '',
       kind: CustomTaskKind.preset,
+      requirePhoto: true,
     ),
     CustomTask(
       id: 'custom:poem2',
@@ -63,6 +66,7 @@ class CustomTasksState extends ChangeNotifier {
       createdBy: TaskCreator.parent,
       createdAt: '',
       kind: CustomTaskKind.preset,
+      requirePhoto: true,
     ),
   ];
 
@@ -152,6 +156,8 @@ class CustomTasksState extends ChangeNotifier {
       createdAt: DateTime.now().toUtc().toIso8601String(),
       kind: input.kind,
       repeatDaily: input.repeatDaily,
+      // 家长勾的「必须添加照片」只在赚钱类上生效；扣分类不需要照片
+      requirePhoto: type == TaskType.earning ? input.requirePhoto : false,
     );
 
     // 同 id 覆盖且挪到末尾
@@ -196,6 +202,7 @@ class CustomTasksState extends ChangeNotifier {
         createdAt: DateTime.now().toUtc().toIso8601String(),
         kind: preset.kind,
         repeatDaily: preset.repeatDaily,
+        requirePhoto: preset.requirePhoto,
       ));
       changed = true;
     }

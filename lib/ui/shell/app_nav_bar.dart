@@ -43,6 +43,7 @@ class AppNavBar extends StatefulWidget {
     required this.selectedIndex,
     required this.onSelected,
     this.hasBackground = false,
+    this.opacity = 1,
   });
 
   final List<AppNavDestination> destinations;
@@ -52,18 +53,51 @@ class AppNavBar extends StatefulWidget {
   /// 用户设了自定义背景图时用半透明卡片底，让照片透出来。
   final bool hasBackground;
 
+  /// 胶囊底色的不透明度：1 = 完全不透明（出厂默认）。
+  ///
+  /// 由设置页「底栏不透明度」控制（[ThemeState.navBarOpacity]）；调低后能从
+  /// 胶囊后面看到滚过去的内容 —— 前提是外层 `Scaffold` 开了 `extendBody`。
+  final double opacity;
+
+  // ---- 几何（对外公开：页面算「底部要让出多少」要用） ----
+
+  /// 条内可用高度（不含自身 padding）
+  static const double innerHeight = 58;
+  static const double barPadding = 4;
+
+  /// 与屏幕两侧的留白 —— 让它浮起来，而不是贴住边框
+  static const double edgeMargin = AppSpacing.md;
+  static const double bottomMargin = AppSpacing.sm;
+
+  /// 胶囊实高
+  static const double barHeight = innerHeight + barPadding * 2;
+
+  /// 真悬浮（`extendBody: true`）时，页面滚动列表底部要让出的高度。
+  ///
+  /// 开了 `extendBody` 之后内容区铺到屏幕底、胶囊浮在内容之上，所以列表必须
+  /// **自己**留出「系统手势条 + 离底间距 + 胶囊高 + 一点呼吸」——
+  /// 否则滚到底时最后一条会被胶囊压住。
+  ///
+  /// 手势条高度读的是 [`MediaQuery.viewPaddingOf`]，不是 `paddingOf`：
+  /// `padding` 会被外面任意一层 `SafeArea` 消费成 0（消费完就没了），
+  /// 而 `viewPadding` 始终是屏幕自己的安全区原值 —— 手势条该让多少，
+  /// 不该取决于外面套了几层 `SafeArea`。
+  static double contentInset(BuildContext context) =>
+      MediaQuery.viewPaddingOf(context).bottom + bottomMargin + barHeight + AppSpacing.sm;
+
   @override
   State<AppNavBar> createState() => _AppNavBarState();
 }
 
 class _AppNavBarState extends State<AppNavBar> with TickerProviderStateMixin {
-  /// 条内可用高度（不含自身 padding）
-  static const double _innerHeight = 58;
-  static const double _barPadding = 4;
+  // 几何只有一份真源（[AppNavBar] 的公开常量）—— 页面要拿它算底部让位，
+  // 这里只做本文件内的短别名，别再写第二遍数字。
+  static const double _innerHeight = AppNavBar.innerHeight;
+  static const double _barPadding = AppNavBar.barPadding;
 
   /// 与屏幕两侧的留白 —— 让它浮起来，而不是贴住边框
-  static const double _edgeMargin = AppSpacing.md;
-  static const double _bottomMargin = AppSpacing.sm;
+  static const double _edgeMargin = AppNavBar.edgeMargin;
+  static const double _bottomMargin = AppNavBar.bottomMargin;
 
   /// 透镜随速度拉伸（果冻感）的中心速度与最大拉伸比例
   static const double _jellySpeed = 8;
@@ -256,7 +290,9 @@ class _AppNavBarState extends State<AppNavBar> with TickerProviderStateMixin {
         },
         child: DecoratedBox(
           decoration: ShapeDecoration(
-            color: palette.cardColor(hasBackground: widget.hasBackground),
+            color: palette
+                .cardColor(hasBackground: widget.hasBackground)
+                .withValues(alpha: widget.opacity),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.full),
             ),

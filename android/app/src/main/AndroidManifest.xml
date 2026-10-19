@@ -8,11 +8,15 @@
     <!-- 准时模式（设置里可开关）：安卓 12+ 要用户自己允许「闹钟和提醒」，
          不申请也能用，只是到点可能晚几分钟（省电模式下走 inexact） -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <!-- 应用内更新：安卓 8+ 安装 APK 必须先由用户允许「安装未知应用」，
+         首次点更新会跳到系统的授权页，回来再点一次就装了 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
         android:label="SekaiNook"
         android:name="${applicationName}"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -50,6 +54,17 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
+        <!-- 应用内更新：下载好的 APK 存在 app 私有缓存目录里，系统安装器读不到 file://，
+             必须经 FileProvider 换成带临时读权限的 content:// 才能调起安装 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

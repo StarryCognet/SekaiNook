@@ -1,7 +1,22 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// 正式签名放在 android/app/key.properties（已被 .gitignore 忽略）：
+//   storeFile=sekainook-release.jks / storePassword=… / keyAlias=… / keyPassword=…
+// 换机器或 CI 上想发正式包，把 .jks 和这份 properties 一起拷过去即可 —— 绝不要重新生成，
+// 换了密钥的包在手机上覆盖安装会直接失败（签名不一致）。
+val keystorePropertiesFile = file("key.properties")
+val hasReleaseSigning = keystorePropertiesFile.exists()
+val keystoreProperties = Properties().apply {
+    if (hasReleaseSigning) {
+        FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
 }
 
 android {
@@ -32,11 +47,28 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        // 只有拿到 key.properties 才建这个配置；没有就退回 debug 签名，
+        // 这样别的机器上 `flutter run --release` 依旧能跑（但打出来的包不能发版）。
+        if (hasReleaseSigning) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // 正式包用 android/app/sekainook-release.jks 签名；缺 key.properties 时退回 debug 签名，
+            // 只够本机调试 —— tool/publish_apk.ps1 会拒绝上传 debug 签名的包。
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

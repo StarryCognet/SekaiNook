@@ -58,6 +58,7 @@ class TaskConfig {
     this.description,
     this.dailyLimit,
     this.window,
+    this.requirePhoto,
   });
 
   final String id;
@@ -72,6 +73,13 @@ class TaskConfig {
   /// 每日次数上限；null = 不限次
   final int? dailyLimit;
   final TaskWindow? window;
+
+  /// 提交这条任务是否必须带一张照片（拍照 / 相册）。
+  ///
+  /// null = 按类型兜底（赚钱类必须，消费 / 罚款不强制），判定统一走
+  /// `core/task_rules.dart` 的 `taskRequiresPhoto`；自定义任务由家长在
+  /// 「添加任务」里勾选，原样带到这里。
+  final bool? requirePhoto;
 
   factory TaskConfig.fromJson(Map<String, dynamic> json) => TaskConfig(
         id: (json['id'] ?? '') as String,
@@ -98,6 +106,7 @@ class TaskConfig {
     String? description,
     int? dailyLimit,
     TaskWindow? window,
+    bool? requirePhoto,
   }) =>
       TaskConfig(
         id: id ?? this.id,
@@ -108,6 +117,7 @@ class TaskConfig {
         description: description ?? this.description,
         dailyLimit: dailyLimit ?? this.dailyLimit,
         window: window ?? this.window,
+        requirePhoto: requirePhoto ?? this.requirePhoto,
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{

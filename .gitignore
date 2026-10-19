@@ -46,3 +46,12 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# wrangler 本地状态（发布 APK 时生成）
+.wrangler/
+
+# 图标工作目录（本地生成脚本与候选图，不入库）
+.icon-work/
+
+# 本地临时目录（截图 / 校验产物，不入库）
+.tmp-*/

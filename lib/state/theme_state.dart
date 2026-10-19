@@ -22,6 +22,7 @@ class ThemeState extends ChangeNotifier {
   })  : _prefs = prefs,
         _api = settingsApi {
     _themeId = _loadThemeId();
+    _navOpacity = _loadNavOpacity();
     // 首屏就把当前这套登记进它所属的深/浅格，免得第一次点切换时没有可回的目标。
     // 移植时这一句千万别漏 —— 它是「第一次点切换会跳错」的根因修复。
     _rememberBrightness(_themeId);
@@ -44,6 +45,39 @@ class ThemeState extends ChangeNotifier {
   String get background => _background;
 
   bool get hasBackground => _background.isNotEmpty;
+
+  // ---- 底栏胶囊的不透明度 ----
+
+  /// 完全不透明 —— 出厂默认
+  static const double navOpacityOpaque = 1;
+
+  /// 下限。再低胶囊几乎看不见，图标与文字会失去底色衬托，对比度掉得厉害。
+  static const double navOpacityMin = 0.5;
+
+  double _navOpacity = navOpacityOpaque;
+
+  /// 底部悬浮胶囊的不透明度：1.0 = 实心（默认），越小越能透出从底下滚过的内容。
+  ///
+  /// **存本机**：这是「这台设备看起来怎么样」的偏好，与主题同类，不跨设备同步。
+  double get navBarOpacity => _navOpacity;
+
+  double _loadNavOpacity() {
+    final raw = _prefs.getDouble(AppConstants.keyNavBarOpacity);
+    // 没写过这个键 = 没调过 = 出厂的不透明；脏值一律夹回合法区间
+    if (raw == null) return navOpacityOpaque;
+    return raw.clamp(navOpacityMin, navOpacityOpaque).toDouble();
+  }
+
+  /// 改底栏不透明度（设置页拖一下即生效并落盘）
+  Future<void> setNavBarOpacity(double value) async {
+    final next = value.clamp(navOpacityMin, navOpacityOpaque).toDouble();
+    try {
+      await _prefs.setDouble(AppConstants.keyNavBarOpacity, next);
+    } catch (_) {}
+    if (_navOpacity == next) return;
+    _navOpacity = next;
+    notifyListeners();
+  }
 
   bool _backgroundReady = false;
 

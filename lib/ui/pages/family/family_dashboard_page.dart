@@ -24,9 +24,11 @@ import '../../../state/theme_state.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
+import '../../shell/app_nav_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
+import '../../widgets/task_row.dart';
 
 /// 历史记录每页条数（手机端长列表一次性渲染会卡，改为「加载更多」分页）
 const int _recordsPageSize = 20;
@@ -42,6 +44,36 @@ enum _RecordFilter {
 
   final String wire;
   final String label;
+}
+
+/// 任务区里一行要渲染的全部信息。
+///
+/// 内置任务与自定义任务在「做完没有 / 能不能点」上口径不同（自定义任务走
+/// `isRecordedToday`，内置任务走 `isTaskDone`），先在这里归一，
+/// 渲染时按「能做 / 没到时间 / 已做满」三分区排，就不用再逐行分支。
+class _TaskEntry {
+  const _TaskEntry({
+    required this.config,
+    required this.custom,
+    required this.done,
+    required this.windowOpen,
+    required this.submitting,
+  });
+
+  /// 交给 `_startCheckIn` 的任务；自定义任务是它的 `user_task_exec` 版本
+  final TaskConfig config;
+
+  /// 自定义任务本体；内置任务为 null
+  final CustomTask? custom;
+
+  /// 今天已经做满（含待审批：孩子提交了家长还没批，也算用掉机会）
+  final bool done;
+
+  /// 时间窗开着（没有时间窗的任务恒为 true）
+  final bool windowOpen;
+
+  /// 这一条正在提交
+  final bool submitting;
 }
 
 /// 核心仪表盘：积分银行 + 任务区 / 待审批区 / 历史记录区
@@ -90,6 +122,18 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   /// 历史记录状态筛选 + 已渲染条数（分页）
   _RecordFilter _recordFilter = _RecordFilter.all;
   int _visibleCount = _recordsPageSize;
+
+  /// 任务区的类型切换：赚钱任务 / 消费·罚款。
+  ///
+  /// 只留一组在屏幕上：一屏 12 条按节奏分完区之后本来就要滚，再把两组叠一起
+  /// 等于让「现在能做什么」重新变模糊。
+  TaskType _taskFilter = TaskType.earning;
+
+  /// 任务区「今天已经做满」是否展开 —— 默认收起，列表才短
+  bool _completedExpanded = false;
+
+  /// 家长端「自定义任务」管理区是否展开（默认收起，避免常驻表单压住任务列表）
+  bool _customManagerExpanded = false;
 
   Timer? _clockTimer;
   Timer? _pollTimer;
@@ -373,16 +417,28 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   // ---- 自定义任务 ----
 
-  Future<void> _addCustomTask(TaskType type, int value, String name) async {
+  /// 添加自定义任务。`requirePhoto` 来自表单里的「必须添加照片」开关
+  /// （默认开）—— 消费 / 罚款类不渲染那个开关，这里传 false 进来即可。
+  Future<void> _addCustomTask(
+    TaskType type,
+    int value,
+    String name,
+    bool requirePhoto,
+  ) async {
     final created = context.read<CustomTasksState>().addTask(
           CustomTaskInput(
             name: name,
             value: value,
             type: type,
             createdBy: TaskCreator.parent,
+            requirePhoto: requirePhoto,
           ),
         );
-    _toast('「${created.name}」已加进快捷任务，点一下就能打卡');
+    _toast(
+      type == TaskType.earning && requirePhoto
+          ? '「${created.name}」已加进快捷任务，提交时要拍照'
+          : '「${created.name}」已加进快捷任务，点一下就能打卡',
+    );
   }
 
   // ---- 审批 ----
@@ -534,7 +590,10 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   }
 
   @override
-  Widget build(BuildContext context) {
+  // 主页四个 tab 里只有这一页没有自己的 Scaffold —— 顶部要留出状态栏，否则第一张卡被系统栏压住
+  Widget build(BuildContext context) => SafeArea(child: _buildBody(context));
+
+  Widget _buildBody(BuildContext context) {
     final state = context.watch<FamilyState>();
     final isParent = state.role == FamilyRole.parent;
     // 分区状态的唯一真相：地址栏 `/family?tab=tasks|pending|history`（缺省 tasks）。
@@ -572,11 +631,12 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     return RefreshIndicator(
       onRefresh: _reloadLedger,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(
+        // 底部让出底栏胶囊（MainShell 开了 extendBody，它浮在内容之上）
+        padding: EdgeInsets.fromLTRB(
           AppSpacing.md,
           AppSpacing.md,
           AppSpacing.md,
-          AppSpacing.xl,
+          AppSpacing.xl + AppNavBar.contentInset(context),
         ),
         children: <Widget>[
           // 首屏四块按序号错峰进场
@@ -1079,14 +1139,46 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final palette = context.palette;
     final records = state.records;
     final customTasks = context.watch<CustomTasksState>();
-    final earningTasks = FamilyRules.tasksByType(TaskType.earning);
-    final spendingTasks = FamilyRules.tasksByType(TaskType.spending);
-    final customEarning = customTasks.tasks
-        .where((task) => task.type == TaskType.earning)
-        .toList(growable: false);
-    final customSpending = customTasks.tasks
-        .where((task) => task.type == TaskType.spending)
-        .toList(growable: false);
+    final filter = _taskFilter;
+    final bool earning = filter == TaskType.earning;
+
+    // 内置任务与自定义任务先归一成同一批 entries，再按「此刻能不能做」三分区。
+    // 这样「时间窗 / 日限」这些规则第一次变成看得见的信息，而不是点了才弹 toast。
+    final entries = <_TaskEntry>[
+      for (final task in FamilyRules.tasksByType(filter))
+        _TaskEntry(
+          config: task,
+          custom: null,
+          done: _isDone(task, records),
+          windowOpen: task.window == null || task.window!.contains(_now),
+          submitting: _submittingId == task.id,
+        ),
+      for (final task in customTasks.tasks.where((task) => task.type == filter))
+        _TaskEntry(
+          config: _toExecTask(task),
+          custom: task,
+          done: isRecordedToday(task, records, now: _now) ||
+              customTasks.isDoneToday(task.id),
+          windowOpen: true,
+          submitting: _submittingId == CustomTasksState.userTaskExecId,
+        ),
+    ];
+
+    final ready = entries.where((entry) => !entry.done && entry.windowOpen).toList(growable: false);
+    final later = entries.where((entry) => !entry.done && !entry.windowOpen).toList(growable: false);
+    final completed = entries.where((entry) => entry.done).toList(growable: false);
+    final progress = todayProgress(FamilyRules.taskRules, records, now: _now);
+    final bool busy = _submittingId != null;
+
+    // 「还没到时间」里最早的那个开始时间，用作头部摘要（如「19:00 之后还能打卡 1 件」）
+    TaskWindow? earliestWindow;
+    for (final entry in later) {
+      final window = entry.config.window;
+      if (window == null) continue;
+      if (earliestWindow == null || window.startMinutes < earliestWindow.startMinutes) {
+        earliestWindow = window;
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1095,71 +1187,88 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              SectionHeader(title: '快捷任务'),
-              _groupLabel(
-                palette.success,
-                Icons.trending_up,
-                '赚钱任务',
+              _taskProgressHeader(
+                progress: progress,
+                ready: ready.length,
+                later: later.length,
+                completed: completed.length,
+                laterHint: earliestWindow?.start,
               ),
-              const SizedBox(height: AppSpacing.sm),
-              for (final (i, task) in earningTasks.indexed)
-                EnterBox(
-                  index: i,
-                  child: _taskButton(
-                    task: task,
-                    earning: true,
-                    disabled: _isDone(task, records),
-                    onTap: () => _startCheckIn(task, records: records),
-                  ),
-                ),
-              // 自定义任务：同样摆在快捷任务区，点开走打卡弹窗（可传照片 / 写备注）
-              for (final (i, task) in customEarning.indexed)
-                EnterBox(
-                  index: i,
-                  child: _taskButton(
-                    task: _toExecTask(task),
-                    earning: true,
-                    disabled: isRecordedToday(task, records, now: _now) ||
-                        customTasks.isDoneToday(task.id),
-                    onTap: () => _startCheckIn(
-                      _toExecTask(task),
-                      custom: task,
-                      records: records,
-                    ),
-                  ),
-                ),
               const SizedBox(height: AppSpacing.md),
-              _groupLabel(
-                palette.danger,
-                Icons.trending_down,
-                '消费 / 罚款',
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              for (final (i, task) in spendingTasks.indexed)
-                EnterBox(
-                  index: i,
-                  child: _taskButton(
-                    task: task,
-                    earning: false,
-                    disabled: _isDone(task, records),
-                    onTap: () => _startCheckIn(task, records: records),
-                  ),
-                ),
-              for (final (i, task) in customSpending.indexed)
-                EnterBox(
-                  index: i,
-                  child: _taskButton(
-                    task: _toExecTask(task),
-                    earning: false,
-                    disabled: isRecordedToday(task, records, now: _now) ||
-                        customTasks.isDoneToday(task.id),
-                    onTap: () => _startCheckIn(
-                      _toExecTask(task),
-                      custom: task,
-                      records: records,
+              _taskTypeSegment(),
+              const SizedBox(height: AppSpacing.md),
+              if (ready.isEmpty && later.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  child: Text(
+                    earning ? '今天要赚的积分都拿到了 🎉' : '今天没有要记的账 🎉',
+                    style: TextStyle(
+                      fontSize: AppFontSize.sm,
+                      color: palette.textSecondary,
                     ),
                   ),
+                )
+              else ...<Widget>[
+                if (ready.isNotEmpty) ...<Widget>[
+                  _taskGroupHeader(
+                    icon: Icons.radio_button_checked,
+                    color: palette.ink(palette.success),
+                    text: '现在可以打卡',
+                    count: ready.length,
+                  ),
+                  for (final (i, entry) in ready.indexed)
+                    _taskEntrySlot(
+                      index: i,
+                      earning: earning,
+                      entry: entry,
+                      busy: busy,
+                      records: records,
+                    ),
+                ],
+                if (later.isNotEmpty) ...<Widget>[
+                  if (ready.isNotEmpty) const SizedBox(height: AppSpacing.md),
+                  _taskGroupHeader(
+                    icon: Icons.schedule_outlined,
+                    color: palette.textSecondary,
+                    text: '还没到时间',
+                    count: later.length,
+                  ),
+                  for (final (i, entry) in later.indexed)
+                    _taskEntrySlot(
+                      index: i,
+                      earning: earning,
+                      entry: entry,
+                      busy: busy,
+                      records: records,
+                    ),
+                ],
+              ],
+              if (completed.isNotEmpty) ...<Widget>[
+                const SizedBox(height: AppSpacing.md),
+                _foldRow(
+                  icon: Icons.task_alt,
+                  label: '今天已经做满',
+                  count: completed.length,
+                  expanded: _completedExpanded,
+                  onTap: () => setState(() => _completedExpanded = !_completedExpanded),
                 ),
+                if (_completedExpanded)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.sm),
+                    child: Column(
+                      children: <Widget>[
+                        for (final (i, entry) in completed.indexed)
+                          _taskEntrySlot(
+                            index: i,
+                            earning: earning,
+                            entry: entry,
+                            busy: busy,
+                            records: records,
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
             ],
           ),
         ),
@@ -1172,7 +1281,171 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     );
   }
 
-  Widget _groupLabel(Color color, IconData icon, String text) => Row(
+  /// 任务区头部（方案 C）：左边今日进度环，右边三行「今天什么能做」的节奏摘要。
+  ///
+  /// 环的口径是有日限的任务（= 首页「今日任务」），右侧三行是全部分区的实时计数 ——
+  /// 一个是「今天还剩多少总量」，一个是「此刻该做什么」，分工不同所以分开写。
+  Widget _taskProgressHeader({
+    required TaskProgress progress,
+    required int ready,
+    required int later,
+    required int completed,
+    required String? laterHint,
+  }) {
+    final palette = context.palette;
+    final bool hasBackground =
+        context.select<ThemeState, bool>((state) => state.background.isNotEmpty);
+    final Color track = palette.softColor(hasBackground: hasBackground);
+    final TextStyle lineStyle = TextStyle(
+      fontSize: AppFontSize.sm,
+      color: palette.textSecondary,
+    );
+    return Row(
+      children: <Widget>[
+        SizedBox(
+          width: 52,
+          height: 52,
+          child: Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              SizedBox(
+                width: 52,
+                height: 52,
+                child: CircularProgressIndicator(
+                  value: progress.total == 0 ? 0 : progress.done / progress.total,
+                  strokeWidth: 5,
+                  strokeCap: StrokeCap.round,
+                  backgroundColor: track,
+                  valueColor: AlwaysStoppedAnimation<Color>(palette.success),
+                ),
+              ),
+              Text(
+                '${progress.done}/${progress.total}',
+                style: TextStyle(
+                  fontSize: AppFontSize.sm,
+                  fontWeight: FontWeight.w700,
+                  color: palette.text,
+                  fontFeatures: kTabularNumbers,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (ready > 0)
+                Text(
+                  '现在能做 $ready 件',
+                  style: TextStyle(
+                    fontSize: AppFontSize.sm,
+                    fontWeight: FontWeight.w600,
+                    color: palette.ink(palette.success),
+                  ),
+                ),
+              if (later > 0)
+                Text(
+                  laterHint == null ? '之后还能打卡 $later 件' : '$laterHint 之后还能打卡 $later 件',
+                  style: lineStyle,
+                ),
+              if (completed > 0) Text('今天已经做满 $completed 件', style: lineStyle),
+              if (ready == 0 && later == 0 && completed == 0)
+                Text('今天没有任务', style: lineStyle),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 任务类型切换（赚钱任务 / 消费·罚款）。
+  ///
+  /// 视觉与上面 TabBar 的高亮一致：选中项是 `segmentedSelected` 实底 + 主色细边，
+  /// 字色按这层底色取 —— 石墨黑下直接写 primary 只有 2.5:1，会糊在一起。
+  Widget _taskTypeSegment() {
+    final palette = context.palette;
+    final bool hasBackground =
+        context.select<ThemeState, bool>((state) => state.background.isNotEmpty);
+    const List<(TaskType, String, IconData)> items = <(TaskType, String, IconData)>[
+      (TaskType.earning, '赚钱任务', Icons.trending_up),
+      (TaskType.spending, '消费 / 罚款', Icons.trending_down),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: palette.softColor(hasBackground: hasBackground),
+        borderRadius: BorderRadius.circular(AppRadius.full),
+      ),
+      child: Row(
+        children: <Widget>[
+          for (final (type, label, icon) in items)
+            Expanded(
+              child: PressInkWell(
+                onTap: () {
+                  if (_taskFilter == type) return;
+                  setState(() {
+                    _taskFilter = type;
+                    _completedExpanded = false;
+                  });
+                },
+                borderRadius: BorderRadius.circular(AppRadius.full),
+                child: AnimatedContainer(
+                  duration: AppMotion.fast,
+                  curve: AppMotion.standard,
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: _taskFilter == type ? palette.segmentedSelected : Colors.transparent,
+                    borderRadius: BorderRadius.circular(AppRadius.full),
+                    border: Border.all(
+                      color: _taskFilter == type
+                          ? palette.primary.withValues(alpha: 0.35)
+                          : Colors.transparent,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Icon(
+                        icon,
+                        size: 14,
+                        color: _taskFilter == type
+                            ? palette.onColor(palette.segmentedSelected)
+                            : palette.textSecondary,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: AppFontSize.sm,
+                          fontWeight:
+                              _taskFilter == type ? FontWeight.w600 : FontWeight.w500,
+                          color: _taskFilter == type
+                              ? palette.onColor(palette.segmentedSelected)
+                              : palette.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 分区标题（现在可以打卡 / 还没到时间），右侧跟一个计数
+  Widget _taskGroupHeader({
+    required IconData icon,
+    required Color color,
+    required String text,
+    required int count,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
         children: <Widget>[
           Icon(icon, size: 14, color: color),
           const SizedBox(width: AppSpacing.xs),
@@ -1180,51 +1453,140 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             text,
             style: TextStyle(
               fontSize: AppFontSize.sm,
-              fontWeight: FontWeight.w600,
-              color: context.palette.textSecondary,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: AppFontSize.xs,
+              fontWeight: FontWeight.w700,
+              color: color.withValues(alpha: 0.7),
+              fontFeatures: kTabularNumbers,
             ),
           ),
         ],
-      );
+      ),
+    );
+  }
 
-  Widget _taskButton({
-    required TaskConfig task,
+  /// 一个任务的列表行（含入场动画与行间距）
+  Widget _taskEntrySlot({
+    required int index,
     required bool earning,
-    required bool disabled,
+    required _TaskEntry entry,
+    required bool busy,
+    required List<LedgerRecord> records,
+  }) {
+    final task = entry.config;
+    final TaskRowState rowState = entry.done
+        ? TaskRowState.done
+        : entry.windowOpen
+            ? TaskRowState.ready
+            : TaskRowState.later;
+    final bool tappable = !entry.done && !busy && !entry.submitting;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: EnterBox(
+        index: index,
+        child: TaskRow(
+          name: task.name,
+          icon: taskIconFor(task.id, earning: earning),
+          earning: earning,
+          state: rowState,
+          value: task.value > 0 ? '+${task.value}' : '${task.value}',
+          meta: _taskEntryMeta(entry, records),
+          onTap: tappable
+              ? () => _startCheckIn(
+                    task,
+                    custom: entry.custom,
+                    records: records,
+                  )
+              : null,
+        ),
+      ),
+    );
+  }
+
+  /// 一行的元信息：时间窗优先，其次日限，再次说明。
+  ///
+  /// 时间窗文案分「还没到」和「已经过了」两种 —— `checkTask()` 的提示语只说
+  /// 「只能在 19:00-22:00 之间打卡」，23 点看到这句会以为还得等。
+  String _taskEntryMeta(_TaskEntry entry, List<LedgerRecord> records) {
+    final task = entry.config;
+    final window = task.window;
+    final limit = task.dailyLimit;
+    final int used = countTodaySubmissions(records, task.id, now: _now);
+
+    if (entry.done) {
+      if (limit != null) return '今天 $used/$limit 次';
+      return '今天已经做过';
+    }
+    if (window != null) {
+      final int minutes = _now.hour * 60 + _now.minute;
+      if (minutes < window.startMinutes) return '${window.start} 开始可以打卡';
+      if (minutes > window.endMinutes) return '${window.start}-${window.end} 已经过了';
+      return '${window.start}-${window.end} 可以打卡';
+    }
+    if (entry.custom != null) return '家长添加的自定义任务';
+    if (limit != null) {
+      if (limit > 1) return '每天 $limit 次 · 今天 $used/$limit';
+      return '每天 $limit 次';
+    }
+    final description = task.description;
+    if (description != null && description.isNotEmpty) return description;
+    return '随时可以打卡';
+  }
+
+  /// 可折叠的一行（「今天已经做满 N 项」/「自定义任务」）
+  Widget _foldRow({
+    required IconData icon,
+    required String label,
+    required int? count,
+    required bool expanded,
     required VoidCallback onTap,
   }) {
     final palette = context.palette;
-    final color = earning ? palette.success : palette.danger;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: SizedBox(
-        width: double.infinity,
-        child: FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: color,
-            // 实色底上的字 / 图标：按这层底色取（success / danger 都不是主色）
-            foregroundColor: palette.onColor(color),
-            disabledBackgroundColor: palette.softColor(
-              hasBackground:
-                  context.select<ThemeState, bool>((state) => state.background.isNotEmpty),
-            ),
-            disabledForegroundColor: palette.textTertiary,
-            alignment: Alignment.centerLeft,
+    final radius = BorderRadius.circular(AppRadius.md);
+    return Material(
+      color: Colors.transparent,
+      borderRadius: radius,
+      child: PressInkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.sm,
           ),
-          onPressed: disabled || _submittingId != null ? null : onTap,
           child: Row(
             children: <Widget>[
-              Icon(earning ? Icons.add : Icons.remove, size: 16),
+              Icon(icon, size: 18, color: palette.textTertiary),
               const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(task.name, overflow: TextOverflow.ellipsis),
-              ),
               Text(
-                task.value > 0 ? '+${task.value}' : '${task.value}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: kTabularNumbers,
+                label,
+                style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+              ),
+              if (count != null) ...<Widget>[
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: AppFontSize.sm,
+                    fontWeight: FontWeight.w700,
+                    color: palette.textSecondary,
+                    fontFeatures: kTabularNumbers,
+                  ),
                 ),
+              ],
+              const Spacer(),
+              AnimatedRotation(
+                turns: expanded ? 0.5 : 0,
+                duration: AppMotion.fast,
+                child: Icon(Icons.expand_more, size: 20, color: palette.textTertiary),
               ),
             ],
           ),
@@ -1233,68 +1595,81 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     );
   }
 
-  /// 自定义任务表单（类型 / 价格 / 名称）+ 任务列表
+  /// 自定义任务（家长端管理区）：默认收起成一行，点开才出现表单与列表。
+  ///
+  /// 原来「SectionHeader + 三选一表单 + 任务列表」常驻在任务区底部，把「快捷任务」
+  /// 挤到首屏之外；而加/删任务的频次远低于打卡，所以收成一行折叠项。
   Widget _buildCustomTaskCard(CustomTasksState customTasks) {
     final palette = context.palette;
+    final int count = customTasks.tasks.length;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          SectionHeader(
-            title: '自定义任务',
-            subtitle: '「添加任务」本身不入账，打卡完成才给积分',
+          _foldRow(
+            icon: Icons.tune,
+            label: count == 0 ? '自定义任务 · 还没有任务' : '自定义任务',
+            count: count == 0 ? null : count,
+            expanded: _customManagerExpanded,
+            onTap: () => setState(() => _customManagerExpanded = !_customManagerExpanded),
           ),
-          _CustomTaskForm(onSubmit: _addCustomTask),
-          const SizedBox(height: AppSpacing.md),
-          if (customTasks.tasks.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-              child: Text(
-                '还没有任务，添加一个吧',
-                style: TextStyle(fontSize: AppFontSize.sm, color: palette.textTertiary),
-              ),
-            )
-          else
-            ...customTasks.tasks.map((task) {
-              final tag = task.kind == CustomTaskKind.preset
-                  ? '预置'
-                  : task.createdBy == TaskCreator.child
-                      ? '孩子提的'
-                      : '自定义';
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
-                        task.name,
-                        style: TextStyle(fontSize: AppFontSize.sm, color: palette.text),
-                        overflow: TextOverflow.ellipsis,
+          if (_customManagerExpanded) ...<Widget>[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '「添加任务」本身不入账，打卡完成才给积分',
+              style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _CustomTaskForm(onSubmit: _addCustomTask),
+            if (customTasks.tasks.isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              ...customTasks.tasks.map((task) {
+                final tag = task.kind == CustomTaskKind.preset
+                    ? '预置'
+                    : task.createdBy == TaskCreator.child
+                        ? '孩子提的'
+                        : '自定义';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          task.name,
+                          style: TextStyle(fontSize: AppFontSize.sm, color: palette.text),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    _pill(text: tag, color: palette.primary),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      task.value > 0 ? '+${task.value}' : '${task.value}',
-                      style: TextStyle(
-                        fontSize: AppFontSize.sm,
-                        fontWeight: FontWeight.w600,
-                        color: task.value > 0 ? palette.success : palette.danger,
-                        fontFeatures: kTabularNumbers,
+                      const SizedBox(width: AppSpacing.sm),
+                      _pill(text: tag, color: palette.primary),
+                      // 要照片的任务多一枚淡色小标：一眼看出哪条提交时要拍图
+                      if (task.requirePhoto) ...<Widget>[
+                        const SizedBox(width: AppSpacing.xs),
+                        _pill(text: '需照片', color: palette.textTertiary),
+                      ],
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        task.value > 0 ? '+${task.value}' : '${task.value}',
+                        style: TextStyle(
+                          fontSize: AppFontSize.sm,
+                          fontWeight: FontWeight.w600,
+                          color: task.value > 0 ? palette.success : palette.danger,
+                          fontFeatures: kTabularNumbers,
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      tooltip: '删除任务',
-                      iconSize: 18,
-                      color: palette.danger,
-                      onPressed: () => _confirmRemoveTask(task),
-                      icon: const Icon(Icons.delete_outline),
-                    ),
-                  ],
-                ),
-              );
-            }),
+                      IconButton(
+                        tooltip: '删除任务',
+                        iconSize: 18,
+                        color: palette.danger,
+                        onPressed: () => _confirmRemoveTask(task),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
         ],
       ),
     );
@@ -1856,6 +2231,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   }
 
   /// 打卡弹窗（照片 + 备注）—— 内置任务与自定义任务共用。
+  /// 屏幕正中的居中弹窗：底部悬浮导航栏不会盖住下面的提交按钮。
   /// 返回 null 表示用户取消。
   Future<_CheckInResult?> _showCheckInDialog(TaskConfig task) async {
     final isParent = _isParent;
@@ -1864,50 +2240,74 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     var uploading = false;
     var picking = false;
     String? photoError;
+    // 照片是不是硬门槛：赚钱类（含家长勾了「必须添加照片」的自定义任务）必须，
+    // 消费 / 罚款只要写清原因。判定与网页版共用 core/task_rules.dart。
+    final bool needPhoto = taskRequiresPhoto(task);
 
-    final result = await showModalBottomSheet<_CheckInResult>(
+    final result = await showDialog<_CheckInResult>(
       context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (builderContext, setSheetState) {
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (builderContext, setDialogState) {
           final palette = builderContext.palette;
           Future<void> pick(ImageSource source) async {
             if (picking) return;
-            setSheetState(() => picking = true);
+            setDialogState(() => picking = true);
             try {
               final picked = await ImagePicker().pickImage(source: source);
               if (picked == null) return;
               final raw = await picked.readAsBytes();
               final compressed = compressImage(raw);
               if (compressed == null) {
-                setSheetState(() => photoError = '这张图读不出来，换一张试试');
+                setDialogState(() => photoError = '这张图读不出来，换一张试试');
                 return;
               }
-              setSheetState(() {
+              setDialogState(() {
                 photo = compressed;
                 photoError = null;
               });
             } catch (_) {
-              setSheetState(() => photoError = '选图失败，请重试');
+              setDialogState(() => photoError = '选图失败，请重试');
             } finally {
-              setSheetState(() => picking = false);
+              setDialogState(() => picking = false);
             }
           }
 
           final positive = task.value >= 0;
-          return Padding(
-            padding: EdgeInsets.only(
-              left: AppSpacing.md,
-              right: AppSpacing.md,
-              top: AppSpacing.md,
-              bottom: MediaQuery.of(builderContext).viewInsets.bottom + AppSpacing.md,
+          // 居中弹窗：胶囊浮在屏幕底部（高 74），AlertDialog 默认 insetPadding 的下边距
+          // 只有 24，弹窗下沿仍会被它压住 —— 这里把下边距放到 96，让按钮始终露在胶囊上方。
+          return AlertDialog(
+            insetPadding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.xl * 3,
             ),
-            child: SingleChildScrollView(
+            titlePadding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              0,
+            ),
+            contentPadding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              0,
+            ),
+            title: Text(
+              task.name,
+              style: TextStyle(
+                fontSize: AppFontSize.lg,
+                fontWeight: FontWeight.w700,
+                color: palette.text,
+              ),
+            ),
+            // 表单偏高（照片 160 + 三行备注），窄屏或弹出键盘时靠滚动兜住
+            content: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  SectionHeader(title: task.name),
                   Row(
                     children: <Widget>[
                       Text(
@@ -1936,8 +2336,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                     ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    '照片（可选）',
-                    style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+                    needPhoto ? '照片（必填）' : '照片（可选）',
+                    style: TextStyle(
+                      fontSize: AppFontSize.sm,
+                      color: needPhoto ? palette.danger : palette.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   if (photo != null)
@@ -1977,6 +2380,15 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                         photoError!,
                         style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger),
                       ),
+                    )
+                  // 必填照片还没选：把「为什么按钮点不动」写在这儿
+                  else if (needPhoto && photo == null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.xs),
+                      child: Text(
+                        '这项任务要拍一张照片，或者从相册选一张，才能提交',
+                        style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger),
+                      ),
                     ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
@@ -1990,54 +2402,57 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                     maxLength: 60,
                     decoration: const InputDecoration(hintText: '写点什么，例如：客厅和书桌都收拾好了'),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: uploading
-                          ? null
-                          : () async {
-                              setSheetState(() => uploading = true);
-                              String? imageUrl;
-                              try {
-                                if (photo != null) {
-                                  final uploaded =
-                                      await UploadApi(ApiClient()).upload(photo!);
-                                  imageUrl = uploaded.url;
-                                }
-                              } catch (_) {
-                                setSheetState(() {
-                                  uploading = false;
-                                  photoError = '图片上传失败，请重试';
-                                });
-                                return;
-                              }
-                              final note = noteController.text.trim();
-                              if (sheetContext.mounted) {
-                                Navigator.of(sheetContext).pop(
-                                  _CheckInResult(
-                                    note: note.isEmpty ? null : note,
-                                    imageUrl: imageUrl,
-                                  ),
-                                );
-                              }
-                            },
-                      child: uploading
-                          ? SizedBox(
-                              width: 18,
-                              height: 18,
-                              // 主色实心按钮上的转圈：默认也是 primary，会跟底撞成一片
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: palette.onPrimary,
-                              ),
-                            )
-                          : Text(isParent ? '确认记账' : '提交申请'),
-                    ),
-                  ),
                 ],
               ),
             ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: uploading ? null : () => Navigator.of(dialogContext).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                // 必填照片没选时按钮直接置灰：先选照片，再谈提交
+                onPressed: uploading || (needPhoto && photo == null)
+                    ? null
+                    : () async {
+                        setDialogState(() => uploading = true);
+                        String? imageUrl;
+                        try {
+                          if (photo != null) {
+                            final uploaded =
+                                await UploadApi(ApiClient()).upload(photo!);
+                            imageUrl = uploaded.url;
+                          }
+                        } catch (_) {
+                          setDialogState(() {
+                            uploading = false;
+                            photoError = '图片上传失败，请重试';
+                          });
+                          return;
+                        }
+                        final note = noteController.text.trim();
+                        if (dialogContext.mounted) {
+                          Navigator.of(dialogContext).pop(
+                            _CheckInResult(
+                              note: note.isEmpty ? null : note,
+                              imageUrl: imageUrl,
+                            ),
+                          );
+                        }
+                      },
+                child: uploading
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        // 主色实心按钮上的转圈：默认也是 primary，会跟底撞成一片
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: palette.onPrimary,
+                        ),
+                      )
+                    : Text(isParent ? '确认记账' : '提交申请'),
+              ),
+            ],
           );
         },
       ),
@@ -2060,7 +2475,7 @@ class _CheckInResult {
 class _CustomTaskForm extends StatefulWidget {
   const _CustomTaskForm({required this.onSubmit});
 
-  final Future<void> Function(TaskType type, int value, String name) onSubmit;
+  final Future<void> Function(TaskType type, int value, String name, bool requirePhoto) onSubmit;
 
   @override
   State<_CustomTaskForm> createState() => _CustomTaskFormState();
@@ -2070,6 +2485,8 @@ class _CustomTaskFormState extends State<_CustomTaskForm> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _valueController = TextEditingController();
   TaskType _type = TaskType.earning;
+  /// 「必须添加照片」：默认开（孩子交的任务大多得看见东西才算数）
+  bool _requirePhoto = true;
   String? _error;
   bool _submitting = false;
 
@@ -2095,7 +2512,7 @@ class _CustomTaskFormState extends State<_CustomTaskForm> {
       _error = null;
       _submitting = true;
     });
-    await widget.onSubmit(_type, value, name);
+    await widget.onSubmit(_type, value, name, _type == TaskType.earning && _requirePhoto);
     if (!mounted) return;
     setState(() => _submitting = false);
     _nameController.clear();
@@ -2123,22 +2540,88 @@ class _CustomTaskFormState extends State<_CustomTaskForm> {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        Text('价格', style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary)),
-        const SizedBox(height: AppSpacing.xs),
-        TextField(
-          controller: _valueController,
-          keyboardType: TextInputType.number,
-          inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-          decoration: const InputDecoration(isDense: true, hintText: '积分'),
+        // 价格 + 名称压成一行两列（方案 D）：表单矮一截，视线只走两行
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            SizedBox(
+              width: 104,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '价格',
+                    style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  TextField(
+                    controller: _valueController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    decoration: const InputDecoration(isDense: true, hintText: '积分'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '名称',
+                    style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  TextField(
+                    controller: _nameController,
+                    maxLength: 20,
+                    // 窄列里放不下「0/20」计数器；长度限制仍在
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      hintText: '例如：帮忙浇花',
+                      counterText: '',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: AppSpacing.sm),
-        Text('名称', style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary)),
-        const SizedBox(height: AppSpacing.xs),
-        TextField(
-          controller: _nameController,
-          maxLength: 20,
-          decoration: const InputDecoration(isDense: true, hintText: '例如：帮忙浇花'),
-        ),
+        // 「必须添加照片」：只对赚钱类有意义（扣分只要写清原因），
+        // 所以跟着类型切换出现 / 消失，默认开。
+        if (_type == TaskType.earning) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '必须添加照片',
+                      style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '开启后，提交这条任务要先拍照或从相册选一张；关闭则可以直接提交',
+                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _requirePhoto,
+                onChanged: _submitting
+                    ? null
+                    : (bool value) => setState(() => _requirePhoto = value),
+              ),
+            ],
+          ),
+        ],
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -2220,11 +2703,11 @@ class _LedgerSkeleton extends StatelessWidget {
     final AppPalette palette = context.palette;
     return ListView(
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         AppSpacing.md,
         AppSpacing.md,
         AppSpacing.md,
-        AppSpacing.xl,
+        AppSpacing.xl + AppNavBar.contentInset(context),
       ),
       children: <Widget>[
         EnterBox(

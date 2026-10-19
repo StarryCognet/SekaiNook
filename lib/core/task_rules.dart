@@ -6,6 +6,18 @@ import '../data/models/task_config.dart';
 /// 从账本页里抽出来，让账本页与首页（妹妹版）用同一套判断 ——
 /// 规则写在两处迟早会写歪（一边让打卡、一边说超限）。
 
+/// 提交这条任务是否必须带一张照片（拍照 / 相册）。
+///
+/// 规则：任务自己声明了 `requirePhoto` 就听它的（自定义任务就是这么定的），
+/// 否则按类型兜底 —— **赚钱类必须，消费与罚款不强制**。
+/// 全站只有这一处判断：打卡弹窗的按钮置灰与提交前的兜底校验、
+/// 家长端「添加任务」表单的默认值都从这里取，免得两边说法不一致。
+bool taskRequiresPhoto(TaskConfig task) {
+  final bool? declared = task.requirePhoto;
+  if (declared != null) return declared;
+  return task.type == TaskType.earning;
+}
+
 /// 某任务今天已经提交过几次。
 ///
 /// 口径：**含待审批**（孩子提交后家长还没批，也算用掉一次机会）；

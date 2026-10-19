@@ -11,6 +11,7 @@ import '../../../state/settings_state.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
+import '../../shell/app_nav_bar.dart';
 import '../../shell/main_shell.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
@@ -130,6 +131,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         ? '${settings.kidName}的打卡动态'
         : '${settings.momName}说的话';
 
+    // 返回键交给主壳统一处理：进通知页时外壳记下了「首页」这一步，按返回就回首页
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -416,11 +418,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
       onRefresh: () => context.read<NotificationState>().refresh(),
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
+        // 底部让出底栏胶囊（MainShell 开了 extendBody，它浮在内容之上）
+        padding: EdgeInsets.fromLTRB(
           AppSpacing.md,
           0,
           AppSpacing.md,
-          AppSpacing.lg,
+          AppSpacing.lg + AppNavBar.contentInset(context),
         ),
         itemCount: visible.length,
         // 每条错峰进场。这里刻意不加 key：靠位置复用，
@@ -579,11 +582,11 @@ class _NotifySkeleton extends StatelessWidget {
     final AppPalette palette = context.palette;
     return ListView(
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         AppSpacing.md,
         0,
         AppSpacing.md,
-        AppSpacing.lg,
+        AppSpacing.lg + AppNavBar.contentInset(context),
       ),
       children: <Widget>[
         for (int i = 0; i < 4; i++)

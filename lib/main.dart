@@ -19,6 +19,7 @@ import 'state/local_notify_state.dart';
 import 'state/notification_state.dart';
 import 'state/settings_state.dart';
 import 'state/theme_state.dart';
+import 'state/update_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,6 +65,7 @@ Future<void> main() async {
       customTasks: CustomTasksState(prefs: prefs),
       garden: GardenState(prefs: prefs, ledgerApi: ledgerApi),
       localNotify: LocalNotifyState(prefs: prefs),
+      update: UpdateState(prefs: prefs),
     ),
   );
 

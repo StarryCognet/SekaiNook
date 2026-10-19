@@ -12,6 +12,7 @@ import '../../../state/garden_state.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
+import '../../shell/app_nav_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
@@ -494,17 +495,20 @@ class _GardenPageState extends State<GardenPage> {
 
   /// 菜单内容的统一列表壳：每个子项按序号错峰进场（首屏元素依次浮现），
   /// 列表本身仍是普通 ListView，滚动行为不变。
-  Widget _pageList(List<Widget> children) => ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          AppSpacing.sm,
-          AppSpacing.md,
-          AppSpacing.xl,
+  Widget _pageList(List<Widget> children) => Builder(
+        // 借一层 Builder 拿 context：这层壳在多个子页复用，底部要让出悬浮底栏
+        builder: (BuildContext context) => ListView(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.sm,
+            AppSpacing.md,
+            AppSpacing.xl + AppNavBar.contentInset(context),
+          ),
+          children: <Widget>[
+            for (int index = 0; index < children.length; index++)
+              EnterBox(index: index, child: children[index]),
+          ],
         ),
-        children: <Widget>[
-          for (int index = 0; index < children.length; index++)
-            EnterBox(index: index, child: children[index]),
-        ],
       );
 
   // ---- 1. 学习总览（Web 版 OverviewPage.tsx）----

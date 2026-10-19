@@ -24,6 +24,9 @@ import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
+import '../../widgets/update_dialog.dart';
+import '../../shell/app_nav_bar.dart';
+import '../../shell/back_intent.dart';
 import 'push_section.dart';
 import 'selftest_panel.dart';
 
@@ -682,12 +685,26 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final section = _section;
-    return Scaffold(
-      body: SafeArea(
-        // 两级钻取：入口页和子页之间做一次横向滑淡切换
-        child: SlideFadeSwitcher(
-          childKey: ValueKey<_SettingsSection?>(section),
-          child: section == null ? _buildIndex(palette) : _buildSection(palette, section),
+    // 系统返回键：先退一级（自检 → 分区 → 设置首页），设置首页上再按才交给外壳
+    return BackIntentHandler(
+      onBack: () {
+        if (_selftestOpen) {
+          setState(() => _selftestOpen = false);
+          return true;
+        }
+        if (_section != null) {
+          setState(() => _section = null);
+          return true;
+        }
+        return false;
+      },
+      child: Scaffold(
+        body: SafeArea(
+          // 两级钻取：入口页和子页之间做一次横向滑淡切换
+          child: SlideFadeSwitcher(
+            childKey: ValueKey<_SettingsSection?>(section),
+            child: section == null ? _buildIndex(palette) : _buildSection(palette, section),
+          ),
         ),
       ),
     );
@@ -699,11 +716,12 @@ class _SettingsPageState extends State<SettingsPage> {
     final isParent = family.role == FamilyRole.parent;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(
+      // 底部让出底栏胶囊的高度（`MainShell` 开了 extendBody，它是浮在内容上的）
+      padding: EdgeInsets.fromLTRB(
         AppSpacing.md,
         AppSpacing.md,
         AppSpacing.md,
-        AppSpacing.xl,
+        AppSpacing.xl + AppNavBar.contentInset(context),
       ),
       children: <Widget>[
         Text(
@@ -783,39 +801,47 @@ class _SettingsPageState extends State<SettingsPage> {
           index: 5,
           child: AppCard(
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        AppConstants.appName,
-                        style: TextStyle(
-                          fontSize: AppFontSize.md,
-                          fontWeight: FontWeight.w600,
-                          color: palette.text,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        '家庭财务与行为管理',
-                        style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                Row(
                   children: <Widget>[
-                    Text(
-                      '当前版本',
-                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            AppConstants.appName,
+                            style: TextStyle(
+                              fontSize: AppFontSize.md,
+                              fontWeight: FontWeight.w600,
+                              color: palette.text,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            '家庭财务与行为管理',
+                            style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    _Tag(text: 'v$appVersion'),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: <Widget>[
+                        Text(
+                          '当前版本',
+                          style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        _Tag(text: 'v$appVersion'),
+                      ],
+                    ),
                   ],
                 ),
+                // 安卓才有这两行：装上就能自己更新；网页版刷新即最新，不摆这个入口
+                const UpdateCheckTile(),
+                const UpdateAutoCheckTile(),
               ],
             ),
           ),
@@ -1000,7 +1026,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildAppearance(AppPalette palette) {
     final theme = context.watch<ThemeState>();
     return ListView(
-      padding: _pagePadding,
+      padding: _pagePadding(context),
       children: <Widget>[
         _subPageHeader(palette, '外观'),
         const SectionHeader(title: '外观', subtitle: '主题和背景图，改完这台手机立刻变'),
@@ -1028,6 +1054,45 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: _BrightnessIcon(dark: theme.preset.dark),
                   label: Text(theme.preset.dark ? '切到浅色' : '切到深色'),
                 ),
+              ),
+            ],
+          ),
+        ),
+        AppCard(
+          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const _CardHead(
+                title: '底栏不透明度',
+                description:
+                    '底部那颗胶囊。调低一点能看见从它后面滚过去的内容；默认不透明，觉得字看不清就调回 100%',
+              ),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Slider(
+                      value: theme.navBarOpacity,
+                      min: ThemeState.navOpacityMin,
+                      max: ThemeState.navOpacityOpaque,
+                      divisions: 10,
+                      onChanged: theme.setNavBarOpacity,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 48,
+                    child: Text(
+                      '${(theme.navBarOpacity * 100).round()}%',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: AppFontSize.sm,
+                        fontWeight: FontWeight.w600,
+                        color: palette.text,
+                        fontFeatures: kTabularNumbers,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1239,7 +1304,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final preview = nickname.isNotEmpty ? nickname : (call.isNotEmpty ? call : serverCall);
 
     return ListView(
-      padding: _pagePadding,
+      padding: _pagePadding(context),
       children: <Widget>[
         _subPageHeader(palette, '家庭'),
         const SectionHeader(title: '家庭', subtitle: '身份和称呼，两个人在各自手机上各管一半'),
@@ -1346,7 +1411,7 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 手机提醒：整块 UI 在 `push_section.dart`，这里只给子页外壳和提示方式。
   Widget _buildPush(AppPalette palette) {
     return ListView(
-      padding: _pagePadding,
+      padding: _pagePadding(context),
       children: <Widget>[
         _subPageHeader(palette, '手机提醒'),
         PushSection(
@@ -1362,7 +1427,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final lockLeft = _pinLockSeconds > 0 ? _pinLockSeconds : family.pinLockRemaining.inSeconds;
 
     return ListView(
-      padding: _pagePadding,
+      padding: _pagePadding(context),
       children: <Widget>[
         _subPageHeader(palette, '家长管理'),
         const SectionHeader(title: '家长管理', subtitle: '口令和打卡照片，只有家长身份看得到'),
@@ -1483,7 +1548,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final entries = _adjustments.take(_adjustmentLogLimit).toList(growable: false);
 
     return ListView(
-      padding: _pagePadding,
+      padding: _pagePadding(context),
       children: <Widget>[
         _subPageHeader(palette, '管理员'),
         const SectionHeader(title: '管理员', subtitle: '直接校准积分数，改完立刻生效'),
@@ -1704,12 +1769,16 @@ class _SettingsPageState extends State<SettingsPage> {
 
   // -------------------------------------------------------------- 小零件
 
-  static const EdgeInsets _pagePadding = EdgeInsets.fromLTRB(
-    AppSpacing.md,
-    AppSpacing.sm,
-    AppSpacing.md,
-    AppSpacing.xl,
-  );
+  /// 子页统一的滚动内边距。
+  ///
+  /// 底部额外让出 [AppNavBar.contentInset] —— `MainShell` 开了 `extendBody`，
+  /// 底栏是浮在内容之上的，不让位的话滚到底会被胶囊压住最后一条。
+  static EdgeInsets _pagePadding(BuildContext context) => EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        AppSpacing.xl + AppNavBar.contentInset(context),
+      );
 
   static final List<TextInputFormatter> _numberFormatters = <TextInputFormatter>[
     FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),

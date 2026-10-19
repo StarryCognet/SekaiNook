@@ -1,7 +1,7 @@
 # SekaiNook（Flutter 版）
 
 家庭「行为 ↔ 积分银行」App 的 Flutter 客户端。**复用 Web 版同一套 Cloudflare Pages Functions 后端**
-（`https://sekainook.pages.dev`），业务语义完全一致，只是把前端从 React + antd 换成 Flutter。
+（`https://sn.starrymiku.com`），业务语义完全一致，只是把前端从 React + antd 换成 Flutter。
 
 - 姊妹仓库（Web 版 + 后端）：`E:\Git\SekaiNook`
 - 目标平台：**Android 手机** + **Flutter Web**（同一份代码）
@@ -112,7 +112,7 @@ flutter test --no-pub test/reminder_parity_test.dart \
 ## 部署
 
 Flutter Web 产物是纯静态文件，丢给任意静态托管即可。它默认连线上后端
-（`https://sekainook.pages.dev`，属跨域调用，后端已加 CORS 中间件）：
+（`https://sn.starrymiku.com`，属跨域调用，后端已加 CORS 中间件）：
 
 ```bash
 # Cloudflare Pages（首次会创建新项目）

@@ -1189,7 +1189,7 @@ delta !== 0 → INSERT 一条 approved 流水：
 ## 20. 验收清单（人工逐条核对接口行为）
 
 > 用法：在真机/模拟器上按顺序跑，或直接用 curl 打后端。每条都要亲眼确认响应。
-> 约定：`BASE` = 后端 origin（如 `https://sekainook.pages.dev`）。
+> 约定：`BASE` = 后端 origin（如 `https://sn.starrymiku.com`）。
 
 ### 20.1 基础与无鉴权
 

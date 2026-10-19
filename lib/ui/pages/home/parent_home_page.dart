@@ -17,6 +17,7 @@ import '../../../state/settings_state.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
+import '../../shell/app_nav_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
@@ -399,11 +400,12 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
         child: family.loading && family.records.isEmpty && !_loadFailed
             ? const _HomeSkeleton()
             : ListView(
-                padding: const EdgeInsets.fromLTRB(
+                // 底部让出底栏胶囊（MainShell 开了 extendBody，它浮在内容之上）
+                padding: EdgeInsets.fromLTRB(
                   AppSpacing.md,
                   AppSpacing.md,
                   AppSpacing.md,
-                  AppSpacing.xl,
+                  AppSpacing.xl + AppNavBar.contentInset(context),
                 ),
                 children: <Widget>[
                   if (_loadFailed) ...<Widget>[
@@ -1526,11 +1528,11 @@ class _HomeSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         AppSpacing.md,
         AppSpacing.md,
         AppSpacing.md,
-        AppSpacing.xl,
+        AppSpacing.xl + AppNavBar.contentInset(context),
       ),
       children: const <Widget>[
         // 顶部那张：问候 + 日期 + 左右两格统计

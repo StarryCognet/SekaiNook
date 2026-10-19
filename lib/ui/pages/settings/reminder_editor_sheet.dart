@@ -11,15 +11,16 @@ import '../../widgets/motion_widgets.dart';
 
 /// 打开「提醒」编辑面板（新增 / 编辑共用）。
 ///
+/// 屏幕正中的居中弹窗 —— 底部那条悬浮导航栏浮在页面之上，
+/// 从底部升起的弹层会被它压住下面的按钮，所以这里不再用底部弹层。
+///
 /// 面板只负责**收集字段**，落盘与排程全交给 [LocalNotifyState]：
 /// 保存后消息留在 `state.message` 里，由调用方按全页统一的口径弹出来
 /// （见 `reminder_list.dart` 的 `_flush`）。
 Future<void> showReminderEditorSheet(BuildContext context, {LocalReminder? reminder}) {
-  return showModalBottomSheet<void>(
+  return showDialog<void>(
     context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (BuildContext sheetContext) => _ReminderEditorSheet(initial: reminder),
+    builder: (BuildContext dialogContext) => _ReminderEditorSheet(initial: reminder),
   );
 }
 
@@ -175,14 +176,17 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: AppSpacing.md,
-        right: AppSpacing.md,
-        top: AppSpacing.xs,
-        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.md,
+    // 居中弹窗：底部悬浮导航栏不会盖住下面那排「试一下 / 取消 / 保存」。
+    // 下边距留 96 是为了躲开浮在屏幕底部的胶囊（高 74）。
+    return Dialog(
+      insetPadding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.xl * 3,
       ),
       child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,

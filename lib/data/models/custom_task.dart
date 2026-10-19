@@ -41,6 +41,7 @@ class CustomTask {
     required this.createdAt,
     required this.kind,
     this.repeatDaily = true,
+    this.requirePhoto = true,
   });
 
   final String id;
@@ -60,6 +61,13 @@ class CustomTask {
   /// 默认 true：每天可再打卡一次
   final bool repeatDaily;
 
+  /// 提交这条任务是否必须带一张照片（拍照 / 相册）。
+  ///
+  /// 家长在「添加任务」里勾选，默认开 —— 孩子交的任务大多得看见东西才算数。
+  /// 消费 / 罚款类固定 false（扣分只要写清原因，不要求拍照）。
+  /// 最终判定统一走 `core/task_rules.dart` 的 `taskRequiresPhoto`。
+  final bool requirePhoto;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
         'id': id,
         'name': name,
@@ -69,6 +77,7 @@ class CustomTask {
         'createdAt': createdAt,
         'kind': kind.wire,
         'repeatDaily': repeatDaily,
+        'requirePhoto': requirePhoto,
       };
 
   /// 从存档里还原一条任务；数据被手改得不像样就返回 null（整条丢弃）。
@@ -97,6 +106,8 @@ class CustomTask {
       createdAt: createdAt is String ? createdAt : DateTime.now().toUtc().toIso8601String(),
       kind: CustomTaskKind.parse(raw['kind'] as String?),
       repeatDaily: raw['repeatDaily'] != false,
+      // 老存档里没有这个字段：赚钱类按「要照片」兜底，消费 / 罚款一律不要
+      requirePhoto: type == TaskType.earning ? raw['requirePhoto'] != false : false,
     );
   }
 
@@ -110,6 +121,8 @@ class CustomTask {
       name: name,
       type: type,
       value: value,
+      // 家长定的照片要求，原样带进打卡弹窗
+      requirePhoto: requirePhoto,
     );
   }
 }
@@ -123,6 +136,7 @@ class CustomTaskInput {
     required this.createdBy,
     this.kind = CustomTaskKind.custom,
     this.repeatDaily = true,
+    this.requirePhoto = true,
     this.id,
   });
 
@@ -132,5 +146,8 @@ class CustomTaskInput {
   final TaskCreator createdBy;
   final CustomTaskKind kind;
   final bool repeatDaily;
+
+  /// 缺省 true（仅赚钱类有效；消费 / 罚款固定不需要照片）
+  final bool requirePhoto;
   final String? id;
 }
