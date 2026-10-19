@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="SekaiNook —— 家庭积分与行为管理">
+  <!-- 出厂主题 original 的页面底色 -->
+  <meta name="theme-color" content="#f5f6fa">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="SekaiNook">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>SekaiNook - 家庭财务与行为管理</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!--
+    启动动画：引擎下载 + 首帧渲染期间盖在页面上（Flutter 首帧一到就由 Dart 侧
+    调 window.__sekainookBootDone() 淡出移除）。放纯 CSS 是为了在 Flutter 引擎
+    还没下载完的时候就能动起来 —— 那几秒原本是一片白。
+  -->
+  <style>
+    #boot-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      background: #f5f6fa;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      transition: opacity 420ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    #boot-splash.boot-out { opacity: 0; pointer-events: none; }
+
+    #boot-splash .boot-seed {
+      width: 76px;
+      height: 76px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      background: #eef0f7;
+      box-shadow: 0 0 0 0 rgba(26, 26, 46, 0.16);
+      animation: boot-breathe 1600ms cubic-bezier(0.4, 0, 0.6, 1) infinite,
+                 boot-ring 1600ms cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    #boot-splash .boot-title {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #1a1a2e;
+      opacity: 0;
+      animation: boot-fade-up 520ms cubic-bezier(0.2, 0, 0, 1) 120ms forwards;
+    }
+    #boot-splash .boot-hint {
+      font-size: 12px;
+      color: #6b7280;
+      opacity: 0;
+      animation: boot-fade-up 520ms cubic-bezier(0.2, 0, 0, 1) 260ms forwards;
+    }
+    #boot-splash .boot-track {
+      width: 132px;
+      height: 4px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #e3e6f0;
+    }
+    #boot-splash .boot-track span {
+      display: block;
+      width: 40%;
+      height: 100%;
+      border-radius: 999px;
+      background: #1a1a2e;
+      animation: boot-sweep 1200ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    @keyframes boot-breathe {
+      0%, 100% { transform: scale(0.94); }
+      50% { transform: scale(1.06); }
+    }
+    @keyframes boot-ring {
+      0% { box-shadow: 0 0 0 0 rgba(26, 26, 46, 0.16); }
+      70% { box-shadow: 0 0 0 18px rgba(26, 26, 46, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(26, 26, 46, 0); }
+    }
+    @keyframes boot-fade-up {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes boot-sweep {
+      from { transform: translateX(-110%); }
+      to { transform: translateX(260%); }
+    }
+    @media (prefers-color-scheme: dark) {
+      #boot-splash { background: #17171c; }
+      #boot-splash .boot-seed { background: #24242c; }
+      #boot-splash .boot-title { color: #f3f4f6; }
+      #boot-splash .boot-track { background: #2c2c36; }
+      #boot-splash .boot-track span { background: #f3f4f6; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #boot-splash .boot-seed,
+      #boot-splash .boot-track span { animation: none; }
+      #boot-splash .boot-title,
+      #boot-splash .boot-hint { animation: none; opacity: 1; }
+    }
+  </style>
+  <script>
+    // Flutter 首帧一到就调它（见 lib/core/boot_splash.dart）。
+    window.__sekainookBootDone = function () {
+      var el = document.getElementById('boot-splash');
+      if (!el) return;
+      el.classList.add('boot-out');
+      window.setTimeout(function () { el.remove(); }, 460);
+    };
+    // 兜底：万一 Dart 侧没调（比如首帧前就报错），8 秒后照样撤掉，别挡住页面。
+    window.setTimeout(window.__sekainookBootDone, 8000);
+  </script>
+</head>
+<body>
+  <div id="boot-splash">
+    <div class="boot-seed">🌱</div>
+    <div class="boot-title">SekaiNook</div>
+    <div class="boot-track"><span></span></div>
+    <div class="boot-hint">正在打开你的小世界…</div>
+  </div>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

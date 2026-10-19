@@ -1,0 +1,194 @@
+import 'package:flutter/material.dart';
+
+import '../../theme/app_theme.dart';
+import '../../theme/motion.dart';
+import '../../theme/tokens.dart';
+import 'motion_widgets.dart';
+
+/// 加载中（小范围用，比如按钮旁边、列表尾部）
+///
+/// 整页加载优先用 [SkeletonList] —— 骨架屏比转圈更不打断视线。
+class LoadingView extends StatelessWidget {
+  const LoadingView({super.key, this.message});
+
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return EnterBox(
+      duration: AppMotion.fast,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2.5, color: palette.primary),
+            ),
+            if (message != null) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                message!,
+                style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 骨架屏列表：按真实卡片的形状铺几张占位，逐张错峰浮现。
+class SkeletonList extends StatelessWidget {
+  const SkeletonList({
+    super.key,
+    this.count = 3,
+    this.lines = 2,
+    this.showLeading = true,
+    this.padding = const EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: AppSpacing.sm,
+    ),
+  });
+
+  final int count;
+  final int lines;
+  final bool showLeading;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: Column(
+        children: <Widget>[
+          for (int i = 0; i < count; i++)
+            EnterBox(
+              index: i,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: SkeletonCard(lines: lines, showLeading: showLeading),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 出错了（带重试）
+class ErrorView extends StatelessWidget {
+  const ErrorView({super.key, required this.message, this.onRetry, this.icon = Icons.cloud_off});
+
+  final String message;
+  final VoidCallback? onRetry;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return _StateHint(
+      icon: icon,
+      iconColor: palette.danger,
+      message: message,
+      action: onRetry == null
+          ? null
+          : OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('再试一次'),
+            ),
+    );
+  }
+}
+
+/// 空状态
+class EmptyView extends StatelessWidget {
+  const EmptyView({
+    super.key,
+    required this.message,
+    this.icon = Icons.inbox_outlined,
+    this.hint,
+  });
+
+  final String message;
+  final String? hint;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return _StateHint(
+      icon: icon,
+      iconColor: palette.textTertiary,
+      message: message,
+      hint: hint,
+    );
+  }
+}
+
+/// 出错 / 空状态共用的版式：圆形软底图标 + 文案 + 可选操作，
+/// 整体从下方轻轻浮上来（[EnterBox]）。
+class _StateHint extends StatelessWidget {
+  const _StateHint({
+    required this.icon,
+    required this.iconColor,
+    required this.message,
+    this.hint,
+    this.action,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String message;
+  final String? hint;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return EnterBox(
+      distance: 18,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: palette.surfaceSoft,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 34, color: iconColor),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+              ),
+              if (hint != null) ...<Widget>[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  hint!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                ),
+              ],
+              if (action != null) ...<Widget>[
+                const SizedBox(height: AppSpacing.md),
+                action!,
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
