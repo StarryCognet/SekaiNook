@@ -1,0 +1,5 @@
+# 版本日志是 scripts/changelog-sync.mjs 生成的（写 LF）。
+# 本机 core.autocrlf=true 且没有这条规则时，git 检出会把它转成 CRLF，
+# 于是 changelog:fallback --check 会误报「与 Web 仓库的版本日志不一致」
+# （内容其实逐字节相同，只差每行一个 CR）。
+app/lib/config/changelog.dart text eol=lf
