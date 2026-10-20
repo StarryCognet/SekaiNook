@@ -69,7 +69,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.build(ThemeId.original),
+        theme: AppTheme.build(ThemeId.rose, dark: false),
         home: Scaffold(
           body: Builder(
             builder: (BuildContext context) => Center(

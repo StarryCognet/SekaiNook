@@ -332,12 +332,13 @@ class _SettingsPageState extends State<SettingsPage> {
     _toast('已切换到「${preset.name}」主题');
   }
 
-  Future<void> _toggleBrightness() async {
+  /// 设置页那三档「浅色 / 深色 / 跟随系统」
+  Future<void> _setBrightness(ThemeBrightness value) async {
     try {
-      await context.read<ThemeState>().toggleBrightness();
+      await context.read<ThemeState>().setBrightness(value);
     } catch (_) {
       if (!mounted) return;
-      _toast('深浅没切成功，请重试', error: true);
+      _toast('明暗没切成功，请重试', error: true);
     }
   }
 
@@ -1122,31 +1123,51 @@ class _SettingsPageState extends State<SettingsPage> {
               const _CardHead(
                 title: '主题',
                 description:
-                    '全局生效；只改这台手机的显示，另一台手机自己选。顶栏右上角那颗太阳/月亮也能一键在深浅之间来回切',
+                    '七种颜色，每种只要一个种子色 —— 整套色板由 Material You 推出来。只改这台手机，另一台自己选',
               ),
-              const SizedBox(height: AppSpacing.sm),
-              for (int index = 0; index < AppTheme.all.length; index++)
-                EnterBox(
-                  index: index,
-                  child: _themeTile(palette, AppTheme.all[index], theme.themeId),
-                ),
-              const SizedBox(height: AppSpacing.sm),
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  onPressed: _toggleBrightness,
-                  icon: _BrightnessIcon(dark: theme.preset.dark),
-                  label: Text(theme.preset.dark ? '切到浅色' : '切到深色'),
-                ),
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.sm,
+                children: <Widget>[
+                  for (int index = 0; index < AppTheme.all.length; index++)
+                    EnterBox(
+                      index: index,
+                      child: _themeTile(palette, AppTheme.all[index], theme.themeId),
+                    ),
+                ],
               ),
-            ],
-          ),
-        ),
-        AppCard(
-          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
+              const SizedBox(height: AppSpacing.md),
+              Divider(height: 1, color: palette.border),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: <Widget>[
+                  Text(
+                    '明暗',
+                    style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+                  ),
+                  const Spacer(),
+                  SegmentedButton<ThemeBrightness>(
+                    segments: const <ButtonSegment<ThemeBrightness>>[
+                      ButtonSegment<ThemeBrightness>(
+                        value: ThemeBrightness.light,
+                        label: Text('浅色'),
+                      ),
+                      ButtonSegment<ThemeBrightness>(
+                        value: ThemeBrightness.dark,
+                        label: Text('深色'),
+                      ),
+                      ButtonSegment<ThemeBrightness>(
+                        value: ThemeBrightness.system,
+                        label: Text('跟随系统'),
+                      ),
+                    ],
+                    selected: <ThemeBrightness>{theme.brightness},
+                    showSelectedIcon: false,
+                    onSelectionChanged: (Set<ThemeBrightness> value) => _setBrightness(value.first),
+                  ),
+                ],
+              ),
               const _CardHead(
                 title: '底栏不透明度',
                 description:
@@ -1291,81 +1312,72 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  /// 一张主题色板卡：48px 圆切三块 —— 整圆是**页面底**、右上四分之一是**卡片底**、
+  /// 右下四分之一是**主色**。
+  ///
+  /// 三个色是当场从种子色推出来的（[AppTheme.swatchOf]），所以色卡上看到的就是
+  /// 选中之后整页的样子 —— 手写预览色迟早会和推导公式漂移。
   Widget _themeTile(AppPalette palette, AppThemePreset preset, ThemeId current) {
-    final selected = preset.id == current;
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.xs),
-      child: AnimatedScale(
-        scale: selected ? 1.03 : 1,
-        duration: AppMotion.fast,
-        curve: AppMotion.spring,
-        child: AnimatedContainer(
-          duration: AppMotion.fast,
-          curve: AppMotion.standard,
-          decoration: ShapeDecoration(
-            color: selected ? palette.primarySoft : palette.surface,
-            shape: AppShape.all(AppRadius.md, side: BorderSide(color: selected ? palette.primary : palette.border, width: selected ? 1.6 : 1)),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            child: InkWell(
-              onTap: () => _pickTheme(preset),
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                child: Row(
-                  children: <Widget>[
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                      child: SizedBox(
-                        width: 48,
-                        height: 30,
-                        child: Row(
-                          children: <Widget>[
-                            for (final color in preset.swatch)
-                              Expanded(child: ColoredBox(color: color)),
-                          ],
-                        ),
+    final bool selected = preset.id == current;
+    final List<Color> swatch = AppTheme.swatchOf(preset.id);
+    return PressScale(
+      scale: 0.94,
+      onTap: () => _pickTheme(preset),
+      child: SizedBox(
+        width: 62,
+        child: Column(
+          children: <Widget>[
+            AnimatedContainer(
+              duration: AppMotion.fast,
+              curve: AppMotion.standard,
+              padding: const EdgeInsets.all(3),
+              decoration: ShapeDecoration(
+                shape: AppShape.all(
+                  AppRadius.full,
+                  side: BorderSide(
+                    color: selected ? palette.primary : palette.border,
+                    width: selected ? 2 : 1,
+                  ),
+                ),
+              ),
+              child: ClipOval(
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Stack(
+                    children: <Widget>[
+                      Positioned.fill(child: ColoredBox(color: swatch[0])),
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        width: 22,
+                        height: 22,
+                        child: ColoredBox(color: swatch[1]),
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            preset.name,
-                            style: TextStyle(
-                              fontSize: AppFontSize.sm,
-                              fontWeight: FontWeight.w600,
-                              // 选中的色卡底是 primarySoft：名字跟着这层底走
-                              color: selected ? palette.onSoft : palette.text,
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            preset.description,
-                            style: TextStyle(
-                              fontSize: AppFontSize.xs,
-                              color: selected
-                                  ? palette.onColorSoft(palette.primarySoft)
-                                  : palette.textSecondary,
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        width: 22,
+                        height: 22,
+                        child: ColoredBox(color: swatch[2]),
                       ),
-                    ),
-                    if (selected) ...<Widget>[
-                      const SizedBox(width: AppSpacing.xs),
-                      Icon(Icons.check_circle, size: 18, color: palette.onSoft),
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              preset.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppFontSize.xs,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected ? palette.primary : palette.textSecondary,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -2583,32 +2595,6 @@ class _AdminPasswordDialogState extends State<_AdminPasswordDialog> {
               : const Text('进入'),
         ),
       ],
-    );
-  }
-}
-
-/// 深浅切换的太阳/月亮：整颗转半圈，两个图标互相淡入淡出。
-class _BrightnessIcon extends StatelessWidget {
-  const _BrightnessIcon({required this.dark});
-
-  final bool dark;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedRotation(
-      turns: dark ? 0.5 : 0,
-      duration: AppMotion.normal,
-      curve: AppMotion.standard,
-      child: AnimatedSwitcher(
-        duration: AppMotion.normal,
-        switchInCurve: AppMotion.decelerate,
-        switchOutCurve: AppMotion.accelerate,
-        child: Icon(
-          key: ValueKey<bool>(dark),
-          dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-          size: 18,
-        ),
-      ),
     );
   }
 }

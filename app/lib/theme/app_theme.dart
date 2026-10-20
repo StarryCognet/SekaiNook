@@ -11,7 +11,7 @@ import 'tokens.dart';
 /// 组装成 ThemeData + palette 扩展，页面只读 palette，不再各写各的色值。
 ///
 /// 加新主题的步骤：① 下面 [AppTheme.all] 加一条 ② [ThemeId] 加一个枚举值。
-enum ThemeId { original, midnight, sakura, forest, sunset, crimson, graphite }
+enum ThemeId { rose, brown, blue, yellow, grayblue, green, purple }
 
 /// 一套主题的全部颜色。字段与 Web 版 `ThemePalette` 一一对应，不要改名。
 class AppPalette extends ThemeExtension<AppPalette> {
@@ -171,6 +171,65 @@ class AppPalette extends ThemeExtension<AppPalette> {
   /// 次级色块 / 选中底色上的文字色。
   Color get onSoft => onColor(primarySoft);
 
+  /// 从一个种子色推导整套色板 —— Material You 的做法，FlClash 的主题就是这么来的。
+  ///
+  /// 为什么换掉原来那七份手写色板：每加一套主题都要人工配 17 个色值，还得逐个校对
+  /// 对比度（`test/palette_contrast_test.dart` 拦的就是漏配的那几个）。走
+  /// [ColorScheme.fromSeed] 之后，给一个种子色，M3 会按 HCT 色轮推出一整组
+  /// 对比度达标的色（浅色/深色各一套），再加主题只要加一行种子色。
+  ///
+  /// 语义色（success / danger / warning）M3 不管，仍是固定色，但会 [harmonize]
+  /// 到种子色 —— 否则紫主题里跳出一个正绿，整页看着就脏。
+  factory AppPalette.fromSeed(Color seed, {required bool dark}) {
+    final ColorScheme scheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: dark ? Brightness.dark : Brightness.light,
+    );
+    return AppPalette(
+      primary: scheme.primary,
+      primarySoft: scheme.primaryContainer,
+      success: harmonize(const Color(0xFF0F9B6C), seed),
+      danger: harmonize(const Color(0xFFE94560), seed),
+      warning: harmonize(const Color(0xFFF5A623), seed),
+      // M3 里 surface(浅色 tone 98 / 深色 tone 6) 是页面底，
+      // surfaceContainerLow 才是卡片底 —— 卡片比页面底低两档，
+      // 「白卡浮在白底上」这件事在 Material You 里是靠这个层级表达的。
+      bg: scheme.surface,
+      surface: scheme.surfaceContainerLow,
+      surfaceSoft: scheme.surfaceContainerHigh,
+      text: scheme.onSurface,
+      textSecondary: scheme.onSurfaceVariant,
+      // M3 只有两档文字色（onSurface / onSurfaceVariant），第三档得自己找：
+      // outline(tone50) 对 surface 只有 3.96:1 不够，所以取 onSurfaceVariant(tone30)
+      // 与 outline 的中点（约 tone40）—— 浅深两色下都落在 5:1 上下。
+      textTertiary: Color.lerp(scheme.onSurfaceVariant, scheme.outline, 0.5)!,
+      border: scheme.outlineVariant,
+      sider: scheme.surfaceContainer,
+      siderSelected: scheme.secondaryContainer,
+      segmentedSelected: scheme.surfaceContainerHighest,
+      surfaceGlass: scheme.surfaceContainerLow.withValues(alpha: 0.82),
+      surfaceSoftGlass: scheme.surfaceContainerHigh.withValues(alpha: 0.70),
+    );
+  }
+
+  /// 把 [target] 的色相往 [source] 的色相上拉一半。
+  ///
+  /// material_color_utilities 的 HarmonizedColor 只能在 HCT 上算，这里用 HSL 顶上。
+  /// **只拉一半**：全拉的话黄主题下的 success 会变成黄绿、紫主题下的 danger 变成紫，
+  /// 「绿=好、红=坏」的语义就没了；拉一半既让整页色调统一，又保住那点直觉。
+  static Color harmonize(Color target, Color source) {
+    final HSLColor t = HSLColor.fromColor(target);
+    final HSLColor s = HSLColor.fromColor(source);
+    // 最短角差（色相是环，179° 和 -179° 其实差 2°）
+    final double delta = ((s.hue - t.hue + 540) % 360) - 180;
+    if (delta.abs() < 12) return target;
+    double hue = t.hue + delta * 0.5;
+    if (hue < 0) hue += 360;
+    if (hue >= 360) hue -= 360;
+    return t.withHue(hue).toColor();
+  }
+
+
   @override
   AppPalette copyWith({
     Color? primary,
@@ -239,15 +298,15 @@ class AppPalette extends ThemeExtension<AppPalette> {
   }
 }
 
-/// 一个主题预设：id + 名字 + 说明 + 预览三色 + 深色标记 + 完整调色板。
+/// 一个主题预设 = 一个种子色。
+///
+/// 色板不存了 —— 它由 [AppPalette.fromSeed] 现推，深色浅色各推一份。
 class AppThemePreset {
   const AppThemePreset({
     required this.id,
     required this.name,
     required this.description,
-    required this.swatch,
-    required this.dark,
-    required this.palette,
+    required this.seed,
   });
 
   final ThemeId id;
@@ -258,238 +317,105 @@ class AppThemePreset {
   /// 设置页显示的一句话说明
   final String description;
 
-  /// 预览小块的三个色（底 / 卡片 / 强调）
-  final List<Color> swatch;
-
-  /// 是否深色主题
-  final bool dark;
-
-  final AppPalette palette;
+  /// 种子色：整套 17 色都从它推出来
+  final Color seed;
 }
 
-/// 深色与浅色主题共用的半透明玻璃底（对应 Web 版的 GLASS_LIGHT / GLASS_SOFT_LIGHT）
-const Color _glassLight = Color(0xD1FFFFFF); // rgba(255,255,255,0.82)
-const Color _glassSoftLight = Color(0xB3FFFFFF); // rgba(255,255,255,0.7)
+/// 明暗偏好 —— 与「哪个主题」是两件独立的事。
+///
+/// 跟着系统走是本机行为（`ThemeMode.system`），所以「跟随系统」只是亮度的一档，
+/// 不是第七个主题。
+enum ThemeBrightness { light, dark, system }
 
-/// 七套主题（顺序与 Web 版一致，设置页按此顺序展示）。
+/// 七个种子色 —— 与 FlClash 的预设主色用的是同一套。
+///
+/// 主题列表只存种子色，色板现推（[paletteOf]）；推导结果有缓存，
+/// `ColorScheme.fromSeed` 要跑一遍 HCT 量化，而主题 × 明暗一共就 14 种。
 abstract final class AppTheme {
-  static const ThemeId defaultThemeId = ThemeId.original;
+  static const ThemeId defaultThemeId = ThemeId.rose;
 
   /// 主题选择存在本机（每台设备各选各的，不跨设备同步）
   static const String storageKey = 'sekainook_theme';
 
+  /// 明暗偏好（浅色 / 深色 / 跟随系统）同样存本机
+  static const String brightnessKey = 'sekainook_theme_brightness';
+
   static const List<AppThemePreset> all = <AppThemePreset>[
     AppThemePreset(
-      id: ThemeId.original,
-      name: '原始',
-      description: '浅色卡片 + 深蓝主色，出厂默认',
-      swatch: <Color>[Color(0xFFF5F6FA), Color(0xFFFFFFFF), Color(0xFF1A1A2E)],
-      dark: false,
-      palette: AppPalette(
-        primary: Color(0xFF1A1A2E),
-        primarySoft: Color(0xFF2A2A4A),
-        success: Color(0xFF0F9B6C),
-        danger: Color(0xFFE94560),
-        warning: Color(0xFFF5A623),
-        bg: Color(0xFFF5F6FA),
-        surface: Color(0xFFFFFFFF),
-        surfaceSoft: Color(0xFFF9FAFB),
-        text: Color(0xFF1A1A2E),
-        textSecondary: Color(0xFF6B7280),
-        textTertiary: Color(0xFF727780),
-        border: Color(0xFFE5E7EB),
-        sider: Color(0xFF1A1A2E),
-        siderSelected: Color(0xFF2A2A4A),
-        segmentedSelected: Color(0xFFFFFFFF),
-        surfaceGlass: _glassLight,
-        surfaceSoftGlass: _glassSoftLight,
-      ),
+      id: ThemeId.rose,
+      name: '玫瑰粉',
+      description: '柔和灰玫瑰，出厂默认',
+      seed: Color(0xFFD8C0C3),
     ),
     AppThemePreset(
-      id: ThemeId.midnight,
-      name: '午夜蓝',
-      description: '午夜蓝墨底 + 青蓝高光，晚上看不刺眼',
-      swatch: <Color>[Color(0xFF060C1C), Color(0xFF0E1A33), Color(0xFF2B7FE0)],
-      dark: true,
-      palette: AppPalette(
-        primary: Color(0xFF2B7FE0),
-        primarySoft: Color(0xFF1B4A8F),
-        success: Color(0xFF34D399),
-        danger: Color(0xFFFF6B81),
-        warning: Color(0xFFF7B955),
-        bg: Color(0xFF060C1C),
-        surface: Color(0xFF0E1A33),
-        surfaceSoft: Color(0xFF132241),
-        text: Color(0xFFE8F1FF),
-        textSecondary: Color(0xFF92A8C9),
-        textTertiary: Color(0xFF7B8FAE),
-        border: Color(0xFF22355A),
-        sider: Color(0xFF04091A),
-        siderSelected: Color(0xFF152A52),
-        segmentedSelected: Color(0xFF1D3160),
-        surfaceGlass: Color(0xD10E1A33),
-        surfaceSoftGlass: Color(0xB3132241),
-      ),
+      id: ThemeId.brown,
+      name: '暖棕',
+      description: '木质褐，安静耐看',
+      seed: Color(0xFF795548),
     ),
     AppThemePreset(
-      id: ThemeId.sakura,
-      name: '樱花粉',
-      description: '奶粉底 + 樱花主色，软软的一天',
-      swatch: <Color>[Color(0xFFFFF5F8), Color(0xFFFFFFFF), Color(0xFFE8628F)],
-      dark: false,
-      palette: AppPalette(
-        primary: Color(0xFFE8628F),
-        primarySoft: Color(0xFFF6A8C4),
-        success: Color(0xFF2FAE86),
-        danger: Color(0xFFE8455F),
-        warning: Color(0xFFE9A13A),
-        bg: Color(0xFFFFF5F8),
-        surface: Color(0xFFFFFFFF),
-        surfaceSoft: Color(0xFFFDF1F5),
-        text: Color(0xFF3B2430),
-        textSecondary: Color(0xFF8B6B78),
-        textTertiary: Color(0xFF847279),
-        border: Color(0xFFF6DBE5),
-        sider: Color(0xFFE8628F),
-        siderSelected: Color(0xFFC9426E),
-        segmentedSelected: Color(0xFFFFFFFF),
-        surfaceGlass: _glassLight,
-        surfaceSoftGlass: _glassSoftLight,
-      ),
+      id: ThemeId.blue,
+      name: '晴空蓝',
+      description: '清澈的天蓝',
+      seed: Color(0xFF03A9F4),
     ),
     AppThemePreset(
-      id: ThemeId.forest,
-      name: '森林绿',
-      description: '薄荷底 + 森林绿，清清爽爽像早上',
-      swatch: <Color>[Color(0xFFF2F9F5), Color(0xFFFFFFFF), Color(0xFF2F9E6E)],
-      dark: false,
-      palette: AppPalette(
-        primary: Color(0xFF2F9E6E),
-        primarySoft: Color(0xFF8FD3B4),
-        success: Color(0xFF2F9E6E),
-        danger: Color(0xFFE0603F),
-        warning: Color(0xFFDFA03A),
-        bg: Color(0xFFF2F9F5),
-        surface: Color(0xFFFFFFFF),
-        surfaceSoft: Color(0xFFEEF7F1),
-        text: Color(0xFF1E3B2F),
-        textSecondary: Color(0xFF5F7D6F),
-        textTertiary: Color(0xFF677A70),
-        border: Color(0xFFDCEBE2),
-        sider: Color(0xFF1F6F4D),
-        siderSelected: Color(0xFF2F9E6E),
-        segmentedSelected: Color(0xFFFFFFFF),
-        surfaceGlass: _glassLight,
-        surfaceSoftGlass: _glassSoftLight,
-      ),
+      id: ThemeId.yellow,
+      name: '柠檬黄',
+      description: '明亮的黄，白天看着精神',
+      seed: Color(0xFFFFFF00),
     ),
     AppThemePreset(
-      id: ThemeId.sunset,
-      name: '暖阳橙',
-      description: '米白底 + 暖橙主色，像傍晚的客厅',
-      swatch: <Color>[Color(0xFFFFF8F1), Color(0xFFFFFFFF), Color(0xFFE07B39)],
-      dark: false,
-      palette: AppPalette(
-        primary: Color(0xFFE07B39),
-        primarySoft: Color(0xFFF5B183),
-        success: Color(0xFF3D9E6D),
-        danger: Color(0xFFD8452F),
-        warning: Color(0xFFDD9A2A),
-        bg: Color(0xFFFFF8F1),
-        surface: Color(0xFFFFFFFF),
-        surfaceSoft: Color(0xFFFDF3E9),
-        text: Color(0xFF3F2A1B),
-        textSecondary: Color(0xFF8A6C55),
-        textTertiary: Color(0xFF837262),
-        border: Color(0xFFF4E0CC),
-        sider: Color(0xFFC25F22),
-        siderSelected: Color(0xFFE07B39),
-        segmentedSelected: Color(0xFFFFFFFF),
-        surfaceGlass: _glassLight,
-        surfaceSoftGlass: _glassSoftLight,
-      ),
+      id: ThemeId.grayblue,
+      name: '雾灰蓝',
+      description: '低饱和灰蓝，不抢眼',
+      seed: Color(0xFFBBC9CC),
     ),
     AppThemePreset(
-      id: ThemeId.crimson,
-      name: '暗夜红',
-      description: '墨红底 + 霓虹红，像游戏界面（夜里护眼）',
-      swatch: <Color>[Color(0xFF140609), Color(0xFF1F0C11), Color(0xFFF04A5A)],
-      dark: true,
-      palette: AppPalette(
-        primary: Color(0xFFF04A5A),
-        primarySoft: Color(0xFF8C1F2D),
-        success: Color(0xFF3DDC97),
-        danger: Color(0xFFFF7B7B),
-        warning: Color(0xFFF2B44C),
-        bg: Color(0xFF140609),
-        surface: Color(0xFF1F0C11),
-        surfaceSoft: Color(0xFF2A1218),
-        text: Color(0xFFF8ECEF),
-        textSecondary: Color(0xFFC99AA5),
-        textTertiary: Color(0xFFA67E86),
-        border: Color(0xFF3D2027),
-        sider: Color(0xFF0D0406),
-        siderSelected: Color(0xFF3A1620),
-        segmentedSelected: Color(0xFF3A1620),
-        surfaceGlass: Color(0xD11F0C11),
-        surfaceSoftGlass: Color(0xB32A1218),
-      ),
+      id: ThemeId.green,
+      name: '抹茶绿',
+      description: '清淡的草绿',
+      seed: Color(0xFFABD397),
     ),
     AppThemePreset(
-      id: ThemeId.graphite,
-      name: '石墨黑',
-      description: '近黑底 + 白墨 + 玻璃胶囊，笔记工具风（夜里最安静）',
-      swatch: <Color>[Color(0xFF141414), Color(0xFF242424), Color(0xFF0F77F0)],
-      dark: true,
-      palette: AppPalette(
-        primary: Color(0xFF0F77F0),
-        primarySoft: Color(0xFF0A4F9E),
-        success: Color(0xFF3DDC97),
-        danger: Color(0xFFFF4538),
-        warning: Color(0xFFFFDD55),
-        bg: Color(0xFF141414),
-        surface: Color(0xFF1F1F1F),
-        surfaceSoft: Color(0xFF242424),
-        text: Color(0xFFFFFFFF),
-        textSecondary: Color(0xFFB4B4B4),
-        textTertiary: Color(0xFF8D8D8D),
-        border: Color(0xFF383838),
-        sider: Color(0xFF0D0D0D),
-        siderSelected: Color(0xFF2A2A2A),
-        segmentedSelected: Color(0xFF3F3F3F),
-        surfaceGlass: Color(0xD11F1F1F),
-        surfaceSoftGlass: Color(0xB3242424),
-      ),
+      id: ThemeId.purple,
+      name: '藤紫',
+      description: '灰调紫，晚上看不刺眼',
+      seed: Color(0xFF665390),
     ),
   ];
 
-  /// 按 id 取预设；id 非法时回退出厂默认（与 Web 版 themePreset 同行为）。
   static AppThemePreset preset(ThemeId id) {
-    for (final item in all) {
+    for (final AppThemePreset item in all) {
       if (item.id == id) return item;
     }
     return all.first;
   }
 
-  /// 按存储字符串取预设；不认识就回退默认。
-  static AppThemePreset presetFromName(String? name) {
-    for (final item in all) {
-      if (item.id.name == name) return item;
-    }
-    return all.first;
+  static final Map<String, AppPalette> _palettes = <String, AppPalette>{};
+
+  /// 某个主题 + 某个明暗下的一整套色（带缓存）
+  static AppPalette paletteOf(ThemeId id, {required bool dark}) => _palettes.putIfAbsent(
+        '${id.name}-$dark',
+        () => AppPalette.fromSeed(preset(id).seed, dark: dark),
+      );
+
+  /// 设置页色板卡的三块颜色（浅色版推导出的 底 / 卡片 / 主色）。
+  /// 手写会和推导公式漂移，所以现算。
+  static List<Color> swatchOf(ThemeId id) {
+    final AppPalette light = paletteOf(id, dark: false);
+    return <Color>[light.bg, light.surface, light.primary];
   }
 
-  /// 组装 Flutter 主题。颜色一律取自 palette，这里不出现任何写死的色值。
-  ///
-  /// [hasBackground] = 用户设了自定义背景图：页面底要透明（照片在底下铺着），
-  /// 卡片改用半透明底。玻璃底由调用方通过 [AppPalette.cardColor] 取。
-  static ThemeData build(ThemeId id, {bool hasBackground = false}) {
-    final themePreset = preset(id);
-    final p = themePreset.palette;
+  static ThemeData build(ThemeId id, {required bool dark, bool hasBackground = false}) {
+    final p = paletteOf(id, dark: dark);
+    final Brightness brightness = dark ? Brightness.dark : Brightness.light;
 
+    // 种子用**原始**种子色而不是 p.primary —— p.primary 本身就是推出来的，
+    // 拿它当种子再推一次会把色相又挪一点（推两次 ≠ 推一次）。
     final scheme = ColorScheme.fromSeed(
-      seedColor: p.primary,
-      brightness: themePreset.dark ? Brightness.dark : Brightness.light,
+      seedColor: preset(id).seed,
+      brightness: brightness,
     ).copyWith(
       // ColorScheme.fromSeed 只会按种子色推出整套容器色，与 palette 里的色值、
       // 尤其是「哪个字配哪个底」无关。这里把容器色与 on* 全部按 palette 收口，
@@ -530,7 +456,7 @@ abstract final class AppTheme {
 
     final base = ThemeData(
       useMaterial3: true,
-      brightness: themePreset.dark ? Brightness.dark : Brightness.light,
+      brightness: brightness,
       colorScheme: scheme,
       scaffoldBackgroundColor: hasBackground ? Colors.transparent : p.bg,
       canvasColor: p.cardColor(hasBackground: hasBackground),
@@ -585,7 +511,7 @@ abstract final class AppTheme {
         hintStyle: TextStyle(color: p.textTertiary),
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: themePreset.dark ? p.surfaceSoft : const Color(0xFF303030),
+        backgroundColor: dark ? p.surfaceSoft : const Color(0xFF303030),
         contentTextStyle: const TextStyle(color: Colors.white, fontSize: AppFontSize.sm),
         behavior: SnackBarBehavior.floating,
         shape: AppShape.all(AppRadius.md),
@@ -680,5 +606,6 @@ abstract final class AppTheme {
 
 /// 页面里取调色板的快捷方式：`context.palette.primary`
 extension AppPaletteContext on BuildContext {
-  AppPalette get palette => Theme.of(this).extension<AppPalette>() ?? AppTheme.all.first.palette;
+  AppPalette get palette =>
+      Theme.of(this).extension<AppPalette>() ?? AppTheme.paletteOf(AppTheme.defaultThemeId, dark: false);
 }

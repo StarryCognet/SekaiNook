@@ -20,7 +20,7 @@ import 'package:sekainook_app/ui/widgets/state_views.dart';
 void main() {
   Widget host(Widget child, {bool disableAnimations = false}) {
     return MaterialApp(
-      theme: AppTheme.build(ThemeId.original),
+      theme: AppTheme.build(ThemeId.rose, dark: false),
       home: MediaQuery(
         data: MediaQueryData(disableAnimations: disableAnimations),
         child: Scaffold(body: child),

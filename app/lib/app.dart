@@ -134,10 +134,24 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
             key: ValueKey<int>(_generation),
             title: 'SekaiNook',
             debugShowCheckedModeBanner: false,
+            // 主题（种子色）与明暗分开给：浅色、深色各建一份 ThemeData，
+            // 「跟随系统」交给 ThemeMode.system —— 平台亮度由 Flutter 自己解析，
+            // 系统一改（比如到了晚上）整个 App 就跟着变，不用我们监听。
             theme: AppTheme.build(
               theme.themeId,
+              dark: false,
               hasBackground: theme.hasBackground,
             ),
+            darkTheme: AppTheme.build(
+              theme.themeId,
+              dark: true,
+              hasBackground: theme.hasBackground,
+            ),
+            themeMode: switch (theme.brightness) {
+              ThemeBrightness.light => ThemeMode.light,
+              ThemeBrightness.dark => ThemeMode.dark,
+              ThemeBrightness.system => ThemeMode.system,
+            },
             // MaterialApp 内部就是 AnimatedTheme：换主题时整个色板慢慢化过去，
             // 而不是"啪"地一下跳。AppPalette 实现了 lerp，所以半透明底也会一起过渡。
             themeAnimationDuration: AppMotion.slower,

@@ -59,7 +59,7 @@ void main() {
     final _TapLog log = _TapLog();
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.build(dark ? ThemeId.midnight : ThemeId.original),
+        theme: AppTheme.build(dark ? ThemeId.grayblue : ThemeId.rose, dark: dark),
         home: Builder(
           builder: (BuildContext context) => MediaQuery(
             // 只改状态栏高度，其余（尺寸 / 方向）照旧从真实窗口来。
@@ -230,7 +230,11 @@ void main() {
           // 照 app.dart 的写法让主题跟着 store 走 —— 顶栏换档后滑块要真的挪过去
           child: Consumer<ThemeState>(
             builder: (BuildContext context, ThemeState state, Widget? child) => MaterialApp(
-              theme: AppTheme.build(state.themeId, hasBackground: state.hasBackground),
+              theme: AppTheme.build(
+                state.themeId,
+                dark: state.brightness == ThemeBrightness.dark,
+                hasBackground: state.hasBackground,
+              ),
               home: const Scaffold(
                 body: Stack(
                   fit: StackFit.expand,
@@ -252,18 +256,18 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('设置'), findsOneWidget);
-      expect(AppTheme.preset(theme.themeId).dark, isFalse, reason: '出厂是浅色');
+      expect(theme.brightness, ThemeBrightness.system, reason: '出厂跟随系统');
       expect(knobOnRight(), findsNothing);
 
       // 点月亮：走的就是设置页那颗按钮用的同一条路（ThemeState.toggleBrightness）
       await tester.tap(find.byIcon(Icons.dark_mode_outlined));
       await tester.pumpAndSettle();
-      expect(AppTheme.preset(theme.themeId).dark, isTrue);
+      expect(theme.brightness, ThemeBrightness.dark);
       expect(knobOnRight(), findsOneWidget, reason: '滑块要托到月亮那一档');
 
       await tester.tap(find.byIcon(Icons.light_mode_outlined));
       await tester.pumpAndSettle();
-      expect(AppTheme.preset(theme.themeId).dark, isFalse);
+      expect(theme.brightness, ThemeBrightness.light);
       expect(knobOnRight(), findsNothing);
     });
   });

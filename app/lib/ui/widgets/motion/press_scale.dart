@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../theme/motion.dart';
+import 'elastic_press.dart';
 
 /// 按压反馈的尺寸归一化膨胀量 —— 与 FlClash 的 `ElasticPress` 同源。
 ///
@@ -29,7 +30,7 @@ double pressGrowthFor(BoxConstraints constraints) {
 ///   child: PressScale(onTap: onTap, child: content),
 /// )
 /// ```
-class PressScale extends StatefulWidget {
+class PressScale extends StatelessWidget {
   const PressScale({
     super.key,
     required this.child,
@@ -45,61 +46,21 @@ class PressScale extends StatefulWidget {
   final VoidCallback? onLongPress;
   final bool enabled;
 
-  /// 额外倍率（默认 1 = 只走尺寸归一化的膨胀量）
+  /// 额外倍率（保留参数：膨胀量由 ElasticPress 按尺寸归一化算，1 = 不额外补偿）
   final double scale;
 
   /// 按下时是否给一次轻触觉反馈（Web 上会被忽略）
   final bool haptic;
 
   @override
-  State<PressScale> createState() => _PressScaleState();
-}
-
-class _PressScaleState extends State<PressScale> {
-  bool _pressed = false;
-
-  void _setPressed(bool value) {
-    if (_pressed == value) return;
-    setState(() => _pressed = value);
-  }
-
-  void _handleTap() {
-    // 触觉只在「真的触发动作」时给一次，且用最轻的 selectionClick。
-    // 每点一下都 lightImpact 会让人去关掉系统触感。
-    if (widget.haptic) HapticFeedback.selectionClick();
-    widget.onTap?.call();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final bool interactive = widget.enabled && (widget.onTap != null || widget.onLongPress != null);
-    if (!interactive) return widget.child;
-
-    final bool animate = !(MediaQuery.maybeDisableAnimationsOf(context) ?? false);
-
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final double grow = pressGrowthFor(constraints);
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => _setPressed(true),
-          onTapUp: (_) => _setPressed(false),
-          onTapCancel: () => _setPressed(false),
-          onTap: _handleTap,
-          onLongPress: widget.onLongPress == null
-              ? null
-              : () {
-                  if (widget.haptic) HapticFeedback.selectionClick();
-                  widget.onLongPress!.call();
-                },
-          child: AnimatedScale(
-            scale: _pressed && animate ? (1 + grow) * widget.scale : 1,
-            duration: _pressed ? AppMotion.instant : AppMotion.normal,
-            curve: _pressed ? AppMotion.standard : AppMotion.spring,
-            child: widget.child,
-          ),
-        );
-      },
+    final bool interactive = enabled && (onTap != null || onLongPress != null);
+    if (!interactive) return child;
+    return ElasticPress(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      haptic: haptic,
+      child: child,
     );
   }
 }

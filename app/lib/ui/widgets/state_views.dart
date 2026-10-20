@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
+import 'motion/empty_illustration.dart';
 import 'motion/shape_loader.dart';
 import 'motion_widgets.dart';
 
@@ -159,14 +160,12 @@ class _StateHint extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: palette.surfaceSoft,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 34, color: iconColor),
+              EmptyIllustration(
+                icon: icon,
+                color: iconColor,
+                background: palette.surfaceSoft,
+                size: 96,
+                accent: palette.primary,
               ),
               const SizedBox(height: AppSpacing.md),
               Text(

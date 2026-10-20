@@ -7,14 +7,14 @@ import '../theme/app_theme.dart';
 
 /// 主题与全局背景图（对应 Web 版 `src/store/useThemeStore.ts`）。
 ///
-/// 两件事放在一起是因为它们都影响「整个 App 长什么样」，也都由设置页控制：
-/// - [themeId]：主题，**存本机**（每台设备各选各的）；右上角太阳/月亮按钮也走这里，
-///   在「上次用的浅色」与「上次用的深色」之间来回切；
+/// 三件事放在一起是因为它们都影响「整个 App 长什么样」，也都由设置页控制：
+/// - [themeId]：用哪个**种子色**，整套色板由它推出来，**存本机**；
+/// - [brightness]：浅色 / 深色 / **跟随系统**，也存本机；
 /// - [background]：全局背景图地址，**存服务端 settings 表**
 ///   （两台设备看到同一张，且服务端知道它被引用，不会被「闲置照片清理」误删）。
 ///
-/// **不跟随系统**：没有任何 `prefers-color-scheme` 参与主题选择，
-/// `themeId` 只来自本机存储或默认值。跟随系统这件事完全由用户手动点的那颗按钮替代。
+/// 主题与明暗是**两件独立的事**（FlClash 也是这么分的）：主题只管「什么颜色」，
+/// 浅色还是深色是另一档偏好，「跟随系统」只是明暗里的一个选项 —— 不是第七套主题。
 class ThemeState extends ChangeNotifier {
   ThemeState({
     required SharedPreferences prefs,
@@ -22,10 +22,8 @@ class ThemeState extends ChangeNotifier {
   })  : _prefs = prefs,
         _api = settingsApi {
     _themeId = _loadThemeId();
+    _brightness = _loadBrightness();
     _navOpacity = _loadNavOpacity();
-    // 首屏就把当前这套登记进它所属的深/浅格，免得第一次点切换时没有可回的目标。
-    // 移植时这一句千万别漏 —— 它是「第一次点切换会跳错」的根因修复。
-    _rememberBrightness(_themeId);
   }
 
   final SharedPreferences _prefs;
@@ -33,11 +31,16 @@ class ThemeState extends ChangeNotifier {
 
   late ThemeId _themeId;
 
-  /// 当前主题
+  /// 当前主题（种子色）
   ThemeId get themeId => _themeId;
 
   /// 当前主题预设
   AppThemePreset get preset => AppTheme.preset(_themeId);
+
+  late ThemeBrightness _brightness;
+
+  /// 当前明暗偏好（可能是「跟随系统」）
+  ThemeBrightness get brightness => _brightness;
 
   String _background = '';
 
@@ -86,7 +89,11 @@ class ThemeState extends ChangeNotifier {
 
   // ---- 主题 ----
 
-  /// 读主题：`isThemeId` 不通过就回出厂默认；读到脏值也一样
+  /// 读主题：不合法就回出厂默认。
+  ///
+  /// 旧版存的是「整套主题」的名字（original / sakura / …），那些名字现在都不是
+  /// 合法 id 了，于是自动回落到出厂主题 —— 老用户装上新版会看到主题变了，
+  /// 这是换色板体系的预期结果，不是丢配置。
   ThemeId _loadThemeId() {
     final raw = _prefs.getString(AppTheme.storageKey);
     for (final item in AppTheme.all) {
@@ -102,49 +109,42 @@ class ThemeState extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// 把 [id] 登记进它所属的深浅格（记不住就退回出厂的那套深浅主题）
-  Future<void> _rememberBrightness(ThemeId id) async {
-    final key = AppTheme.preset(id).dark
-        ? AppConstants.keyThemeDark
-        : AppConstants.keyThemeLight;
-    try {
-      await _prefs.setString(key, id.name);
-    } catch (_) {}
-  }
-
-  /// 读「上次用过的浅色 / 深色」。
-  ///
-  /// 两处必须照抄：① 深色的出厂回落是**硬编码 `midnight`**（浅色才是 `original`）；
-  /// ② 合法性判定要求「是合法 id **且**深浅相符」—— 两个键写反就会被判非法。
-  ThemeId _loadBrightness({required bool dark}) {
-    final fallback = dark ? ThemeId.midnight : AppTheme.defaultThemeId;
-    final raw = _prefs.getString(dark ? AppConstants.keyThemeDark : AppConstants.keyThemeLight);
-    for (final item in AppTheme.all) {
-      if (item.id.name == raw && item.dark == dark) return item.id;
-    }
-    return fallback;
-  }
-
   /// 切换主题（设置页点一下即生效并落盘）
   Future<void> setThemeId(ThemeId id) async {
-    // 顺序固定：先落盘两个键，再改 state
     await _saveThemeId(id);
-    await _rememberBrightness(id);
     if (_themeId == id) return;
     _themeId = id;
     notifyListeners();
   }
 
-  /// 在「上次用的浅色」与「上次用的深色」之间来回切（右上角太阳/月亮按钮）
-  Future<void> toggleBrightness() async {
-    final targetDark = !AppTheme.preset(_themeId).dark;
-    final next = _loadBrightness(dark: targetDark);
-    await _saveThemeId(next);
-    await _rememberBrightness(next);
-    if (_themeId == next) return;
-    _themeId = next;
+  // ---- 明暗 ----
+
+  /// 读明暗偏好。出厂「跟随系统」—— 手机到了晚上自己变深色，最不打扰人；
+  /// 读不到或读到脏值也一样回它。
+  ThemeBrightness _loadBrightness() {
+    final raw = _prefs.getString(AppTheme.brightnessKey);
+    for (final item in ThemeBrightness.values) {
+      if (item.name == raw) return item;
+    }
+    return ThemeBrightness.system;
+  }
+
+  /// 设置页那三个「浅色 / 深色 / 跟随系统」按钮
+  Future<void> setBrightness(ThemeBrightness value) async {
+    try {
+      await _prefs.setString(AppTheme.brightnessKey, value.name);
+    } catch (_) {}
+    if (_brightness == value) return;
+    _brightness = value;
     notifyListeners();
   }
+
+  /// 右上角太阳/月亮按钮：在浅色与深色之间来回切。
+  ///
+  /// [effectiveDark] 是「现在看上去是不是深色」—— 偏好是「跟随系统」时，
+  /// 光看 [_brightness] 判断不出该往哪边切，得由界面把当前实际明暗问出来传进来。
+  Future<void> toggleBrightness({required bool effectiveDark}) =>
+      setBrightness(effectiveDark ? ThemeBrightness.light : ThemeBrightness.dark);
 
   // ---- 背景图 ----
 

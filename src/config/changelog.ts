@@ -14,10 +14,22 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.1.1';
+export const APP_VERSION = '2.1.2';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.1.2',
+    date: '2026-10-20 08:30:00',
+    title: '主题换了，按钮也换了一种按法',
+    changes: [
+      '预设主题换成 7 个主色：玫瑰粉 / 棕 / 蓝 / 黄 / 灰蓝 / 绿 / 紫',
+      '整套配色由一个种子色推导出来，明暗两档自动配套',
+      '设置页可以选择跟随系统、常亮或者常暗',
+      '按钮按住会弹性放大，拖着走有跟手的拉伸，松手弹回',
+      '空状态和出错页换成了会做入场动画的插画',
+    ],
+  },
   {
     version: '2.1.1',
     date: '2026-10-19 22:15:00',

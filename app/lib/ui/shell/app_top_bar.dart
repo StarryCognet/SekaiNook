@@ -10,7 +10,7 @@ import '../../theme/app_shape.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
-import '../widgets/motion/press_scale.dart';
+import '../widgets/motion/elastic_press.dart';
 
 /// 顶栏左侧那颗胶囊里的「当前页小图标 + 页面名」。
 ///
@@ -269,9 +269,8 @@ class _BellChip extends StatelessWidget {
         message: '通知',
         // 语义已经由外面那条给了，别再念一遍
         excludeFromSemantics: true,
-        child: PressInkWell(
+        child: ElasticPress(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(AppRadius.full),
           child: SizedBox(
             width: AppTopBar.chipWidth,
             height: AppTopBar.chipHeight,
@@ -471,7 +470,11 @@ class AppTopBarHost extends StatelessWidget implements PreferredSizeWidget {
       unread: unread,
       hasBackground: hasBackground,
       onNotifications: () => context.go('/home/notifications'),
-      onToggleBrightness: () => unawaited(context.read<ThemeState>().toggleBrightness()),
+      onToggleBrightness: () => unawaited(
+        context
+            .read<ThemeState>()
+            .toggleBrightness(effectiveDark: Theme.of(context).brightness == Brightness.dark),
+      ),
     );
   }
 }

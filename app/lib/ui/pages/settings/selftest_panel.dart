@@ -533,21 +533,13 @@ class _SelftestPanelState extends State<SelftestPanel> {
     }
   }
 
-  /// 主题：存的三个键是否合法 + 7 套主题能不能构建 + 色板对比度。
+  /// 主题：存的键是否合法 + 7 个种子（明暗各一遍）能不能构建 + 色板对比度。
   Future<SelftestClientResult> _checkTheme(String id) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final String? current = prefs.getString(AppTheme.storageKey);
-    final String? light = prefs.getString(AppConstants.keyThemeLight);
-    final String? dark = prefs.getString(AppConstants.keyThemeDark);
 
     bool knownId(String? value) =>
         value != null && AppTheme.all.any((AppThemePreset preset) => preset.id.name == value);
-    bool matchesBrightness(String? value, bool isDark) =>
-        value != null &&
-        AppTheme.all.any(
-          (AppThemePreset preset) => preset.id.name == value && preset.dark == isDark,
-        );
-
     final List<String> broken = <String>[];
     final Map<String, double> ratios = <String, double>{};
     double worst = double.infinity;
@@ -556,12 +548,13 @@ class _SelftestPanelState extends State<SelftestPanel> {
     for (final AppThemePreset preset in AppTheme.all) {
       final String name = preset.id.name; // ignore: unnecessary_string_interpolations
       try {
-        AppTheme.build(preset.id);
+        AppTheme.build(preset.id, dark: false);
+        AppTheme.build(preset.id, dark: true);
       } catch (error) {
         broken.add('$name 构建失败：$error');
         continue;
       }
-      final AppPalette palette = preset.palette;
+      final AppPalette palette = AppTheme.paletteOf(preset.id, dark: false);
       // 阈值与 test/palette_contrast_test.dart 一致（正文 4.5 / 次要 3.5）
       final List<_ContrastPair> pairs = <_ContrastPair>[
         _ContrastPair('text / surface', palette.text, palette.surface, 4.5),
@@ -590,18 +583,13 @@ class _SelftestPanelState extends State<SelftestPanel> {
 
     final List<String> invalid = <String>[
       if (current != null && !knownId(current)) '${AppTheme.storageKey}=$current',
-      if (light != null && !matchesBrightness(light, false)) '${AppConstants.keyThemeLight}=$light',
-      if (dark != null && !matchesBrightness(dark, true)) '${AppConstants.keyThemeDark}=$dark',
     ];
     final List<String> missing = <String>[
       if (current == null) AppTheme.storageKey,
-      if (light == null) AppConstants.keyThemeLight,
-      if (dark == null) AppConstants.keyThemeDark,
     ];
     final Map<String, dynamic> data = <String, dynamic>{
       'current': current,
-      'light': light,
-      'dark': dark,
+      'brightness': prefs.getString(AppTheme.brightnessKey),
       'minContrast': ratios,
       'broken': broken,
     };
@@ -630,7 +618,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
     return SelftestClientResult(
       id: id,
       status: SelftestStatus.pass,
-      detail: '主题=$current · 浅=$light · 深=$dark；7 套都能构建，$worstText',
+      detail: '主题=$current · 明暗=${prefs.getString(AppTheme.brightnessKey) ?? "未存"}；7 套都能构建，$worstText',
       data: data,
     );
   }
