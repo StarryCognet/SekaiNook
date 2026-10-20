@@ -1168,6 +1168,67 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
+              // 纯黑只在深色下有意义，浅色下不给这个开关（点了也不会变）
+              if (Theme.of(context).brightness == Brightness.dark) ...<Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            '纯黑背景',
+                            style: TextStyle(fontSize: AppFontSize.sm, color: palette.text),
+                          ),
+                          Text(
+                            'OLED 屏上黑色像素不发光，能省一点电',
+                            style: TextStyle(
+                              fontSize: AppFontSize.xs,
+                              color: palette.textTertiary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: theme.pureBlack,
+                      onChanged: (bool value) => theme.setPureBlack(value),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+              const _CardHead(
+                title: '字号',
+                description: '整体放大或缩小正文；图标、间距不跟着变',
+              ),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Slider(
+                      value: theme.textScale,
+                      min: 0.8,
+                      max: 1.4,
+                      divisions: 12,
+                      onChanged: (double value) => theme.setTextScale(value),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 48,
+                    child: Text(
+                      '${(theme.textScale * 100).round()}%',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: AppFontSize.sm,
+                        fontWeight: FontWeight.w600,
+                        color: palette.text,
+                        fontFeatures: kTabularNumbers,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
               const _CardHead(
                 title: '底栏不透明度',
                 description:

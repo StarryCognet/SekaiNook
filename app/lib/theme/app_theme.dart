@@ -180,12 +180,16 @@ class AppPalette extends ThemeExtension<AppPalette> {
   ///
   /// 语义色（success / danger / warning）M3 不管，仍是固定色，但会 [harmonize]
   /// 到种子色 —— 否则紫主题里跳出一个正绿，整页看着就脏。
-  factory AppPalette.fromSeed(Color seed, {required bool dark}) {
+  factory AppPalette.fromSeed(
+    Color seed, {
+    required bool dark,
+    bool pureBlack = false,
+  }) {
     final ColorScheme scheme = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: dark ? Brightness.dark : Brightness.light,
     );
-    return AppPalette(
+    final AppPalette palette = AppPalette(
       primary: scheme.primary,
       primarySoft: scheme.primaryContainer,
       success: harmonize(const Color(0xFF0F9B6C), seed),
@@ -210,7 +214,23 @@ class AppPalette extends ThemeExtension<AppPalette> {
       surfaceGlass: scheme.surfaceContainerLow.withValues(alpha: 0.82),
       surfaceSoftGlass: scheme.surfaceContainerHigh.withValues(alpha: 0.70),
     );
+    return pureBlack ? palette.toPureBlack() : palette;
   }
+
+  /// 纯黑模式：只压「底」，不动「墨」。
+  ///
+  /// AMOLED 上纯黑像素不发光（省电、黑边更利落），但把文字和主色也一起压暗
+  /// 会让对比度塌掉 —— 所以只换 bg / surface / surfaceSoft / sider 这几层底。
+  AppPalette toPureBlack() => copyWith(
+        bg: const Color(0xFF000000),
+        surface: const Color(0xFF0B0B0B),
+        surfaceSoft: const Color(0xFF141414),
+        sider: const Color(0xFF080808),
+        segmentedSelected: const Color(0xFF1C1C1C),
+        border: const Color(0xFF262626),
+        surfaceGlass: const Color(0x1A000000),
+        surfaceSoftGlass: const Color(0x1F0B0B0B),
+      );
 
   /// 把 [target] 的色相往 [source] 的色相上拉一半。
   ///
@@ -339,6 +359,11 @@ abstract final class AppTheme {
 
   /// 明暗偏好（浅色 / 深色 / 跟随系统）同样存本机
   static const String brightnessKey = 'sekainook_theme_brightness';
+  /// 纯黑模式（只深色有效）：把页面底压到 0 tone。
+  static const String pureBlackKey = 'theme_pure_black';
+
+  /// 正文字号缩放，0.8 ~ 1.4。
+  static const String textScaleKey = 'theme_text_scale';
 
   static const List<AppThemePreset> all = <AppThemePreset>[
     AppThemePreset(
@@ -395,9 +420,14 @@ abstract final class AppTheme {
   static final Map<String, AppPalette> _palettes = <String, AppPalette>{};
 
   /// 某个主题 + 某个明暗下的一整套色（带缓存）
-  static AppPalette paletteOf(ThemeId id, {required bool dark}) => _palettes.putIfAbsent(
-        '${id.name}-$dark',
-        () => AppPalette.fromSeed(preset(id).seed, dark: dark),
+  static AppPalette paletteOf(
+    ThemeId id, {
+    required bool dark,
+    bool pureBlack = false,
+  }) =>
+      _palettes.putIfAbsent(
+        '${id.name}-$dark-$pureBlack',
+        () => AppPalette.fromSeed(preset(id).seed, dark: dark, pureBlack: pureBlack),
       );
 
   /// 设置页色板卡的三块颜色（浅色版推导出的 底 / 卡片 / 主色）。
@@ -407,8 +437,14 @@ abstract final class AppTheme {
     return <Color>[light.bg, light.surface, light.primary];
   }
 
-  static ThemeData build(ThemeId id, {required bool dark, bool hasBackground = false}) {
-    final p = paletteOf(id, dark: dark);
+  static ThemeData build(
+    ThemeId id, {
+    required bool dark,
+    bool hasBackground = false,
+    bool pureBlack = false,
+    double textScale = 1,
+  }) {
+    final p = paletteOf(id, dark: dark, pureBlack: pureBlack);
     final Brightness brightness = dark ? Brightness.dark : Brightness.light;
 
     // 种子用**原始**种子色而不是 p.primary —— p.primary 本身就是推出来的，
@@ -468,9 +504,12 @@ abstract final class AppTheme {
 
     return base.copyWith(
       extensions: <ThemeExtension<dynamic>>[p],
+      // 字号缩放走 textTheme 而不是 MediaQuery.textScaler：
+      // 后者会连同 Material 组件的固定高度一起放大，按钮和卡片会被撑破。
       textTheme: base.textTheme.apply(
         bodyColor: p.text,
         displayColor: p.text,
+        fontSizeFactor: textScale,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: p.cardColor(hasBackground: hasBackground),

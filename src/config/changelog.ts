@@ -14,10 +14,20 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.1.2';
+export const APP_VERSION = '2.1.3';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.1.3',
+    date: '2026-10-20 09:20:00',
+    title: '能调字号了，深色还能更黑',
+    changes: [
+      '设置 → 外观新增字号滑杆，可以从 80% 调到 140%',
+      '深色模式下新增「纯黑背景」开关，OLED 屏上更省电',
+      '换主题、换明暗时的过渡更顺，不会中间闪一下',
+    ],
+  },
   {
     version: '2.1.2',
     date: '2026-10-20 08:30:00',

@@ -141,11 +141,14 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
               theme.themeId,
               dark: false,
               hasBackground: theme.hasBackground,
+              textScale: theme.textScale,
             ),
             darkTheme: AppTheme.build(
               theme.themeId,
               dark: true,
               hasBackground: theme.hasBackground,
+              pureBlack: theme.pureBlack,
+              textScale: theme.textScale,
             ),
             themeMode: switch (theme.brightness) {
               ThemeBrightness.light => ThemeMode.light,

@@ -146,6 +146,29 @@ class ThemeState extends ChangeNotifier {
   Future<void> toggleBrightness({required bool effectiveDark}) =>
       setBrightness(effectiveDark ? ThemeBrightness.light : ThemeBrightness.dark);
 
+  // ---- 纯黑 / 字号 ----
+
+  /// 深色模式下把页面底压到纯黑（AMOLED 省电、黑边更利落）。浅色模式无效。
+  bool get pureBlack => _prefs.getBool(AppTheme.pureBlackKey) ?? false;
+
+  Future<void> setPureBlack(bool value) async {
+    try {
+      await _prefs.setBool(AppTheme.pureBlackKey, value);
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  /// 正文字号缩放 0.8 ~ 1.4（1.0 是默认）。
+  double get textScale =>
+      (_prefs.getDouble(AppTheme.textScaleKey) ?? 1.0).clamp(0.8, 1.4).toDouble();
+
+  Future<void> setTextScale(double value) async {
+    try {
+      await _prefs.setDouble(AppTheme.textScaleKey, value.clamp(0.8, 1.4).toDouble());
+    } catch (_) {}
+    notifyListeners();
+  }
+
   // ---- 背景图 ----
 
   /// 打开 App 时问一次服务端有没有设背景图。
