@@ -1198,6 +1198,33 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
               ],
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          '跟随壁纸取色',
+                          style: TextStyle(fontSize: AppFontSize.sm, color: palette.text),
+                        ),
+                        Text(
+                          'Android 12+ 从壁纸里取主色，其它系统会自动退回上面选的色',
+                          style: TextStyle(
+                            fontSize: AppFontSize.xs,
+                            color: palette.textTertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: theme.followWallpaper,
+                    onChanged: (bool value) => theme.setFollowWallpaper(value),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
               const _CardHead(
                 title: '字号',
                 description: '整体放大或缩小正文；图标、间距不跟着变',

@@ -146,6 +146,18 @@ class ThemeState extends ChangeNotifier {
   Future<void> toggleBrightness({required bool effectiveDark}) =>
       setBrightness(effectiveDark ? ThemeBrightness.light : ThemeBrightness.dark);
 
+  // ---- 跟随壁纸 ----
+
+  /// 跟随系统壁纸取色（Android 12+）。拿不到动态色时 App 会退回固定种子。
+  bool get followWallpaper => _prefs.getBool(AppTheme.followWallpaperKey) ?? false;
+
+  Future<void> setFollowWallpaper(bool value) async {
+    try {
+      await _prefs.setBool(AppTheme.followWallpaperKey, value);
+    } catch (_) {}
+    notifyListeners();
+  }
+
   // ---- 纯黑 / 字号 ----
 
   /// 深色模式下把页面底压到纯黑（AMOLED 省电、黑边更利落）。浅色模式无效。

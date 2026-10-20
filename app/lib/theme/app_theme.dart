@@ -365,6 +365,9 @@ abstract final class AppTheme {
   /// 正文字号缩放，0.8 ~ 1.4。
   static const String textScaleKey = 'theme_text_scale';
 
+  /// 是否跟随壁纸主色（Android 12+ 的 Material You）。
+  static const String followWallpaperKey = 'theme_follow_wallpaper';
+
   static const List<AppThemePreset> all = <AppThemePreset>[
     AppThemePreset(
       id: ThemeId.rose,
@@ -424,10 +427,15 @@ abstract final class AppTheme {
     ThemeId id, {
     required bool dark,
     bool pureBlack = false,
+    Color? dynamicSeed,
   }) =>
       _palettes.putIfAbsent(
-        '${id.name}-$dark-$pureBlack',
-        () => AppPalette.fromSeed(preset(id).seed, dark: dark, pureBlack: pureBlack),
+        '${id.name}-$dark-$pureBlack-${dynamicSeed?.hashCode}',
+        () => AppPalette.fromSeed(
+          dynamicSeed ?? preset(id).seed,
+          dark: dark,
+          pureBlack: pureBlack,
+        ),
       );
 
   /// 设置页色板卡的三块颜色（浅色版推导出的 底 / 卡片 / 主色）。
@@ -443,8 +451,9 @@ abstract final class AppTheme {
     bool hasBackground = false,
     bool pureBlack = false,
     double textScale = 1,
+    Color? dynamicSeed,
   }) {
-    final p = paletteOf(id, dark: dark, pureBlack: pureBlack);
+    final p = paletteOf(id, dark: dark, pureBlack: pureBlack, dynamicSeed: dynamicSeed);
     final Brightness brightness = dark ? Brightness.dark : Brightness.light;
 
     // 种子用**原始**种子色而不是 p.primary —— p.primary 本身就是推出来的，

@@ -36,6 +36,7 @@ class SekaiNookApp extends StatefulWidget {
     required this.garden,
     required this.localNotify,
     required this.update,
+    this.dynamicSeed,
   });
 
   final FamilyState family;
@@ -46,6 +47,9 @@ class SekaiNookApp extends StatefulWidget {
   final GardenState garden;
   final LocalNotifyState localNotify;
   final UpdateState update;
+
+  /// 跟随壁纸取到的主色（Android 12+）。为 null 时用用户选的固定种子。
+  final Color? dynamicSeed;
 
   @override
   State<SekaiNookApp> createState() => _SekaiNookAppState();
@@ -142,6 +146,7 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
               dark: false,
               hasBackground: theme.hasBackground,
               textScale: theme.textScale,
+              dynamicSeed: widget.dynamicSeed,
             ),
             darkTheme: AppTheme.build(
               theme.themeId,
@@ -149,6 +154,7 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
               hasBackground: theme.hasBackground,
               pureBlack: theme.pureBlack,
               textScale: theme.textScale,
+              dynamicSeed: widget.dynamicSeed,
             ),
             themeMode: switch (theme.brightness) {
               ThemeBrightness.light => ThemeMode.light,

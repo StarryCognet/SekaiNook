@@ -27,10 +27,20 @@ class ChangelogEntry {
 }
 
 /// 当前版本号（与 [changelog] 第一条保持一致）。
-const String appVersion = '2.1.3';
+const String appVersion = '2.1.4';
 
 /// 版本历史（倒序：最新在前）。
 const List<ChangelogEntry> changelog = <ChangelogEntry>[
+  ChangelogEntry(
+    version: '2.1.4',
+    date: '2026-10-20 09:20:00',
+    title: '界面颜色能跟着手机壁纸变了',
+    changes: <String>[
+      'Android 12 及以上：在「设置 → 主题 → 跟随壁纸取色」打开后，整套界面的主色会从壁纸里取',
+      '旧系统、网页版上没有这个能力，开关会自动退回你手选的颜色',
+      '换张壁纸就能换整套配色，不用再在预设里挑',
+    ],
+  ),
   ChangelogEntry(
     version: '2.1.3',
     date: '2026-10-20 09:20:00',

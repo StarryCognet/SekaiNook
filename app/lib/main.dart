@@ -1,6 +1,7 @@
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -52,8 +53,12 @@ Future<void> main() async {
   final ledgerApi = LedgerApi(client);
   final settingsApi = SettingsApi(client);
 
+  // 跟随壁纸：Android 12+ 会把壁纸主色交给 App；拿不到（旧系统 / 桌面 / Web）
+  // 时 lightDynamic 是 null，App 里会退回用户选的固定种子。
   runApp(
-    SekaiNookApp(
+    DynamicColorBuilder(
+      builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+        final Widget app = SekaiNookApp(
       family: FamilyState(
         api: ledgerApi,
         pinGuard: PinGuard(prefs),
@@ -66,6 +71,10 @@ Future<void> main() async {
       garden: GardenState(prefs: prefs, ledgerApi: ledgerApi),
       localNotify: LocalNotifyState(prefs: prefs),
       update: UpdateState(prefs: prefs),
+        dynamicSeed: lightDynamic?.primary,
+        );
+        return app;
+      },
     ),
   );
 
