@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -574,8 +575,8 @@ class _ModeLine extends StatelessWidget {
         children: <Widget>[
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.xs, right: AppSpacing.sm),
-            child: Icon(
-              active ? Icons.check_circle : Icons.radio_button_unchecked,
+            child: GlyphIcon(
+              active ? AppIcons.checkCircle : AppIcons.radioOff,
               size: AppFontSize.sm,
               color: color,
             ),

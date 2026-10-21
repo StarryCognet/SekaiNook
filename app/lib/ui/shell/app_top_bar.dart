@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -21,19 +22,19 @@ class AppTopBarPage {
   const AppTopBarPage({required this.label, required this.icon});
 
   final String label;
-  final IconData icon;
+  final Glyph icon;
 
-  static const AppTopBarPage home = AppTopBarPage(label: '首页', icon: Icons.home_outlined);
+  static const AppTopBarPage home = AppTopBarPage(label: '首页', icon: AppIcons.home);
   static const AppTopBarPage notifications =
-      AppTopBarPage(label: '通知', icon: Icons.notifications_outlined);
+      AppTopBarPage(label: '通知', icon: AppIcons.bell);
   static const AppTopBarPage family =
-      AppTopBarPage(label: '家庭账本', icon: Icons.receipt_long_outlined);
+      AppTopBarPage(label: '家庭账本', icon: AppIcons.receipt);
   static const AppTopBarPage plan =
-      AppTopBarPage(label: '学习计划', icon: Icons.calendar_month_outlined);
+      AppTopBarPage(label: '学习计划', icon: AppIcons.calendar);
   static const AppTopBarPage garden =
-      AppTopBarPage(label: '阳光花园', icon: Icons.local_florist_outlined);
+      AppTopBarPage(label: '阳光花园', icon: AppIcons.flower);
   static const AppTopBarPage settings =
-      AppTopBarPage(label: '设置', icon: Icons.settings_outlined);
+      AppTopBarPage(label: '设置', icon: AppIcons.settings);
 
   /// 按当前 location 推页面名与图标（路由表见 `app/lib/router.dart`）。
   ///
@@ -219,7 +220,7 @@ class _PageChip extends StatelessWidget {
               color: palette.primarySoft,
               shape: AppShape.all(AppRadius.sm),
             ),
-            child: Icon(
+            child: GlyphIcon(
               page.icon,
               size: AppTopBar.pageIconGlyph,
               color: palette.onSoft,
@@ -254,8 +255,8 @@ class _BellChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final Icon icon = Icon(
-      Icons.notifications_outlined,
+    final Widget icon = GlyphIcon(
+      AppIcons.bell,
       size: AppTopBar.glyph,
       color: palette.textSecondary,
     );
@@ -363,7 +364,7 @@ class _BrightnessSwitch extends StatelessWidget {
               Row(
                 children: <Widget>[
                   _BrightnessOption(
-                    icon: Icons.light_mode_outlined,
+                    icon: AppIcons.sun,
                     label: '切到浅色主题',
                     hint: '浅色',
                     current: !dark,
@@ -371,7 +372,7 @@ class _BrightnessSwitch extends StatelessWidget {
                     onTap: dark ? onToggle : null,
                   ),
                   _BrightnessOption(
-                    icon: Icons.dark_mode_outlined,
+                    icon: AppIcons.moon,
                     label: '切到深色主题',
                     hint: '深色',
                     current: dark,
@@ -397,7 +398,7 @@ class _BrightnessOption extends StatelessWidget {
     required this.onTap,
   });
 
-  final IconData icon;
+  final Glyph icon;
 
   /// 读屏念的完整说法（「切到浅色主题」）
   final String label;
@@ -434,7 +435,7 @@ class _BrightnessOption extends StatelessWidget {
             // 另一档压在轨道（primarySoft）上 → 用 `onSoft`（就是 `onColor(primarySoft)`）。
             // 两档各取自己背景的合规前景色，不靠调透明度凑对比 ——
             // 这两组都在 `test/palette_contrast_test.dart` 的射程里。
-            child: Icon(
+            child: GlyphIcon(
               icon,
               size: _BrightnessSwitch.glyph,
               color: current ? palette.onColor(palette.segmentedSelected) : palette.onSoft,

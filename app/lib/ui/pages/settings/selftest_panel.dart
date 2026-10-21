@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -861,7 +862,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
         AppIconButton(
           onPressed: widget.onBack,
           tooltip: '返回管理员',
-          icon: Icon(Icons.arrow_back, color: palette.text),
+          icon: GlyphIcon(AppIcons.arrowBack, color: palette.text),
         ),
         Text(
           '管理员',
@@ -1121,7 +1122,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
                     turns: collapsed ? 0 : 0.5,
                     duration: AppMotion.fast,
                     curve: AppMotion.standard,
-                    child: Icon(Icons.expand_more, size: 20, color: palette.textTertiary),
+                    child: GlyphIcon(AppIcons.chevronDown, size: 20, color: palette.textTertiary),
                   ),
                 ],
               ),
@@ -1263,7 +1264,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
             children: <Widget>[
               AppFilledButton.icon(
                 onPressed: _running ? null : _run,
-                icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                icon: const GlyphIcon(AppIcons.play, size: 18),
                 label: Text(_running ? '跑着…' : '运行所选（${_selected.length}）'),
               ),
               AppOutlinedButton(
@@ -1288,12 +1289,12 @@ class _SelftestPanelState extends State<SelftestPanel> {
               children: <Widget>[
                 AppOutlinedButton.icon(
                   onPressed: _copyJson,
-                  icon: const Icon(Icons.copy_all_outlined, size: 18),
+                  icon: const GlyphIcon(AppIcons.copy, size: 18),
                   label: const Text('复制 JSON'),
                 ),
                 AppOutlinedButton.icon(
                   onPressed: _copyMarkdown,
-                  icon: const Icon(Icons.description_outlined, size: 18),
+                  icon: const GlyphIcon(AppIcons.file, size: 18),
                   label: const Text('导出 Markdown'),
                 ),
               ],
@@ -1310,7 +1311,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(Icons.error_outline, size: 18, color: palette.dangerInk),
+          GlyphIcon(AppIcons.error, size: 18, color: palette.dangerInk),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
@@ -1385,7 +1386,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Icon(_statusIcon(result.status), size: 16, color: color),
+              GlyphIcon(_statusIcon(result.status), size: 16, color: color),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Wrap(
@@ -1461,8 +1462,8 @@ class _SelftestPanelState extends State<SelftestPanel> {
                         color: palette.primaryInk,
                       ),
                     ),
-                    Icon(
-                      expanded ? Icons.expand_less : Icons.expand_more,
+                    GlyphIcon(
+                      expanded ? AppIcons.chevronUp : AppIcons.chevronDown,
                       size: 16,
                       color: palette.primaryInk,
                     ),
@@ -1515,16 +1516,16 @@ class _SelftestPanelState extends State<SelftestPanel> {
     }
   }
 
-  IconData _statusIcon(SelftestStatus status) {
+  Glyph _statusIcon(SelftestStatus status) {
     switch (status) {
       case SelftestStatus.pass:
-        return Icons.check_circle_rounded;
+        return AppIcons.checkCircle;
       case SelftestStatus.fail:
-        return Icons.cancel_rounded;
+        return AppIcons.close;
       case SelftestStatus.warn:
-        return Icons.warning_amber_rounded;
+        return AppIcons.warning;
       case SelftestStatus.skip:
-        return Icons.remove_circle_outline;
+        return AppIcons.removeCircle;
     }
   }
 }

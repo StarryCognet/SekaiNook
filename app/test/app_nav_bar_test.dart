@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sekainook_app/ui/shell/app_nav_bar.dart';
+import 'package:sekainook_app/ui/icons/icons.dart';
 
 /// 底部导航（FlClash 风格弹簧透镜）的回归测试。
 ///
@@ -11,25 +12,25 @@ import 'package:sekainook_app/ui/shell/app_nav_bar.dart';
 /// 以及开了「减少动态效果」时不崩、仍然能选中。
 void main() {
   const List<AppNavDestination> destinations = <AppNavDestination>[
-    AppNavDestination(icon: Icons.home_outlined, selectedIcon: Icons.home, label: '首页', badge: 3),
+    AppNavDestination(icon: AppIcons.home, selectedIcon: AppIcons.home, label: '首页', badge: 3),
     AppNavDestination(
-      icon: Icons.receipt_long_outlined,
-      selectedIcon: Icons.receipt_long,
+      icon: AppIcons.receipt,
+      selectedIcon: AppIcons.receipt,
       label: '家庭',
     ),
     AppNavDestination(
-      icon: Icons.calendar_month_outlined,
-      selectedIcon: Icons.calendar_month,
+      icon: AppIcons.calendar,
+      selectedIcon: AppIcons.calendar,
       label: '计划',
     ),
     AppNavDestination(
-      icon: Icons.local_florist_outlined,
-      selectedIcon: Icons.local_florist,
+      icon: AppIcons.flower,
+      selectedIcon: AppIcons.flower,
       label: '花园',
     ),
     AppNavDestination(
-      icon: Icons.settings_outlined,
-      selectedIcon: Icons.settings,
+      icon: AppIcons.settings,
+      selectedIcon: AppIcons.settings,
       label: '设置',
     ),
   ];

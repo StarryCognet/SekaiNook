@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -677,7 +678,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         children: <Widget>[
           Row(
             children: <Widget>[
-              Icon(Icons.account_balance_wallet_outlined, size: 16, color: palette.primary),
+              GlyphIcon(AppIcons.wallet, size: 16, color: palette.primary),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 '当前总积分',
@@ -708,7 +709,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             const SizedBox(height: AppSpacing.sm),
             Row(
               children: <Widget>[
-                Icon(Icons.fact_check_outlined, size: 14, color: palette.primary),
+                GlyphIcon(AppIcons.checklist, size: 14, color: palette.primary),
                 const SizedBox(width: AppSpacing.xs),
                 Text(
                   '待审批 ',
@@ -767,7 +768,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                 onPressed: canExchange
                     ? () => _confirmExchange(exchangeValue, exchangeYuan)
                     : null,
-                icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+                icon: const GlyphIcon(AppIcons.wallet, size: 18),
                 label: Text('兑换 $exchangeYuan 元现金'),
               ),
             ),
@@ -833,7 +834,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         children: <Widget>[
           Row(
             children: <Widget>[
-              Icon(Icons.schedule_outlined, size: 16, color: palette.primary),
+              GlyphIcon(AppIcons.clock, size: 16, color: palette.primary),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 '今日任务与作息',
@@ -864,13 +865,13 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             _pill(
               text: '已过 22:00，未打卡睡觉会记一次罚款',
               color: palette.danger,
-              icon: Icons.nightlight_outlined,
+              icon: AppIcons.moon,
             )
           else
             _pill(
               text: '作息正常',
               color: palette.success,
-              icon: Icons.check_circle_outline,
+              icon: AppIcons.checkCircle,
             ),
           const SizedBox(height: AppSpacing.md),
           Row(
@@ -885,7 +886,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   onPressed: homeworkTask == null || _isDone(homeworkTask, records)
                       ? null
                       : () => _startCheckIn(homeworkTask, records: records),
-                  icon: const Icon(Icons.check_circle_outline, size: 18),
+                  icon: const GlyphIcon(AppIcons.checkCircle, size: 18),
                   label: const Text('按时完成作业'),
                 ),
               ),
@@ -896,7 +897,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   onPressed: sleepTask == null || _isDone(sleepTask, records)
                       ? null
                       : () => _startCheckIn(sleepTask, records: records),
-                  icon: const Icon(Icons.nightlight_outlined, size: 18),
+                  icon: const GlyphIcon(AppIcons.moon, size: 18),
                   label: const Text('按时睡觉'),
                 ),
               ),
@@ -1218,7 +1219,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
               else ...<Widget>[
                 if (ready.isNotEmpty) ...<Widget>[
                   _taskGroupHeader(
-                    icon: Icons.radio_button_checked,
+                    icon: AppIcons.radioOn,
                     color: palette.ink(palette.success),
                     text: '现在可以打卡',
                     count: ready.length,
@@ -1235,7 +1236,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                 if (later.isNotEmpty) ...<Widget>[
                   if (ready.isNotEmpty) const SizedBox(height: AppSpacing.md),
                   _taskGroupHeader(
-                    icon: Icons.schedule_outlined,
+                    icon: AppIcons.clock,
                     color: palette.textSecondary,
                     text: '还没到时间',
                     count: later.length,
@@ -1253,7 +1254,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
               if (completed.isNotEmpty) ...<Widget>[
                 const SizedBox(height: AppSpacing.md),
                 _foldRow(
-                  icon: Icons.task_alt,
+                  icon: AppIcons.checkCircle,
                   label: '今天已经做满',
                   count: completed.length,
                   expanded: _completedExpanded,
@@ -1375,9 +1376,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final palette = context.palette;
     final bool hasBackground =
         context.select<ThemeState, bool>((state) => state.background.isNotEmpty);
-    const List<(TaskType, String, IconData)> items = <(TaskType, String, IconData)>[
-      (TaskType.earning, '赚钱任务', Icons.trending_up),
-      (TaskType.spending, '消费 / 罚款', Icons.trending_down),
+    const List<(TaskType, String, Glyph)> items = <(TaskType, String, Glyph)>[
+      (TaskType.earning, '赚钱任务', AppIcons.trendUp),
+      (TaskType.spending, '消费 / 罚款', AppIcons.trendDown),
     ];
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xs),
@@ -1411,7 +1412,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
-                      Icon(
+                      GlyphIcon(
                         icon,
                         size: 14,
                         color: _taskFilter == type
@@ -1442,7 +1443,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   /// 分区标题（现在可以打卡 / 还没到时间），右侧跟一个计数
   Widget _taskGroupHeader({
-    required IconData icon,
+    required Glyph icon,
     required Color color,
     required String text,
     required int count,
@@ -1451,7 +1452,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: 14, color: color),
+          GlyphIcon(icon, size: 14, color: color),
           const SizedBox(width: AppSpacing.xs),
           Text(
             text,
@@ -1547,7 +1548,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   /// 可折叠的一行（「今天已经做满 N 项」/「自定义任务」）
   Widget _foldRow({
-    required IconData icon,
+    required Glyph icon,
     required String label,
     required int? count,
     required bool expanded,
@@ -1568,7 +1569,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           ),
           child: Row(
             children: <Widget>[
-              Icon(icon, size: 18, color: palette.textTertiary),
+              GlyphIcon(icon, size: 18, color: palette.textTertiary),
               const SizedBox(width: AppSpacing.sm),
               Text(
                 label,
@@ -1590,7 +1591,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
               AnimatedRotation(
                 turns: expanded ? 0.5 : 0,
                 duration: AppMotion.fast,
-                child: Icon(Icons.expand_more, size: 20, color: palette.textTertiary),
+                child: GlyphIcon(AppIcons.chevronDown, size: 20, color: palette.textTertiary),
               ),
             ],
           ),
@@ -1611,7 +1612,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           _foldRow(
-            icon: Icons.tune,
+            icon: AppIcons.sliders,
             label: count == 0 ? '自定义任务 · 还没有任务' : '自定义任务',
             count: count == 0 ? null : count,
             expanded: _customManagerExpanded,
@@ -1666,7 +1667,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                         iconSize: 18,
                         color: palette.danger,
                         onPressed: () => _confirmRemoveTask(task),
-                        icon: const Icon(Icons.delete_outline),
+                        icon: const GlyphIcon(AppIcons.delete),
                       ),
                     ],
                   ),
@@ -1710,7 +1711,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final pending = state.pendingRecords;
     if (pending.isEmpty) {
       return AppCard(
-        child: EmptyView(message: '暂无待审批申请', icon: Icons.fact_check_outlined),
+        child: EmptyView(message: '暂无待审批申请', icon: AppIcons.checklist),
       );
     }
     return AppCard(
@@ -1730,7 +1731,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
               const Spacer(),
               AppFilledButton.icon(
                 onPressed: _approvingAll ? null : () => _confirmApproveAll(pending),
-                icon: const Icon(Icons.check_circle_outline, size: 18),
+                icon: const GlyphIcon(AppIcons.checkCircle, size: 18),
                 label: const Text('全部通过'),
               ),
             ],
@@ -1785,8 +1786,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             ),
             // primarySoft 是实色有色底：原始主题里 primary 与它是同一族的深 navy
             // （#1A1A2E 写 #2A2A4A 上），这个图标原来等于看不见（约 1.1:1）
-            child: Icon(
-              Icons.fact_check_outlined,
+            child: GlyphIcon(
+              AppIcons.checklist,
               size: 16,
               color: palette.onColor(palette.primarySoft),
             ),
@@ -1845,13 +1846,13 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                                 ),
                               ),
                             )
-                          : const Icon(Icons.check_circle_outline, size: 16),
+                          : const GlyphIcon(AppIcons.checkCircle, size: 16),
                       label: const Text('通过'),
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     AppOutlinedButton.icon(
                       onPressed: () => unawaited(_startReject(record)),
-                      icon: const Icon(Icons.cancel_outlined, size: 16),
+                      icon: const GlyphIcon(AppIcons.close, size: 16),
                       label: const Text('驳回'),
                     ),
                   ],
@@ -1908,7 +1909,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
               if (isParent && filtered.isNotEmpty)
                 AppOutlinedButton.icon(
                   onPressed: () => unawaited(_exportCsv(filtered)),
-                  icon: const Icon(Icons.download_outlined, size: 16),
+                  icon: const GlyphIcon(AppIcons.download, size: 16),
                   label: const Text('导出 CSV'),
                 ),
             ],
@@ -1921,7 +1922,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             child: filtered.isEmpty
                 ? EmptyView(
                     message: _recordFilter == _RecordFilter.all ? '暂无流水记录' : '该状态下暂无记录',
-                    icon: Icons.history,
+                    icon: AppIcons.history,
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1983,8 +1984,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
               color: (positive ? palette.success : palette.danger).withValues(alpha: 0.12),
               shape: AppShape.all(AppRadius.md),
             ),
-            child: Icon(
-              positive ? Icons.trending_up : Icons.trending_down,
+            child: GlyphIcon(
+              positive ? AppIcons.trendUp : AppIcons.trendDown,
               size: 16,
               color: positive ? palette.success : palette.danger,
             ),
@@ -2029,7 +2030,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                     if (!isParent && status == LedgerStatus.pending)
                       AppOutlinedButton.icon(
                         onPressed: () => _confirmWithdraw(record),
-                        icon: const Icon(Icons.undo, size: 16),
+                        icon: const GlyphIcon(AppIcons.undo, size: 16),
                         label: const Text('撤回'),
                       ),
                     // 驳回后重新提交：孩子对自己申请的补救动作 ——
@@ -2049,7 +2050,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                       AppOutlinedButton.icon(
                         onPressed: () => _confirmDelete(record),
                         style: OutlinedButton.styleFrom(foregroundColor: palette.danger),
-                        icon: const Icon(Icons.delete_outline, size: 16),
+                        icon: const GlyphIcon(AppIcons.delete, size: 16),
                         label: const Text('删除'),
                       ),
                   ],
@@ -2149,7 +2150,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   /// 取这层实际颜色的 onColor。原来字色直接用语义色本身：原始主题下 warning 色写在自己
   /// 的 12% 淡底上只有 1.9:1（状态标签基本读不出来），success/danger 也只有 3.1/3.3。
   /// 底色与描边不动。
-  Widget _pill({required String text, required Color color, IconData? icon}) {
+  Widget _pill({required String text, required Color color, Glyph? icon}) {
     final palette = context.palette;
     final Color pillFill = Color.alphaBlend(
       color.withValues(alpha: 0.12),
@@ -2169,7 +2170,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           if (icon != null) ...<Widget>[
-            Icon(icon, size: 12, color: onPill),
+            GlyphIcon(icon, size: 12, color: onPill),
             const SizedBox(width: AppSpacing.xs),
           ],
           Text(text, style: TextStyle(fontSize: AppFontSize.xs, color: onPill)),
@@ -2362,7 +2363,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                       Expanded(
                         child: AppOutlinedButton.icon(
                           onPressed: picking ? null : () => pick(ImageSource.camera),
-                          icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                          icon: const GlyphIcon(AppIcons.camera, size: 18),
                           label: const Text('拍照'),
                         ),
                       ),
@@ -2370,7 +2371,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                       Expanded(
                         child: AppOutlinedButton.icon(
                           onPressed: picking ? null : () => pick(ImageSource.gallery),
-                          icon: const Icon(Icons.photo_library_outlined, size: 18),
+                          icon: const GlyphIcon(AppIcons.photos, size: 18),
                           label: const Text('从相册选'),
                         ),
                       ),
@@ -2665,8 +2666,8 @@ class _RecordThumb extends StatelessWidget {
             child: Image.network(
               url,
               fit: BoxFit.contain,
-              errorBuilder: (context, error, stack) => Icon(
-                Icons.broken_image_outlined,
+              errorBuilder: (context, error, stack) => GlyphIcon(
+                AppIcons.imageBroken,
                 color: palette.textTertiary,
               ),
             ),
@@ -2688,7 +2689,7 @@ class _RecordThumb extends StatelessWidget {
               hasBackground:
                   context.select<ThemeState, bool>((state) => state.background.isNotEmpty),
             ),
-            child: Icon(Icons.image_outlined, size: 18, color: palette.textTertiary),
+            child: GlyphIcon(AppIcons.photos, size: 18, color: palette.textTertiary),
           ),
         ),
       ),

@@ -14,10 +14,20 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.2.1';
+export const APP_VERSION = '2.3.0';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.3.0',
+    date: '2026-10-21 14:35:00',
+    title: '全站图标换成 FlClash 自绘图标',
+    changes: [
+      '全站 Material 图标换成 FlClash 的自绘矢量图标：95 个图标逐一映射，34 个业务图标按 24×24 网格新绘（饭、存钱罐、奖杯、火焰、账本、收件箱…）',
+      '字形粗细统一、随主题色和字号缩放，不再依赖 MaterialIcons 字体，弱网和首屏不怕图标字体没下完',
+      '新增图标 golden 测试，48 个图标一屏可比对，以后加图标有回归基准',
+    ],
+  },
   {
     version: '2.2.1',
     date: '2026-10-21 14:10:00',

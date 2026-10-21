@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -819,7 +820,7 @@ class _SettingsPageState extends State<SettingsPage> {
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             onTap: () => setState(() => _section = _SettingsSection.appearance),
             child: _EntryRow(
-              icon: Icons.palette_outlined,
+              icon: AppIcons.palette,
               title: '外观',
               description:
                   '主题与背景图 · 现在是「${theme.preset.name}」主题${theme.hasBackground ? ' · 已设背景图' : ''}',
@@ -832,7 +833,7 @@ class _SettingsPageState extends State<SettingsPage> {
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             onTap: () => setState(() => _section = _SettingsSection.family),
             child: _EntryRow(
-              icon: Icons.family_restroom_outlined,
+              icon: AppIcons.family,
               title: '家庭',
               description: '身份与称呼 · 现在用的是${isParent ? '家长' : '小孩'}身份',
             ),
@@ -844,7 +845,7 @@ class _SettingsPageState extends State<SettingsPage> {
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             onTap: () => setState(() => _section = _SettingsSection.push),
             child: const _EntryRow(
-              icon: Icons.notifications_active_outlined,
+              icon: AppIcons.bell,
               title: '手机提醒',
               description: '任务快到期时手机收提醒 · 可以发一条测试通知',
             ),
@@ -857,7 +858,7 @@ class _SettingsPageState extends State<SettingsPage> {
               margin: const EdgeInsets.only(bottom: AppSpacing.sm),
               onTap: () => setState(() => _section = _SettingsSection.parent),
               child: const _EntryRow(
-                icon: Icons.lock_outline,
+                icon: AppIcons.lock,
                 title: '家长管理',
                 description: '家长口令、打卡照片清理',
               ),
@@ -869,7 +870,7 @@ class _SettingsPageState extends State<SettingsPage> {
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             onTap: _openAdmin,
             child: const _EntryRow(
-              icon: Icons.tune_outlined,
+              icon: AppIcons.sliders,
               title: '管理员',
               description: '修改积分数 · 需要管理员密码',
             ),
@@ -939,7 +940,7 @@ class _SettingsPageState extends State<SettingsPage> {
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             onTap: _signOut,
             child: const _EntryRow(
-              icon: Icons.logout,
+              icon: AppIcons.logout,
               title: '退出当前身份',
               description: '清掉本机记的身份，下次打开重新选（妈妈 / 女儿）',
               danger: true,
@@ -1731,7 +1732,7 @@ class _SettingsPageState extends State<SettingsPage> {
           margin: const EdgeInsets.only(bottom: AppSpacing.sm),
           onTap: () => setState(() => _selftestOpen = true),
           child: const _EntryRow(
-            icon: Icons.fact_check_outlined,
+            icon: AppIcons.checklist,
             title: '全站自检',
             description: '把后端整条链路逐项跑一遍 · 按组勾选、套预设、导出 JSON / Markdown',
           ),
@@ -1965,7 +1966,7 @@ class _SettingsPageState extends State<SettingsPage> {
         AppIconButton(
           onPressed: () => setState(() => _section = null),
           tooltip: '返回设置',
-          icon: Icon(Icons.arrow_back, color: palette.text),
+          icon: GlyphIcon(AppIcons.arrowBack, color: palette.text),
         ),
         Text(
           '设置',
@@ -2112,7 +2113,7 @@ class _EntryRow extends StatelessWidget {
     this.danger = false,
   });
 
-  final IconData icon;
+  final Glyph icon;
   final String title;
   final String description;
   final bool danger;
@@ -2133,7 +2134,7 @@ class _EntryRow extends StatelessWidget {
             color: accent.withValues(alpha: 0.12),
             shape: AppShape.all(AppRadius.md),
           ),
-          child: Icon(icon, size: 18, color: accent),
+          child: GlyphIcon(icon, size: 18, color: accent),
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
@@ -2156,7 +2157,7 @@ class _EntryRow extends StatelessWidget {
             ],
           ),
         ),
-        Icon(Icons.chevron_right, size: 18, color: palette.textTertiary),
+        GlyphIcon(AppIcons.chevronForward, size: 18, color: palette.textTertiary),
       ],
     );
   }

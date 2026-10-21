@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -220,8 +221,8 @@ class _RoleCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right,
+                GlyphIcon(
+                  AppIcons.chevronForward,
                   color: selected ? palette.onColorSoft(selectedBase) : palette.textTertiary,
                 ),
               ],

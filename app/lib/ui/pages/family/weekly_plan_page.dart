@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -27,11 +28,11 @@ import '../../widgets/state_views.dart';
 import '../../widgets/motion/app_buttons.dart';
 
 /// 每个科目的图标（与 Web 版 SUBJECT_ICONS 一致）
-const Map<String, IconData> _subjectIcons = <String, IconData>{
-  '英语': Icons.menu_book_outlined,
-  '语文': Icons.auto_stories_outlined,
-  '数学': Icons.calculate_outlined,
-  '日常': Icons.home_outlined,
+const Map<String, Glyph> _subjectIcons = <String, Glyph>{
+  '英语': AppIcons.book,
+  '语文': AppIcons.book,
+  '数学': AppIcons.calculate,
+  '日常': AppIcons.home,
 };
 
 /// 每周学习计划：按固定模板把这一周的分组计划铺开，家长/孩子都能直接推进度。
@@ -259,7 +260,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
                 padding: EdgeInsets.only(top: AppSpacing.xl),
                 child: EmptyView(
                   message: '本周暂无学习计划',
-                  icon: Icons.event_note_outlined,
+                  icon: AppIcons.calendar,
                 ),
               )
             else
@@ -393,7 +394,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
     final widgets = <Widget>[];
     for (final entry in _grouped) {
       final subject = entry.key;
-      final icon = _subjectIcons[subject] ?? Icons.checklist_outlined;
+      final icon = _subjectIcons[subject] ?? AppIcons.checklist;
       final rows = entry.value;
       final doneCount = rows
           .where((tpl) {
@@ -410,7 +411,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
               children: <Widget>[
                 Row(
                   children: <Widget>[
-                    Icon(icon, size: 18, color: palette.primary),
+                    GlyphIcon(icon, size: 18, color: palette.primary),
                     const SizedBox(width: AppSpacing.xs),
                     Text(
                       subject,
@@ -505,7 +506,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
                         ),
                         if (done) ...<Widget>[
                           const SizedBox(width: AppSpacing.xs),
-                          Icon(Icons.check_circle, size: 14, color: palette.success),
+                          GlyphIcon(AppIcons.checkCircle, size: 14, color: palette.success),
                         ],
                       ],
                     ),
@@ -609,7 +610,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
                       : const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: <Widget>[
-                            Icon(Icons.add, size: 16),
+                            GlyphIcon(AppIcons.add, size: 16),
                             SizedBox(width: 2),
                             Text('增加'),
                           ],

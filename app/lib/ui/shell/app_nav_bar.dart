@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
@@ -29,8 +30,8 @@ class AppNavDestination {
     this.badge = 0,
   });
 
-  final IconData icon;
-  final IconData selectedIcon;
+  final Glyph icon;
+  final Glyph selectedIcon;
   final String label;
 
   /// > 0 时在图标右上角挂一个角标（未读通知 / 待审批）。
@@ -733,7 +734,7 @@ class _NavIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Icon icon = Icon(
+    final Widget icon = GlyphIcon(
       selected ? destination.selectedIcon : destination.icon,
       size: 24,
       color: color,

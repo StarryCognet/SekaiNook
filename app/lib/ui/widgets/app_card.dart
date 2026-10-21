@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -174,7 +175,7 @@ class StatBlock extends StatelessWidget {
   final String Function(num value)? formatter;
   final String? unit;
   final Color? color;
-  final IconData? icon;
+  final Glyph? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -193,7 +194,7 @@ class StatBlock extends StatelessWidget {
         Row(
           children: <Widget>[
             if (icon != null) ...<Widget>[
-              Icon(icon, size: 14, color: palette.textTertiary),
+              GlyphIcon(icon!, size: 14, color: palette.textTertiary),
               const SizedBox(width: AppSpacing.xs),
             ],
             Text(

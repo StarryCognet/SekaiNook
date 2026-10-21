@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -20,7 +21,7 @@ class EmptyIllustration extends StatefulWidget {
     this.accent,
   });
 
-  final IconData icon;
+  final Glyph icon;
   final Color color;
   final Color background;
   final double size;
@@ -97,7 +98,7 @@ class _EmptyIllustrationState extends State<EmptyIllustration>
           color: widget.background,
           shape: AppShape.all(size * 0.36),
         ),
-        child: Icon(widget.icon, size: size * 0.34, color: widget.color),
+        child: GlyphIcon(widget.icon, size: size * 0.34, color: widget.color),
       ),
     );
   }

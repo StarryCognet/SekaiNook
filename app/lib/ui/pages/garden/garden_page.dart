@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:math' as math;
 
 // Material 也有一个 Badge（小红点角标），花园的勋章模型重名，藏掉 Material 那个
@@ -27,13 +28,13 @@ class _Plant {
 
   final String name;
   final String desc;
-  final IconData icon;
+  final Glyph icon;
 }
 
 const List<_Plant> _plants = <_Plant>[
-  _Plant(name: '向日葵', desc: '阳光越足，长得越高', icon: Icons.wb_sunny_outlined),
-  _Plant(name: '小玫瑰', desc: '需要细心照顾', icon: Icons.local_florist_outlined),
-  _Plant(name: '仙人掌', desc: '坚强的小植物', icon: Icons.eco_outlined),
+  _Plant(name: '向日葵', desc: '阳光越足，长得越高', icon: AppIcons.sun),
+  _Plant(name: '小玫瑰', desc: '需要细心照顾', icon: AppIcons.flower),
+  _Plant(name: '仙人掌', desc: '坚强的小植物', icon: AppIcons.leaf),
 ];
 
 /// 图标 key → Material 图标。
@@ -41,28 +42,28 @@ const List<_Plant> _plants = <_Plant>[
 /// key 与 Web 版 `src/components/garden/GardenIcon.tsx` 的 `ICON_MAP` 一一对应
 /// （`flower` → SmileOutlined、`leaf` → EnvironmentOutlined 那两个在 Material 里
 /// 取语义更近的花/叶图标），未知 key 回退星形，与 Web 版一致。
-IconData _gardenIcon(String key) => switch (key) {
-      'book' => Icons.menu_book_outlined,
-      'read' => Icons.chrome_reader_mode_outlined,
-      'book-open' => Icons.chrome_reader_mode_outlined,
-      'calc' => Icons.calculate_outlined,
-      'pen' => Icons.edit_outlined,
-      'feather' => Icons.edit_outlined,
-      'eye' => Icons.visibility_outlined,
-      'sport' => Icons.bolt_outlined,
-      'home' => Icons.home_outlined,
-      'sun' => Icons.wb_sunny_outlined,
-      'flower' => Icons.local_florist_outlined,
-      'leaf' => Icons.eco_outlined,
-      'calendar' => Icons.calendar_today_outlined,
-      'trophy' => Icons.emoji_events_outlined,
-      'coin' => Icons.monetization_on_outlined,
-      'dashboard' => Icons.dashboard_outlined,
-      'check' => Icons.check_circle_outline,
-      'shop' => Icons.storefront_outlined,
-      'history' => Icons.history,
-      'star' => Icons.star_outline,
-      _ => Icons.star_outline,
+Glyph _gardenIcon(String key) => switch (key) {
+      'book' => AppIcons.book,
+      'read' => AppIcons.book,
+      'book-open' => AppIcons.book,
+      'calc' => AppIcons.calculate,
+      'pen' => AppIcons.edit,
+      'feather' => AppIcons.edit,
+      'eye' => AppIcons.eye,
+      'sport' => AppIcons.bolt,
+      'home' => AppIcons.home,
+      'sun' => AppIcons.sun,
+      'flower' => AppIcons.flower,
+      'leaf' => AppIcons.leaf,
+      'calendar' => AppIcons.calendar,
+      'trophy' => AppIcons.trophy,
+      'coin' => AppIcons.savings,
+      'dashboard' => AppIcons.dashboard,
+      'check' => AppIcons.checkCircle,
+      'shop' => AppIcons.store,
+      'history' => AppIcons.history,
+      'star' => AppIcons.star,
+      _ => AppIcons.star,
     };
 
 /// 阳光花园儿童工作台（对应 Web 版 `src/views/garden/` 下的 8 个页面）。
@@ -297,7 +298,7 @@ class _GardenPageState extends State<GardenPage> {
           onTap: () => garden.flushPending(),
           child: Row(
             children: <Widget>[
-              Icon(Icons.cloud_upload_outlined, color: palette.onSoft),
+              GlyphIcon(AppIcons.upload, color: palette.onSoft),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
@@ -373,7 +374,7 @@ class _GardenPageState extends State<GardenPage> {
                     number: garden.balance,
                     unit: '阳光',
                     color: _readableAccent(palette, palette.warning),
-                    icon: Icons.wb_sunny_outlined,
+                    icon: AppIcons.sun,
                   ),
                 ),
                 Expanded(
@@ -382,7 +383,7 @@ class _GardenPageState extends State<GardenPage> {
                     number: garden.streakDays,
                     unit: '天',
                     color: _readableAccent(palette, palette.danger),
-                    icon: Icons.local_fire_department_outlined,
+                    icon: AppIcons.fire,
                   ),
                 ),
                 Expanded(
@@ -393,7 +394,7 @@ class _GardenPageState extends State<GardenPage> {
                     formatter: (num value) => '${value.round()}/${garden.tasks.length}',
                     unit: '个',
                     color: _readableAccent(palette, palette.primary),
-                    icon: Icons.check_circle_outline,
+                    icon: AppIcons.checkCircle,
                   ),
                 ),
               ],
@@ -524,7 +525,7 @@ class _GardenPageState extends State<GardenPage> {
               label: '阳光余额',
               number: garden.balance,
               unit: '阳光',
-              icon: Icons.wb_sunny_outlined,
+              icon: AppIcons.sun,
               color: palette.warning,
             ),
           ),
@@ -534,7 +535,7 @@ class _GardenPageState extends State<GardenPage> {
               label: '连续学习',
               number: garden.streakDays,
               unit: '天',
-              icon: Icons.local_fire_department_outlined,
+              icon: AppIcons.fire,
               color: palette.danger,
             ),
           ),
@@ -544,7 +545,7 @@ class _GardenPageState extends State<GardenPage> {
               label: '已获勋章',
               number: earnedBadges,
               unit: '枚',
-              icon: Icons.emoji_events_outlined,
+              icon: AppIcons.trophy,
               color: palette.success,
             ),
           ),
@@ -606,7 +607,7 @@ class _GardenPageState extends State<GardenPage> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        Icon(
+                        GlyphIcon(
                           _gardenIcon(item.icon),
                           size: 18,
                           color: _readableAccent(palette, palette.success),
@@ -667,7 +668,7 @@ class _GardenPageState extends State<GardenPage> {
     required num number,
     String? unit,
     String Function(num value)? formatter,
-    required IconData icon,
+    required Glyph icon,
     required Color color,
   }) {
     final AppPalette palette = context.palette;
@@ -688,7 +689,7 @@ class _GardenPageState extends State<GardenPage> {
               color: color.withValues(alpha: 0.14),
               shape: AppShape.all(AppRadius.md),
             ),
-            child: Icon(icon, size: 18, color: iconColor),
+            child: GlyphIcon(icon, size: 18, color: iconColor),
           ),
           const SizedBox(height: AppSpacing.sm),
           StatBlock(label: label, number: number, formatter: formatter, unit: unit, color: accent),
@@ -710,7 +711,7 @@ class _GardenPageState extends State<GardenPage> {
               label: '今日完成',
               number: garden.completedCount,
               unit: '个任务',
-              icon: Icons.check_circle_outline,
+              icon: AppIcons.checkCircle,
               color: palette.success,
             ),
           ),
@@ -720,7 +721,7 @@ class _GardenPageState extends State<GardenPage> {
               label: '完成率',
               number: percent,
               formatter: (num value) => '${value.round()}%',
-              icon: Icons.trending_up_outlined,
+              icon: AppIcons.trendUp,
               color: palette.primary,
             ),
           ),
@@ -730,7 +731,7 @@ class _GardenPageState extends State<GardenPage> {
               label: '连续学习',
               number: garden.streakDays,
               unit: '天',
-              icon: Icons.local_fire_department_outlined,
+              icon: AppIcons.fire,
               color: palette.danger,
             ),
           ),
@@ -763,7 +764,7 @@ class _GardenPageState extends State<GardenPage> {
               color: accent.withValues(alpha: 0.12),
               shape: AppShape.all(AppRadius.md),
             ),
-            child: Icon(
+            child: GlyphIcon(
               _gardenIcon(task.icon),
               size: 20,
               color: _tintForeground(palette, accent, alpha: 0.12),
@@ -790,7 +791,7 @@ class _GardenPageState extends State<GardenPage> {
                 const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: <Widget>[
-                    Icon(Icons.schedule, size: 14, color: palette.textTertiary),
+                    GlyphIcon(AppIcons.clock, size: 14, color: palette.textTertiary),
                     const SizedBox(width: AppSpacing.xs),
                     Text(
                       '${task.duration} 分钟',
@@ -810,8 +811,8 @@ class _GardenPageState extends State<GardenPage> {
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  Icon(
-                    Icons.wb_sunny_outlined,
+                  GlyphIcon(
+                    AppIcons.sun,
                     size: 14,
                     color: done ? palette.textTertiary : rewardColor,
                   ),
@@ -906,7 +907,7 @@ class _GardenPageState extends State<GardenPage> {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Icon(_gardenIcon('book'), size: 18, color: palette.primary),
+              GlyphIcon(_gardenIcon('book'), size: 18, color: palette.primary),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
@@ -994,7 +995,7 @@ class _GardenPageState extends State<GardenPage> {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Icon(_gardenIcon('read'), size: 18, color: accent),
+              GlyphIcon(_gardenIcon('read'), size: 18, color: accent),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
@@ -1006,7 +1007,7 @@ class _GardenPageState extends State<GardenPage> {
                   ),
                 ),
               ),
-              if (done) Icon(Icons.check_circle, size: 20, color: accent),
+              if (done) GlyphIcon(AppIcons.checkCircle, size: 20, color: accent),
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -1088,8 +1089,8 @@ class _GardenPageState extends State<GardenPage> {
                     color: palette.warning.withValues(alpha: 0.14),
                     shape: AppShape.all(AppRadius.full),
                   ),
-                  child: Icon(
-                    Icons.wb_sunny_outlined,
+                  child: GlyphIcon(
+                    AppIcons.sun,
                     color: _tintForeground(palette, palette.warning),
                   ),
                 ),
@@ -1150,8 +1151,8 @@ class _GardenPageState extends State<GardenPage> {
                     color: palette.primary.withValues(alpha: 0.12),
                     shape: AppShape.all(AppRadius.full),
                   ),
-                  child: Icon(
-                    Icons.park_outlined,
+                  child: GlyphIcon(
+                    AppIcons.tree,
                     color: _tintForeground(palette, palette.primary, alpha: 0.12),
                   ),
                 ),
@@ -1231,7 +1232,7 @@ class _GardenPageState extends State<GardenPage> {
                 color: palette.success.withValues(alpha: 0.12),
                 shape: AppShape.all(AppRadius.full),
               ),
-              child: Icon(
+              child: GlyphIcon(
                 plant.icon,
                 size: 22,
                 color: _tintForeground(palette, palette.success, alpha: 0.12),
@@ -1295,8 +1296,8 @@ class _GardenPageState extends State<GardenPage> {
                 color: palette.warning.withValues(alpha: 0.14),
                 shape: AppShape.all(AppRadius.full),
               ),
-              child: Icon(
-                Icons.wb_sunny_outlined,
+              child: GlyphIcon(
+                AppIcons.sun,
                 color: _tintForeground(palette, palette.warning),
               ),
             ),
@@ -1398,7 +1399,7 @@ class _GardenPageState extends State<GardenPage> {
   Widget _wearingRow(
     String label,
     String? value,
-    IconData? icon,
+    Glyph? icon,
     String empty,
     AppPalette palette,
   ) {
@@ -1423,7 +1424,7 @@ class _GardenPageState extends State<GardenPage> {
                 : Row(
                     children: <Widget>[
                       if (icon != null) ...<Widget>[
-                        Icon(icon, size: 16, color: palette.primary),
+                        GlyphIcon(icon, size: 16, color: palette.primary),
                         const SizedBox(width: AppSpacing.xs),
                       ],
                       Flexible(
@@ -1478,7 +1479,7 @@ class _GardenPageState extends State<GardenPage> {
               color: palette.primary.withValues(alpha: 0.12),
               shape: AppShape.all(AppRadius.md),
             ),
-            child: Icon(
+            child: GlyphIcon(
               _gardenIcon(item.icon),
               size: 22,
               color: _tintForeground(palette, palette.primary, alpha: 0.12, base: cardBase),
@@ -1511,7 +1512,7 @@ class _GardenPageState extends State<GardenPage> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        Icon(Icons.wb_sunny_outlined, size: 14, color: priceColor),
+                        GlyphIcon(AppIcons.sun, size: 14, color: priceColor),
                         const SizedBox(width: AppSpacing.xs),
                         Text(
                           '${item.cost}',
@@ -1664,7 +1665,7 @@ class _GardenPageState extends State<GardenPage> {
                 color: palette.warning.withValues(alpha: 0.16),
                 shape: AppShape.all(AppRadius.full),
               ),
-              child: Icon(Icons.emoji_events_outlined, size: 24, color: palette.warning),
+              child: GlyphIcon(AppIcons.trophy, size: 24, color: palette.warning),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -1791,7 +1792,7 @@ class _GardenPageState extends State<GardenPage> {
                   color: accent.withValues(alpha: 0.14),
                   shape: AppShape.all(AppRadius.md),
                 ),
-                child: Icon(
+                child: GlyphIcon(
                   _gardenIcon(badge.icon),
                   size: 20,
                   color: _tintForeground(palette, accent),
@@ -1881,7 +1882,7 @@ class _GardenPageState extends State<GardenPage> {
                 formatter: (num value) => '${value.round()}/${garden.tasks.length}',
                 unit: '个任务',
                 color: palette.primary,
-                icon: Icons.check_circle_outline,
+                icon: AppIcons.checkCircle,
               ),
             ),
             Expanded(
@@ -1890,7 +1891,7 @@ class _GardenPageState extends State<GardenPage> {
                 number: _earnedToday(garden),
                 unit: '阳光',
                 color: palette.warning,
-                icon: Icons.wb_sunny_outlined,
+                icon: AppIcons.sun,
               ),
             ),
           ],
@@ -1945,7 +1946,7 @@ class _GardenPageState extends State<GardenPage> {
 
     return Row(
       children: <Widget>[
-        Icon(Icons.check_circle_outline, size: 20, color: palette.success),
+        GlyphIcon(AppIcons.checkCircle, size: 20, color: palette.success),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: Column(
@@ -1971,7 +1972,7 @@ class _GardenPageState extends State<GardenPage> {
             ],
           ),
         ),
-        Icon(Icons.wb_sunny_outlined, size: AppFontSize.sm, color: rewardColor),
+        GlyphIcon(AppIcons.sun, size: AppFontSize.sm, color: rewardColor),
         const SizedBox(width: AppSpacing.xs),
         AnimatedCount(
           value: task.reward,
@@ -1990,11 +1991,11 @@ class _GardenPageState extends State<GardenPage> {
   Widget _recordRow(LedgerRecord record, AppPalette palette) {
     final bool rejected = record.isRejected;
     final bool pending = record.isPending;
-    final IconData icon = rejected
-        ? Icons.cancel_outlined
+    final Glyph icon = rejected
+        ? AppIcons.close
         : pending
-            ? Icons.schedule_outlined
-            : Icons.check_circle_outline;
+            ? AppIcons.clock
+            : AppIcons.checkCircle;
     final Color iconColor = rejected
         ? palette.danger
         : pending
@@ -2010,7 +2011,7 @@ class _GardenPageState extends State<GardenPage> {
 
     return Row(
       children: <Widget>[
-        Icon(icon, size: 20, color: iconColor),
+        GlyphIcon(icon, size: 20, color: iconColor),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: Column(
@@ -2213,7 +2214,7 @@ class _MenuChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(
+          GlyphIcon(
             _gardenIcon(menu.icon),
             size: 18,
             // 选中态整颗胶囊是 highlight（淡主色底），字与图标都跟着这层底走
@@ -2257,7 +2258,7 @@ class _CheckButton extends StatelessWidget {
           shape: AppShape.all(AppRadius.full, side: BorderSide(color: done ? palette.success : palette.border, width: 2)),
         ),
         // 勾压在实心 success 底上：字色跟底色算，别拿卡片底色（surface）当字色
-        child: done ? Icon(Icons.check, size: 22, color: palette.onColor(palette.success)) : null,
+        child: done ? GlyphIcon(AppIcons.check, size: 22, color: palette.onColor(palette.success)) : null,
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -14,7 +15,7 @@ class SuccessBurst extends StatefulWidget {
     super.key,
     this.size = 112,
     this.color,
-    this.icon = Icons.check_rounded,
+    this.icon = AppIcons.check,
     this.autoPlay = true,
     this.onCompleted,
   });
@@ -23,7 +24,7 @@ class SuccessBurst extends StatefulWidget {
 
   /// 默认取当前主题主色
   final Color? color;
-  final IconData icon;
+  final Glyph icon;
 
   /// 挂载后自动播一次；设 false 时靠 [GlobalKey] 调 state.play() 手动触发
   final bool autoPlay;
@@ -130,7 +131,7 @@ class SuccessBurstState extends State<SuccessBurst> with SingleTickerProviderSta
                     ),
                   ],
                 ),
-                child: Icon(
+                child: GlyphIcon(
                   widget.icon,
                   color: Colors.white,
                   size: widget.size * 0.32,

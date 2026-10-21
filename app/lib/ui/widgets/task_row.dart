@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -45,7 +46,7 @@ class TaskRow extends StatelessWidget {
   /// 任务名（一行，放不下就省略号）
   final String name;
 
-  final IconData icon;
+  final Glyph icon;
 
   /// 赚积分（true）/ 扣积分（false）—— 决定这一行用绿还是红
   final bool earning;
@@ -59,7 +60,7 @@ class TaskRow extends StatelessWidget {
   final String? meta;
 
   /// 元信息前的小图标
-  final IconData? metaIcon;
+  final Glyph? metaIcon;
 
   /// 整行可点；null = 这一行现在点不动（已做满 / 没到时间窗 / 正在提交）
   final VoidCallback? onTap;
@@ -130,7 +131,7 @@ class TaskRow extends StatelessWidget {
                   color: iconFill,
                   shape: AppShape.all(AppRadius.sm),
                 ),
-                child: Icon(icon, size: 20, color: iconColor),
+                child: GlyphIcon(icon, size: 20, color: iconColor),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -154,7 +155,7 @@ class TaskRow extends StatelessWidget {
                         child: Row(
                           children: <Widget>[
                             if (metaIcon != null) ...<Widget>[
-                              Icon(metaIcon, size: 12, color: palette.textTertiary),
+                              GlyphIcon(metaIcon!, size: 12, color: palette.textTertiary),
                               const SizedBox(width: AppSpacing.xs),
                             ],
                             Flexible(
@@ -224,7 +225,7 @@ class TaskRow extends StatelessWidget {
               palette.surface,
             ),
           ),
-          child: Icon(Icons.schedule_outlined, size: 14, color: palette.textTertiary),
+          child: GlyphIcon(AppIcons.clock, size: 14, color: palette.textTertiary),
         );
       case TaskRowState.done:
         return Container(
@@ -237,7 +238,7 @@ class TaskRow extends StatelessWidget {
               palette.cardColor(hasBackground: hasBackground),
             ),
           ),
-          child: Icon(Icons.check_rounded, size: 16, color: palette.ink(accent)),
+          child: GlyphIcon(AppIcons.check, size: 16, color: palette.ink(accent)),
         );
     }
   }
@@ -245,35 +246,35 @@ class TaskRow extends StatelessWidget {
 
 /// 任务图标：按任务 id 给一个能看懂的图标。
 ///
-/// 原来 12 条任务共用 `Icons.add` / `Icons.remove` 两个图标，扫一眼分不出哪条是哪条；
+/// 原来 12 条任务共用 `AppIcons.add` / `AppIcons.remove` 两个图标，扫一眼分不出哪条是哪条；
 /// 图标本身也是「这是什么事」的最快线索。
-IconData taskIconFor(String taskId, {bool earning = true}) {
+Glyph taskIconFor(String taskId, {bool earning = true}) {
   switch (taskId) {
     case 'clean_room':
-      return Icons.cleaning_services_outlined;
+      return AppIcons.broom;
     case 'wash_dishes':
-      return Icons.local_dining_outlined;
+      return AppIcons.meal;
     case 'do_laundry':
-      return Icons.local_laundry_service_outlined;
+      return AppIcons.laundry;
     case 'take_out_trash':
-      return Icons.delete_outline;
+      return AppIcons.delete;
     case 'finish_homework':
-      return Icons.edit_note_outlined;
+      return AppIcons.compose;
     case 'read_book':
-      return Icons.menu_book_outlined;
+      return AppIcons.book;
     case 'sleep_on_time':
-      return Icons.bedtime_outlined;
+      return AppIcons.moon;
     case 'ipad_time':
-      return Icons.tablet_mac_outlined;
+      return AppIcons.devices;
     case 'phone_time':
-      return Icons.smartphone_outlined;
+      return AppIcons.devices;
     case 'eye_penalty':
-      return Icons.visibility_off_outlined;
+      return AppIcons.eyeOff;
     case 'sleep_penalty':
-      return Icons.alarm_off_outlined;
+      return AppIcons.alarmOff;
     case 'homework_incomplete':
-      return Icons.assignment_late_outlined;
+      return AppIcons.assignment;
     default:
-      return earning ? Icons.star_outline_rounded : Icons.remove_circle_outline;
+      return earning ? AppIcons.star : AppIcons.removeCircle;
   }
 }

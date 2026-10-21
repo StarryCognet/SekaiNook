@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
@@ -84,11 +85,11 @@ class SkeletonList extends StatelessWidget {
 
 /// 出错了（带重试）
 class ErrorView extends StatelessWidget {
-  const ErrorView({super.key, required this.message, this.onRetry, this.icon = Icons.cloud_off});
+  const ErrorView({super.key, required this.message, this.onRetry, this.icon = AppIcons.cloudOff});
 
   final String message;
   final VoidCallback? onRetry;
-  final IconData icon;
+  final Glyph icon;
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +102,7 @@ class ErrorView extends StatelessWidget {
           ? null
           : AppOutlinedButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh, size: 18),
+              icon: const GlyphIcon(AppIcons.refresh, size: 18),
               label: const Text('再试一次'),
             ),
     );
@@ -113,13 +114,13 @@ class EmptyView extends StatelessWidget {
   const EmptyView({
     super.key,
     required this.message,
-    this.icon = Icons.inbox_outlined,
+    this.icon = AppIcons.inbox,
     this.hint,
   });
 
   final String message;
   final String? hint;
-  final IconData icon;
+  final Glyph icon;
 
   @override
   Widget build(BuildContext context) {
@@ -144,7 +145,7 @@ class _StateHint extends StatelessWidget {
     this.action,
   });
 
-  final IconData icon;
+  final Glyph icon;
   final Color iconColor;
   final String message;
   final String? hint;

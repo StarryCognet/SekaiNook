@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -248,7 +249,7 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
               alignment: Alignment.centerLeft,
               child: AppOutlinedButton.icon(
                 onPressed: _busy ? null : _pickTime,
-                icon: const Icon(Icons.schedule_outlined, size: AppFontSize.sm),
+                icon: const GlyphIcon(AppIcons.clock, size: AppFontSize.sm),
                 label: Text(_timeLabel),
               ),
             ),
@@ -281,7 +282,7 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
                 children: <Widget>[
                   AppOutlinedButton.icon(
                     onPressed: _busy ? null : _pickDay,
-                    icon: const Icon(Icons.event_outlined, size: AppFontSize.sm),
+                    icon: const GlyphIcon(AppIcons.calendar, size: AppFontSize.sm),
                     label: Text(_onceDay ?? '选日期'),
                   ),
                   const SizedBox(width: AppSpacing.sm),

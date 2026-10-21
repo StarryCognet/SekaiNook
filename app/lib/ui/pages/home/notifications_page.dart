@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -206,7 +207,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
           AppIconButton(
             onPressed: _goBack,
             tooltip: '返回',
-            icon: Icon(Icons.arrow_back, color: palette.text),
+            icon: GlyphIcon(AppIcons.arrowBack, color: palette.text),
           ),
           Expanded(
             child: Column(
@@ -279,7 +280,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(Icons.info_outline, size: 16, color: palette.onColor(noticeFill)),
+          GlyphIcon(AppIcons.info, size: 16, color: palette.onColor(noticeFill)),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
@@ -315,7 +316,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       ),
       child: Row(
         children: <Widget>[
-          Icon(Icons.cloud_off, size: 14, color: palette.danger),
+          GlyphIcon(AppIcons.cloudOff, size: 14, color: palette.danger),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
@@ -513,7 +514,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
               color: color.withValues(alpha: 0.12),
               shape: AppShape.all(AppRadius.md),
             ),
-            child: Icon(_iconFor(item.type), size: 18, color: color),
+            child: GlyphIcon(_iconFor(item.type), size: 18, color: color),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
@@ -559,22 +560,22 @@ class _NotificationsPageState extends State<NotificationsPage> {
     );
   }
 
-  static IconData _iconFor(NotifyType? type) {
+  static Glyph _iconFor(NotifyType? type) {
     switch (type) {
       case NotifyType.checkinPending:
-        return Icons.schedule;
+        return AppIcons.clock;
       case NotifyType.approved:
-        return Icons.check_circle_outline;
+        return AppIcons.checkCircle;
       case NotifyType.rejected:
-        return Icons.cancel_outlined;
+        return AppIcons.close;
       case NotifyType.resubmitted:
-        return Icons.refresh;
+        return AppIcons.refresh;
       case NotifyType.recorded:
-        return Icons.edit_outlined;
+        return AppIcons.edit;
       case NotifyType.payout:
-        return Icons.card_giftcard;
+        return AppIcons.gift;
       case null:
-        return Icons.notifications_none;
+        return AppIcons.bell;
     }
   }
 

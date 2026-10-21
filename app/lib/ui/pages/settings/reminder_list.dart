@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -115,7 +116,7 @@ class _ReminderListState extends State<ReminderList> {
               alignment: Alignment.centerLeft,
               child: AppOutlinedButton.icon(
                 onPressed: state.busy ? null : () => _edit(null),
-                icon: const Icon(Icons.add, size: AppFontSize.sm),
+                icon: const GlyphIcon(AppIcons.add, size: AppFontSize.sm),
                 label: const Text('加一条提醒'),
               ),
             ),

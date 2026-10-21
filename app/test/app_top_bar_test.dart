@@ -11,6 +11,7 @@ import 'package:sekainook_app/state/theme_state.dart';
 import 'package:sekainook_app/theme/app_theme.dart';
 import 'package:sekainook_app/theme/tokens.dart';
 import 'package:sekainook_app/ui/shell/app_top_bar.dart';
+import 'package:sekainook_app/ui/icons/icons.dart';
 
 /// 全局顶栏的回归测试。
 ///
@@ -22,6 +23,10 @@ import 'package:sekainook_app/ui/shell/app_top_bar.dart';
 /// 前四组都是**裸 pump**（一层 Provider 都没有）—— 顶栏本体刻意不读 Provider
 /// （接线在 `AppTopBarHost`），哪天有人在里面 `context.watch` 一下，那几组就会红。
 /// 最后一组反过来：只喂 `AppTopBarHost` 需要的两个 store，不算 `MainShell`。
+Finder _glyph(Glyph glyph) => find.byWidgetPredicate(
+  (widget) => widget is GlyphIcon && widget.glyph == glyph,
+);
+
 void main() {
   group('页面名与图标跟着 location 走', () {
     test('五个 Tab 加通知页各自认领', () {
@@ -34,10 +39,10 @@ void main() {
     });
 
     test('先例顺序：/home/notifications 不能落成首页、/family/plan 不能落成家庭账本', () {
-      expect(AppTopBarPage.of('/home/notifications').icon, Icons.notifications_outlined);
-      expect(AppTopBarPage.of('/family/plan').icon, Icons.calendar_month_outlined);
-      expect(AppTopBarPage.of('/family').icon, Icons.receipt_long_outlined);
-      expect(AppTopBarPage.of('/home').icon, Icons.home_outlined);
+      expect(AppTopBarPage.of('/home/notifications').icon, AppIcons.bell);
+      expect(AppTopBarPage.of('/family/plan').icon, AppIcons.calendar);
+      expect(AppTopBarPage.of('/family').icon, AppIcons.receipt);
+      expect(AppTopBarPage.of('/home').icon, AppIcons.home);
     });
 
     test('带 query 或子路径也认得出，认不出的兜底回首页', () {
@@ -111,10 +116,10 @@ void main() {
     final _TapLog log = await pumpTopBar(tester);
 
     expect(find.text('首页'), findsOneWidget);
-    expect(find.byIcon(Icons.home_outlined), findsOneWidget);
+    expect(_glyph(AppIcons.home), findsOneWidget);
     expect(find.text('0'), findsNothing, reason: '没未读就不该挂角标');
 
-    await tester.tap(find.byIcon(Icons.notifications_outlined));
+    await tester.tap(_glyph(AppIcons.bell));
     await tester.pump();
     expect(log.notifications, 1);
     expect(log.brightness, 0, reason: '点铃铛不该顺手把主题切了');
@@ -131,11 +136,11 @@ void main() {
   testWidgets('浅色时：点月亮切一次，点太阳（当前这档）不动', (WidgetTester tester) async {
     final _TapLog log = await pumpTopBar(tester);
 
-    await tester.tap(find.byIcon(Icons.light_mode_outlined));
+    await tester.tap(_glyph(AppIcons.sun));
     await tester.pump();
     expect(log.brightness, 0, reason: '已经在浅色，点太阳不该把用户弹到深色去');
 
-    await tester.tap(find.byIcon(Icons.dark_mode_outlined));
+    await tester.tap(_glyph(AppIcons.moon));
     await tester.pump();
     expect(log.brightness, 1);
   });
@@ -143,11 +148,11 @@ void main() {
   testWidgets('深色时：点太阳切一次，点月亮（当前这档）不动', (WidgetTester tester) async {
     final _TapLog log = await pumpTopBar(tester, dark: true);
 
-    await tester.tap(find.byIcon(Icons.dark_mode_outlined));
+    await tester.tap(_glyph(AppIcons.moon));
     await tester.pump();
     expect(log.brightness, 0);
 
-    await tester.tap(find.byIcon(Icons.light_mode_outlined));
+    await tester.tap(_glyph(AppIcons.sun));
     await tester.pump();
     expect(log.brightness, 1);
   });
@@ -180,7 +185,7 @@ void main() {
       tester,
       page: const AppTopBarPage(
         label: '这是一个特别特别长的页面名用来把胶囊撑爆',
-        icon: Icons.home_outlined,
+        icon: AppIcons.home,
       ),
       unread: 3,
     );
@@ -189,9 +194,9 @@ void main() {
     // 省略号截断走的是 Text.overflow，data 仍是全名
     expect(find.text('这是一个特别特别长的页面名用来把胶囊撑爆'), findsOneWidget);
     // 右侧两件（铃铛 / 深浅开关）没被挤走
-    expect(find.byIcon(Icons.notifications_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.light_mode_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.dark_mode_outlined), findsOneWidget);
+    expect(_glyph(AppIcons.bell), findsOneWidget);
+    expect(_glyph(AppIcons.sun), findsOneWidget);
+    expect(_glyph(AppIcons.moon), findsOneWidget);
   });
 
   testWidgets('有背景图时不炸（走玻璃底那一档色）', (WidgetTester tester) async {
@@ -260,12 +265,12 @@ void main() {
       expect(knobOnRight(), findsNothing);
 
       // 点月亮：走的就是设置页那颗按钮用的同一条路（ThemeState.toggleBrightness）
-      await tester.tap(find.byIcon(Icons.dark_mode_outlined));
+      await tester.tap(_glyph(AppIcons.moon));
       await tester.pumpAndSettle();
       expect(theme.brightness, ThemeBrightness.dark);
       expect(knobOnRight(), findsOneWidget, reason: '滑块要托到月亮那一档');
 
-      await tester.tap(find.byIcon(Icons.light_mode_outlined));
+      await tester.tap(_glyph(AppIcons.sun));
       await tester.pumpAndSettle();
       expect(theme.brightness, ThemeBrightness.light);
       expect(knobOnRight(), findsNothing);

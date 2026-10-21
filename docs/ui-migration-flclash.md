@@ -361,3 +361,44 @@ ThemeData build() => ThemeData(
 3. **弹层（showDialog 21 处 → CommonDialog）**：每处弹窗内容结构不同，跟页面重写一起做更稳（批 3/4）。
 
 进程记录：`changelog:sync`（推 D1）在发版时两次 `fetch failed`（网络波动），但 APK 内置的 `changelog.dart` fallback 已生成 2.2.1（76 条），App 内日志不受影响；D1 同步已在发版后补跑成功（`npm run changelog:sync` → 同步完成，自检 env.changelog=ok）。
+
+## §11 批 3 执行记录（图标系统，v2.3.0）
+
+### 目标与口径
+
+批 3 原计划是「四页重写 + 图标第一批」。实际执行时先把图标系统作为独立子批次做完了：它是四页重写的前提（`TonalButton` 只收 `Glyph`，页面里大量 `IconData` 字段必须先有 Glyph 才能换组件），而且视觉变化最直接、风险最低，可以单独发版验证。四页重写放到 2.4.0。
+
+### 盘点（改之前）
+
+- `app/lib` 中 `Icons.` 引用 **213 处 / 95 个不同图标 / 19 个文件**（此前提到的「100 个」是估值，实际 95）。
+- `IconData` 类型声明 31 处、`Icon(` 37 处，散布在公共组件里：`app_nav_bar.dart`、`app_top_bar.dart`、`app_card.dart`、`state_views.dart`、`task_row.dart`、`motion/celebrate.dart`、`motion/empty_illustration.dart`、`selftest_panel.dart` 以及各页面局部字段。
+
+### 落地
+
+1. `app/lib/ui/icons/app_icons.dart`（约 700 行）
+   - `abstract final class AppIcons`：70+ 个语义别名直接指向 fl_ui 的 `AppGlyphs`（如 `check = AppGlyphs.check`、`clock = AppGlyphs.requests`、`download = AppGlyphs.cloudDownload`）；
+   - 34 个业务图标按 FlClash 原语手绘（`GlyphBox`/`GlyphCircle`/`GlyphOval`/`GlyphArc`/`GlyphPolyline`/`GlyphPath`，24×24 网格、内容区 3.5–20.5、线宽 1.8）：`home bell moon flower tree leaf meal laundry store gift savings wallet family checklist assignment trophy fire calculate receipt calendar file trendUp trendDown radioOn radioOff imageBroken inbox alarmOff cloudOff logout play history book chart`。
+2. `app/lib/ui/icons/icons.dart`：barrel，页面只需 `import 'package:sekainook_app/ui/icons/icons.dart';`。
+3. `app/tool/migrate_icons.py`：三步批量替换（`Icons.x`→`AppIcons.y` 按 95 项映射表、`IconData`→`Glyph`、`Icon(`→`GlyphIcon(`，用负向断言避免误伤 `GlyphIcon(`，自动补 barrel import），dry-run 输出无 UNMAPPED 后才 `--write`，共改 19 个文件。
+4. `app/test/icons_preview_test.dart`：48 个图标 6 列网格的 golden 快照，`--update-goldens` 生成 `test/goldens/icons_preview.png`（1240×1020）。两轮目检后重绘了 4 个观感不佳的：`meal`（同心圆→碗+蒸汽）、`savings`（瘦椭圆→三枚叠币）、`inbox`（波浪线→标准收件箱）、`cloudOff`（方块→云形轮廓+斜线）。
+
+### 修复与验证
+
+- 4 处类型错误：`app_nav_bar.dart:737`、`app_top_bar.dart:258` 的 `final Icon icon` → `final Widget icon`；`app_card.dart:197`、`task_row.dart:158` 的 `GlyphIcon(icon, ...)` → `GlyphIcon(icon!, ...)`。
+- 3 个测试文件（`app_nav_bar_test`、`app_top_bar_test`、`motion_widgets_test`）把 `find.byIcon(Icons.x)` 换成 `find.byWidgetPredicate((w) => w is GlyphIcon && w.glyph == AppIcons.x)`。
+- `flutter analyze --no-pub`：**0 error / 0 warning**（101 info，88 条来自 lib/fl_ui 上游的 `prefer_initializing_formals`，其余为既有风格提示）。
+- `flutter test --no-pub`：**199 通过 / 2 失败**，失败的是 `e2e_flow_test`、`garden_flow_test`（需真实后端，基线即失败）。
+- `flutter build web --debug --no-pub` 成功（106s）。
+- headless Chrome（9335 端口，`tool/screenshot.mjs` + `tool/click.mjs`）截图首页 / 花园 / 设置三页：底栏 5 个 Glyph、统计卡（太阳/火焰/对勾）、分类标签、任务行图标、设置项图标（调色板/家庭/铃铛/锁/滑杆 + 右箭头）全部正常，混排风格统一。
+
+### 一个踩过的坑（值得记进验收流程）
+
+验收时一度看到设置页显示「当前版本 v1.31.18」、底栏还是旧图标，排查半天：`main.dart.js` 里根本没有 `v1.31.18` 字面量。根因是 **8082 端口上同时挂着三个 `python -m http.server`**（旧副本 `E:\Git\SekaiNook-App\build\web`、相对路径 `build/web`、新仓库 `app\build\web`），Windows 上它们都能绑上同一端口，先绑定的旧进程在处理请求——浏览器拿到的一直是旧副本的产物。杀掉多余进程后立刻正常（`Content-Length` 从 17,004,249 变 17,174,786）。
+
+**结论**：本地验收前先 `curl -sI http://127.0.0.1:8082/main.dart.js` 核对 Content-Length，或先 `Get-CimInstance Win32_Process -Filter "Name='python.exe'"` 确认端口只被目标目录的服务占用。
+
+### 发版
+
+- `src/config/changelog.ts`：`APP_VERSION` 2.2.1 → **2.3.0**，新增 2.3.0 条目；`npm run changelog:fallback` 生成 `app/lib/config/changelog.dart`（77 条）；`npm run changelog:sync` 推 D1 成功。
+- `app/pubspec.yaml`：version **2.3.0+31**。
+- `tool/publish_apk.ps1` 打包上传，核对 `latest.json`（见提交记录）。

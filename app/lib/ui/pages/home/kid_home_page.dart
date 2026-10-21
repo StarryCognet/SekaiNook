@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -41,28 +42,28 @@ import '../../widgets/motion/app_buttons.dart';
 
 /// 花园图标 key → Material 图标（与 `garden_page.dart` 的映射一致，
 /// 对应 Web 版 `components/garden/GardenIcon.tsx`，未知 key 回退星形）。
-IconData _gardenIcon(String key) => switch (key) {
-      'book' => Icons.menu_book_outlined,
-      'read' => Icons.chrome_reader_mode_outlined,
-      'book-open' => Icons.chrome_reader_mode_outlined,
-      'calc' => Icons.calculate_outlined,
-      'pen' => Icons.edit_outlined,
-      'feather' => Icons.edit_outlined,
-      'eye' => Icons.visibility_outlined,
-      'sport' => Icons.bolt_outlined,
-      'home' => Icons.home_outlined,
-      'sun' => Icons.wb_sunny_outlined,
-      'flower' => Icons.local_florist_outlined,
-      'leaf' => Icons.eco_outlined,
-      'calendar' => Icons.calendar_today_outlined,
-      'trophy' => Icons.emoji_events_outlined,
-      'coin' => Icons.monetization_on_outlined,
-      'dashboard' => Icons.dashboard_outlined,
-      'check' => Icons.check_circle_outline,
-      'shop' => Icons.storefront_outlined,
-      'history' => Icons.history,
-      'star' => Icons.star_outline,
-      _ => Icons.star_outline,
+Glyph _gardenIcon(String key) => switch (key) {
+      'book' => AppIcons.book,
+      'read' => AppIcons.book,
+      'book-open' => AppIcons.book,
+      'calc' => AppIcons.calculate,
+      'pen' => AppIcons.edit,
+      'feather' => AppIcons.edit,
+      'eye' => AppIcons.eye,
+      'sport' => AppIcons.bolt,
+      'home' => AppIcons.home,
+      'sun' => AppIcons.sun,
+      'flower' => AppIcons.flower,
+      'leaf' => AppIcons.leaf,
+      'calendar' => AppIcons.calendar,
+      'trophy' => AppIcons.trophy,
+      'coin' => AppIcons.savings,
+      'dashboard' => AppIcons.dashboard,
+      'check' => AppIcons.checkCircle,
+      'shop' => AppIcons.store,
+      'history' => AppIcons.history,
+      'star' => AppIcons.star,
+      _ => AppIcons.star,
     };
 
 /// 首页先摆这几个打卡按钮（顺序按妹妹最常用的排）
@@ -217,9 +218,9 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     blurRadius: AppSpacing.xl,
     spreadRadius: AppSpacing.xs,
   );
-  static const Widget _fireIcon = Icon(Icons.local_fire_department_outlined, size: AppFontSize.sm);
-  static const Widget _trophyIcon = Icon(Icons.emoji_events_outlined, size: AppFontSize.sm);
-  static const Widget _rightIcon = Icon(Icons.chevron_right, size: AppFontSize.md);
+  static const Widget _fireIcon = GlyphIcon(AppIcons.fire, size: AppFontSize.sm);
+  static const Widget _trophyIcon = GlyphIcon(AppIcons.trophy, size: AppFontSize.sm);
+  static const Widget _rightIcon = GlyphIcon(AppIcons.chevronForward, size: AppFontSize.md);
 
   /// 打卡弹窗用的上传接口。
   ///
@@ -573,7 +574,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
               _gapSm,
               EnterBox(
                 index: 1,
-                child: _noticeBar(palette, _settleNotice!, Icons.receipt_long_outlined),
+                child: _noticeBar(palette, _settleNotice!, AppIcons.receipt),
               ),
             ],
             if (rejected != null) ...<Widget>[
@@ -593,7 +594,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                   onTap: () => unawaited(_refresh()),
                   child: Row(
                     children: <Widget>[
-                      Icon(Icons.cloud_off, size: AppFontSize.md, color: palette.danger),
+                      GlyphIcon(AppIcons.cloudOff, size: AppFontSize.md, color: palette.danger),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: Text(
@@ -621,7 +622,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                 child: _noticeBar(
                   palette,
                   '已经 22:00 啦，还有 $learningLeft 个学习任务没完成',
-                  Icons.nightlight_outlined,
+                  AppIcons.moon,
                   pulseColor: palette.warning,
                   onTap: () => context.go(_gardenPath('tasks')),
                 ),
@@ -634,7 +635,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                 child: _noticeBar(
                   palette,
                   '「${sleepTask.task.name}」${sleepTask.windowText}，别忘啦',
-                  Icons.bedtime_outlined,
+                  AppIcons.moon,
                   onTap: () => _startCheckIn(sleepTask.task),
                 ),
               ),
@@ -792,7 +793,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                             color: palette.cardColor(hasBackground: false),
                             shape: AppShape.all(AppRadius.full, side: BorderSide(color: palette.primary)),
                           ),
-                          child: Icon(
+                          child: GlyphIcon(
                             _gardenIcon(avatarItem.icon),
                             size: AppFontSize.sm,
                             color: palette.primary,
@@ -809,7 +810,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: <Widget>[
-              Icon(Icons.wb_sunny_outlined, size: AppFontSize.lg, color: heroText),
+              GlyphIcon(AppIcons.sun, size: AppFontSize.lg, color: heroText),
               const SizedBox(width: AppSpacing.xs),
               AnimatedCount(
                 value: garden.balance,
@@ -917,7 +918,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
   Widget _noticeBar(
     AppPalette palette,
     String text,
-    IconData icon, {
+    Glyph icon, {
     VoidCallback? onTap,
     Color? pulseColor,
   }) {
@@ -931,7 +932,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             PulseDot(color: pulseColor),
             const SizedBox(width: AppSpacing.xs),
           ],
-          Icon(icon, size: AppFontSize.md, color: palette.primary),
+          GlyphIcon(icon, size: AppFontSize.md, color: palette.primary),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
@@ -940,7 +941,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             ),
           ),
           const SizedBox(width: AppSpacing.xs),
-          Icon(Icons.chevron_right, size: AppFontSize.md, color: palette.primary),
+          GlyphIcon(AppIcons.chevronForward, size: AppFontSize.md, color: palette.primary),
         ],
       ),
     );
@@ -1217,7 +1218,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                   color: _accentTint(palette.primary),
                   shape: AppShape.all(AppRadius.md),
                 ),
-                child: Icon(
+                child: GlyphIcon(
                   _gardenIcon(task.icon),
                   size: AppFontSize.md,
                   color: _onAccentTint(palette, palette.primary),
@@ -1616,7 +1617,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Icon(Icons.notifications_outlined, size: AppFontSize.sm, color: palette.primary),
+              GlyphIcon(AppIcons.bell, size: AppFontSize.sm, color: palette.primary),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
@@ -1663,19 +1664,19 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
 
   Widget _grid(AppPalette palette, String momName, int unreadCount) {
     final List<_GridEntry> entries = <_GridEntry>[
-      _GridEntry('去打卡', Icons.check_circle_outline, () => context.go(_familyPath('tasks'))),
-      _GridEntry('背古诗', Icons.menu_book_outlined, () => context.go(_gardenPath('poem'))),
-      _GridEntry('我的花园', Icons.wb_sunny_outlined, () => context.go(_gardenPath('garden'))),
+      _GridEntry('去打卡', AppIcons.checkCircle, () => context.go(_familyPath('tasks'))),
+      _GridEntry('背古诗', AppIcons.book, () => context.go(_gardenPath('poem'))),
+      _GridEntry('我的花园', AppIcons.sun, () => context.go(_gardenPath('garden'))),
       _GridEntry(
         '$momName的话',
-        Icons.notifications_outlined,
+        AppIcons.bell,
         () => context.go('/home/notifications'),
         badge: unreadCount,
       ),
-      _GridEntry('本周计划', Icons.calendar_today_outlined, () => context.go('/family/plan')),
-      _GridEntry('我的账本', Icons.account_balance_wallet_outlined, () => context.go(_familyPath('history'))),
-      _GridEntry('我的勋章', Icons.emoji_events_outlined, () => context.go(_gardenPath('rewards'))),
-      _GridEntry('设置', Icons.settings_outlined, () => context.go('/settings')),
+      _GridEntry('本周计划', AppIcons.calendar, () => context.go('/family/plan')),
+      _GridEntry('我的账本', AppIcons.wallet, () => context.go(_familyPath('history'))),
+      _GridEntry('我的勋章', AppIcons.trophy, () => context.go(_gardenPath('rewards'))),
+      _GridEntry('设置', AppIcons.settings, () => context.go('/settings')),
     ];
 
     return AppCard(
@@ -1719,7 +1720,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                     color: _accentTint(palette.primary),
                     shape: AppShape.all(AppRadius.md),
                   ),
-                  child: Icon(
+                  child: GlyphIcon(
                     entry.icon,
                     size: AppFontSize.md,
                     color: _onAccentTint(palette, palette.primary),
@@ -1838,7 +1839,7 @@ class _GridEntry {
   const _GridEntry(this.label, this.icon, this.onTap, {this.badge = 0});
 
   final String label;
-  final IconData icon;
+  final Glyph icon;
   final VoidCallback onTap;
   final int badge;
 }
@@ -2179,13 +2180,13 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                 children: <Widget>[
                   AppOutlinedButton.icon(
                     onPressed: _submitting ? null : () => unawaited(_pick(ImageSource.camera)),
-                    icon: const Icon(Icons.photo_camera_outlined, size: AppFontSize.md),
+                    icon: const GlyphIcon(AppIcons.camera, size: AppFontSize.md),
                     label: const Text('拍照'),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   AppOutlinedButton.icon(
                     onPressed: _submitting ? null : () => unawaited(_pick(ImageSource.gallery)),
-                    icon: const Icon(Icons.photo_library_outlined, size: AppFontSize.md),
+                    icon: const GlyphIcon(AppIcons.photos, size: AppFontSize.md),
                     label: const Text('从相册选'),
                   ),
                 ],

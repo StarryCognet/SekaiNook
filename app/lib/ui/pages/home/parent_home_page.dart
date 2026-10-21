@@ -1,3 +1,4 @@
+import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
 
 import 'package:fl_chart/fl_chart.dart';
@@ -45,7 +46,7 @@ const List<String> _weekText = <String>[
 const Widget _gapXs = SizedBox(height: AppSpacing.xs);
 const Widget _gapSm = SizedBox(height: AppSpacing.sm);
 const Widget _gapMd = SizedBox(height: AppSpacing.md);
-const Widget _rightIcon = Icon(Icons.chevron_right, size: AppFontSize.md);
+const Widget _rightIcon = GlyphIcon(AppIcons.chevronForward, size: AppFontSize.md);
 
 /// 问候语（对应 Web 版 `greetingText`）
 String _greetingText(DateTime now) {
@@ -412,7 +413,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                         onTap: () => unawaited(_refresh()),
                         child: Row(
                           children: <Widget>[
-                            Icon(Icons.cloud_off, size: AppFontSize.md, color: palette.danger),
+                            GlyphIcon(AppIcons.cloudOff, size: AppFontSize.md, color: palette.danger),
                             const SizedBox(width: AppSpacing.sm),
                             Expanded(
                               child: Text(
@@ -491,7 +492,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    Icon(Icons.access_time, size: AppFontSize.sm, color: palette.primary),
+                    GlyphIcon(AppIcons.clock, size: AppFontSize.sm, color: palette.primary),
                     const SizedBox(width: AppSpacing.xs),
                     Text(
                       _clockText(now),
@@ -623,7 +624,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
           : '点一下去处理';
       todos.add(_todoRow(
         palette,
-        Icons.fact_check_outlined,
+        AppIcons.checklist,
         '有 ${family.pendingCount} 条打卡等你审批',
         hint,
         onTap: () => context.go(_familyPath('pending')),
@@ -633,7 +634,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
     if (family.balance > 0) {
       todos.add(_todoRow(
         palette,
-        Icons.savings_outlined,
+        AppIcons.savings,
         '$kidName攒了 ${family.balance} 积分，可以兑换成钱了',
         '全部兑换可得 ${_yuanText(FamilyRules.pointsToYuan(family.balance))} 元'
         '（${FamilyRules.exchangeRateText}）',
@@ -691,7 +692,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
 
   Widget _todoRow(
     AppPalette palette,
-    IconData icon,
+    Glyph icon,
     String text,
     String hint, {
     required VoidCallback onTap,
@@ -717,7 +718,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                   ),
                   shape: AppShape.all(AppRadius.md),
                 ),
-                child: Icon(icon, size: AppFontSize.md, color: _tintOn(palette, palette.primary)),
+                child: GlyphIcon(icon, size: AppFontSize.md, color: _tintOn(palette, palette.primary)),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -749,7 +750,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                   ),
                   child: trailing,
                 ),
-              Icon(Icons.chevron_right, size: AppFontSize.md, color: palette.textTertiary),
+              GlyphIcon(AppIcons.chevronForward, size: AppFontSize.md, color: palette.textTertiary),
             ],
           ),
         ),
@@ -1097,25 +1098,25 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
     final List<_GridEntry> entries = <_GridEntry>[
       _GridEntry(
         '去审批',
-        Icons.fact_check_outlined,
+        AppIcons.checklist,
         () => context.go(_familyPath('pending')),
         badge: family.pendingCount,
       ),
       _GridEntry(
         '家庭账本',
-        Icons.account_balance_wallet_outlined,
+        AppIcons.wallet,
         () => context.go(_familyPath('history')),
       ),
-      _GridEntry('学习计划', Icons.calendar_today_outlined, () => context.go('/family/plan')),
-      _GridEntry('阳光花园', Icons.wb_sunny_outlined, () => context.go('/garden')),
+      _GridEntry('学习计划', AppIcons.calendar, () => context.go('/family/plan')),
+      _GridEntry('阳光花园', AppIcons.sun, () => context.go('/garden')),
       _GridEntry(
         '通知',
-        Icons.notifications_outlined,
+        AppIcons.bell,
         () => context.go('/home/notifications'),
         badge: unreadCount,
       ),
-      _GridEntry('导出流水', Icons.file_download_outlined, () => _export(family.records)),
-      _GridEntry('设置', Icons.settings_outlined, () => context.go('/settings')),
+      _GridEntry('导出流水', AppIcons.download, () => _export(family.records)),
+      _GridEntry('设置', AppIcons.settings, () => context.go('/settings')),
     ];
 
     return AppCard(
@@ -1158,8 +1159,8 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                     ),
                     shape: AppShape.all(AppRadius.full),
                   ),
-                  child: Icon(
-                    Icons.savings_outlined,
+                  child: GlyphIcon(
+                    AppIcons.savings,
                     size: AppFontSize.md,
                     color: _tintOn(palette, palette.success),
                   ),
@@ -1234,7 +1235,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                     color: palette.softColor(hasBackground: false),
                     shape: AppShape.all(AppRadius.md, side: BorderSide(color: palette.border)),
                   ),
-                  child: Icon(entry.icon, size: AppFontSize.md, color: palette.primary),
+                  child: GlyphIcon(entry.icon, size: AppFontSize.md, color: palette.primary),
                 ),
                 if (entry.badge > 0)
                   Positioned(
@@ -1278,7 +1279,7 @@ class _GridEntry {
   const _GridEntry(this.label, this.icon, this.onTap, {this.badge = 0});
 
   final String label;
-  final IconData icon;
+  final Glyph icon;
   final VoidCallback onTap;
   final int badge;
 }
@@ -1311,7 +1312,7 @@ class _BalanceTrend extends StatelessWidget {
         height: _chartHeight,
         child: const EmptyView(
           message: '最近 14 天还没有积分记录',
-          icon: Icons.show_chart,
+          icon: AppIcons.chart,
         ),
       );
     }

@@ -12,11 +12,16 @@ import 'package:sekainook_app/theme/tokens.dart';
 import 'package:sekainook_app/ui/widgets/app_card.dart';
 import 'package:sekainook_app/ui/widgets/motion_widgets.dart';
 import 'package:sekainook_app/ui/widgets/state_views.dart';
+import 'package:sekainook_app/ui/icons/icons.dart';
 
 /// 动效组件的回归测试：不测"好不好看"，只测三件容易出错的事 ——
 /// ① 关掉系统动画时必须直接落终点态（不能卡在透明）；
 /// ② 组件能正常挂载/卸载，不因为动画控制器出异常；
 /// ③ 交互回调照旧触发（动画不该抢走点击）。
+Finder _glyph(Glyph glyph) => find.byWidgetPredicate(
+  (widget) => widget is GlyphIcon && widget.glyph == glyph,
+);
+
 void main() {
   Widget host(Widget child, {bool disableAnimations = false}) {
     return MaterialApp(
@@ -135,7 +140,7 @@ void main() {
     testWidgets('关掉动画时直接停在完成态', (WidgetTester tester) async {
       await tester.pumpWidget(host(const SuccessBurst(), disableAnimations: true));
       await tester.pump();
-      expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+      expect(_glyph(AppIcons.check), findsOneWidget);
     });
 
     testWidgets('showBurst 盖一层并在播完后收掉', (WidgetTester tester) async {
