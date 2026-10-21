@@ -437,3 +437,38 @@ ThemeData build() => ThemeData(
 - ✅ 图标系统（2.3.0）
 - ✅ 身份选择页重写 + 弹窗路由统一（2.4.0）
 - ⬜ 剩余弹窗统一（`family_dashboard_page` 9 处、`settings_page` 4 处、`reminder_editor_sheet`、`selftest_panel`）与四页组件化重写 → 批 4
+
+---
+
+## §13 批 4 第一批：全站弹窗路由统一（2.5.0）
+
+**日期**：2026-10-21
+
+### 改动
+
+把「单表达式 builder」形式的 `showDialog` 批量换成 `showFloatingDialog`（FlClash 的 PushPopupRoute：底部弹起、遮罩压暗、`SurfaceScope(floating)`），共 12 处：
+
+| 文件 | 处数 | 典型弹窗 |
+|---|---|---|
+| `app/lib/ui/pages/family/family_dashboard_page.dart` | 8 | 兑换积分、删快捷任务、批量通过、撤回申请、删除记录、驳回（带输入框）、打卡弹窗 |
+| `app/lib/ui/pages/settings/settings_page.dart` | 3 | 家长 PIN、修改口令、管理员密码 |
+| `app/lib/ui/pages/settings/reminder_editor_sheet.dart` | 1 | 提醒编辑器 |
+
+加上批 3 第二批已改的 5 处（role_gate 口令、parent_home 驳回/兑换、kid_home 打卡/勋章），全站累计 **18 处**走浮动弹窗路由。
+
+**有意保留 `showDialog` 的 4 处**：
+- `settings_page.dart:2070`、`selftest_panel.dart:760`：`builder` 是 `{ }` 块体（内部自己算 palette / 状态），换成浮动路由需要先拆 Builder，留到页面组件化重写时一起做；
+- `update_dialog.dart:46/69`：属于更新链路（AGENTS.md 明确别动），保持原样。
+
+### 验证
+- `flutter analyze --no-pub`：0 error / 0 warning（101 info，与批 3 一致）。
+- `flutter test --no-pub`：199 通过 / 2 失败（`e2e_flow_test`、`garden_flow_test` 需真实后端，基线即失败）。
+- `flutter build web --debug --no-pub` 成功（145s）。
+- headless Chrome 截图：家庭账本页 → 输入 100 积分 → 点「兑换 100 元现金」→ 浮动弹窗正常（标题「兑换 100 积分 = 10 元？」、取消/确认兑换胶囊按钮、遮罩压暗、弹窗居中不下沉）。
+- 一处异步 lint 修复：`family_dashboard_page.dart` 打卡弹窗里 `if (context.mounted)` → `if (mounted)`（`context` 已从弹窗 BuildContext 变成 State.context）。
+
+### 发版
+- `src/config/changelog.ts`：`APP_VERSION` 2.4.0 → **2.5.0**；`changelog:fallback` 生成 79 条；`changelog:sync` 推 D1 成功。
+- `app/pubspec.yaml`：version **2.5.0+33**。
+- 线上与本地 `latest.json` 一致：versionCode **33** / sha256 **d585af341c7dc0b0a98793a0bc5aa5dc76ffe48235ad0e2e7c31c12bd2ef02d5** / size **23,969,981**。
+- 发布前清空代理环境变量（同 2.4.0）。

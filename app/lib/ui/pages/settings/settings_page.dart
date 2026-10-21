@@ -1,3 +1,4 @@
+import 'package:sekainook_app/fl_ui/dialog.dart';
 import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -420,9 +421,9 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _changeRole(FamilyRole next) async {
     final family = context.read<FamilyState>();
     if (next == FamilyRole.parent && family.role != FamilyRole.parent) {
-      final ok = await showDialog<bool>(
+      final ok = await showFloatingDialog<bool>(
         context: context,
-        builder: (_) => _ParentPinDialog(family: family),
+        child: _ParentPinDialog(family: family),
       );
       if (ok != true || !mounted) return;
     }
@@ -441,9 +442,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _changeParentPin() async {
     final family = context.read<FamilyState>();
-    final ok = await showDialog<bool>(
+    final ok = await showFloatingDialog<bool>(
       context: context,
-      builder: (_) => _ChangePinDialog(family: family),
+      child: _ChangePinDialog(family: family),
     );
     if (ok != true || !mounted) return;
     showBurst(context);
@@ -558,9 +559,9 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     final api = _adminApi;
-    final password = await showDialog<String>(
+    final password = await showFloatingDialog<String>(
       context: context,
-      builder: (_) => _AdminPasswordDialog(api: api),
+      child: _AdminPasswordDialog(api: api),
     );
     if (password == null || !mounted) return;
     setState(() {

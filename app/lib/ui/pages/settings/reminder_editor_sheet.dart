@@ -1,3 +1,4 @@
+import 'package:sekainook_app/fl_ui/dialog.dart';
 import 'package:sekainook_app/ui/icons/icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,9 +21,9 @@ import '../../widgets/motion/app_buttons.dart';
 /// 保存后消息留在 `state.message` 里，由调用方按全页统一的口径弹出来
 /// （见 `reminder_list.dart` 的 `_flush`）。
 Future<void> showReminderEditorSheet(BuildContext context, {LocalReminder? reminder}) {
-  return showDialog<void>(
+  return showFloatingDialog<void>(
     context: context,
-    builder: (BuildContext dialogContext) => _ReminderEditorSheet(initial: reminder),
+    child: _ReminderEditorSheet(initial: reminder),
   );
 }
 

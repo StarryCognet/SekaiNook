@@ -27,10 +27,20 @@ class ChangelogEntry {
 }
 
 /// 当前版本号（与 [changelog] 第一条保持一致）。
-const String appVersion = '2.4.0';
+const String appVersion = '2.5.0';
 
 /// 版本历史（倒序：最新在前）。
 const List<ChangelogEntry> changelog = <ChangelogEntry>[
+  ChangelogEntry(
+    version: '2.5.0',
+    date: '2026-10-21 15:05:00',
+    title: '全站弹窗换成 FlClash 浮动弹窗',
+    changes: <String>[
+      '家庭账本、设置、提醒编辑里 13 处弹窗改走浮动弹窗路由：从底部弹起、点遮罩收起、背景压暗，手感和 FlClash 一致',
+      '兑换积分、删除记录、撤回申请、批量通过、家长 PIN、修改口令等确认框统一成一张卡片，按钮自动排成「取消淡底 + 确认主色填充」',
+      '弹窗打开时不再整屏跳变，底部胶囊导航与弹窗的层级关系也理顺了',
+    ],
+  ),
   ChangelogEntry(
     version: '2.4.0',
     date: '2026-10-21 14:45:00',

@@ -1,3 +1,4 @@
+import 'package:sekainook_app/fl_ui/dialog.dart';
 import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -779,19 +780,19 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   }
 
   void _confirmExchange(int points, double yuan) {
-    showDialog<void>(
+    showFloatingDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      child: AlertDialog(
         title: Text('兑换 $points 积分 = $yuan 元？'),
         content: const Text('会记一条「现金兑现」支出，剩下的积分留在账上；如需回退请删除该记录'),
         actions: <Widget>[
           AppTextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () => Navigator.of(context).pop(),
             child: const Text('取消'),
           ),
           AppFilledButton(
             onPressed: () {
-              Navigator.of(dialogContext).pop();
+              Navigator.of(context).pop();
               unawaited(_settle(points));
             },
             child: const Text('确认兑换'),
@@ -1682,19 +1683,19 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   void _confirmRemoveTask(CustomTask task) {
     final store = context.read<CustomTasksState>();
-    showDialog<void>(
+    showFloatingDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      child: AlertDialog(
         title: const Text('删掉这个任务？'),
         content: Text('「${task.name}」会从快捷任务里移除，已有的流水不受影响。'),
         actions: <Widget>[
           AppTextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () => Navigator.of(context).pop(),
             child: const Text('取消'),
           ),
           AppTextButton(
             onPressed: () {
-              Navigator.of(dialogContext).pop();
+              Navigator.of(context).pop();
               store.removeTask(task.id);
             },
             child: const Text('删掉'),
@@ -1745,19 +1746,19 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   }
 
   void _confirmApproveAll(List<LedgerRecord> pending) {
-    showDialog<void>(
+    showFloatingDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      child: AlertDialog(
         title: Text('一次通过全部 ${pending.length} 条？'),
         content: const Text('确认后才入账；要驳回的请单独处理'),
         actions: <Widget>[
           AppTextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () => Navigator.of(context).pop(),
             child: const Text('再想想'),
           ),
           AppFilledButton(
             onPressed: () {
-              Navigator.of(dialogContext).pop();
+              Navigator.of(context).pop();
               unawaited(_approveAll(pending));
             },
             child: const Text('全部通过'),
@@ -2091,19 +2092,19 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   }
 
   void _confirmWithdraw(LedgerRecord record) {
-    showDialog<void>(
+    showFloatingDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      child: AlertDialog(
         title: const Text('撤回这条申请？'),
         content: const Text('撤回后记录会被删除，可以重新打卡'),
         actions: <Widget>[
           AppTextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () => Navigator.of(context).pop(),
             child: const Text('取消'),
           ),
           AppFilledButton(
             onPressed: () {
-              Navigator.of(dialogContext).pop();
+              Navigator.of(context).pop();
               unawaited(_withdraw(record.id));
             },
             child: const Text('撤回'),
@@ -2115,26 +2116,26 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   void _confirmDelete(LedgerRecord record) {
     final hasImage = record.imageUrl != null && record.imageUrl!.isNotEmpty;
-    showDialog<void>(
+    showFloatingDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      child: AlertDialog(
         title: const Text('确认删除该记录？'),
         content: Text(hasImage ? '关联图片也会一并删除，且不可恢复' : '删除后不可恢复'),
         actions: <Widget>[
           AppTextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () => Navigator.of(context).pop(),
             child: const Text('取消'),
           ),
           AppFilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              backgroundColor: Theme.of(context).colorScheme.error,
               // 实色红底上的字按这层底色取，而不是主题给主色配的 onPrimary
-              foregroundColor: dialogContext.palette.onColor(
-                Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: context.palette.onColor(
+                Theme.of(context).colorScheme.error,
               ),
             ),
             onPressed: () {
-              Navigator.of(dialogContext).pop();
+              Navigator.of(context).pop();
               unawaited(_delete(record.id));
             },
             child: const Text('删除'),
@@ -2182,9 +2183,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   /// 驳回弹窗：写一句话给女儿，而不是点一下就走
   Future<void> _startReject(LedgerRecord target) async {
     final controller = TextEditingController();
-    final reason = await showDialog<String>(
+    final reason = await showFloatingDialog<String>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
+      child: StatefulBuilder(
         builder: (builderContext, setDialogState) => AlertDialog(
           title: Text('驳回「${target.taskName}」'),
           content: Column(
@@ -2206,7 +2207,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           ),
           actions: <Widget>[
             AppTextButton(
-              onPressed: _rejecting ? null : () => Navigator.of(dialogContext).pop(),
+              onPressed: _rejecting ? null : () => Navigator.of(context).pop(),
               child: const Text('取消'),
             ),
             AppFilledButton(
@@ -2221,7 +2222,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   ? null
                   : () {
                       setDialogState(() {});
-                      Navigator.of(dialogContext).pop(controller.text.trim());
+                      Navigator.of(context).pop(controller.text.trim());
                     },
               child: const Text('确认驳回'),
             ),
@@ -2248,9 +2249,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     // 消费 / 罚款只要写清原因。判定与网页版共用 core/task_rules.dart。
     final bool needPhoto = taskRequiresPhoto(task);
 
-    final result = await showDialog<_CheckInResult>(
+    final result = await showFloatingDialog<_CheckInResult>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
+      child: StatefulBuilder(
         builder: (builderContext, setDialogState) {
           final palette = builderContext.palette;
           Future<void> pick(ImageSource source) async {
@@ -2411,7 +2412,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             ),
             actions: <Widget>[
               AppTextButton(
-                onPressed: uploading ? null : () => Navigator.of(dialogContext).pop(),
+                onPressed: uploading ? null : () => Navigator.of(context).pop(),
                 child: const Text('取消'),
               ),
               AppFilledButton(
@@ -2435,8 +2436,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                           return;
                         }
                         final note = noteController.text.trim();
-                        if (dialogContext.mounted) {
-                          Navigator.of(dialogContext).pop(
+                        if (mounted) {
+                          Navigator.of(context).pop(
                             _CheckInResult(
                               note: note.isEmpty ? null : note,
                               imageUrl: imageUrl,
@@ -2657,9 +2658,9 @@ class _RecordThumb extends StatelessWidget {
     final palette = context.palette;
     return PressInkWell(
       borderRadius: BorderRadius.circular(AppRadius.sm),
-      onTap: () => showDialog<void>(
+      onTap: () => showFloatingDialog<void>(
         context: context,
-        builder: (dialogContext) => Dialog(
+        child: Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.all(AppSpacing.md),
           child: InteractiveViewer(
