@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:sekainook_app/fl_ui/dialog.dart';
 import 'package:sekainook_app/ui/widgets/app_toast.dart';
 import 'package:sekainook_app/ui/widgets/app_loading.dart';
 import 'package:go_router/go_router.dart';
@@ -266,9 +267,9 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
 
   Future<void> _reject(LedgerRecord record) async {
     if (_busyId != null) return;
-    final String? reason = await showDialog<String>(
+    final String? reason = await showFloatingDialog<String>(
       context: context,
-      builder: (BuildContext dialogContext) => _RejectDialog(taskName: record.taskName),
+      child: _RejectDialog(taskName: record.taskName),
     );
     if (reason == null || !mounted) return;
     setState(() => _busyId = record.id);
@@ -293,9 +294,9 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
     if (balance <= 0 || _settling) return;
 
     final double yuan = FamilyRules.pointsToYuan(balance);
-    final bool? confirmed = await showDialog<bool>(
+    final bool? confirmed = await showFloatingDialog<bool>(
       context: context,
-      builder: (BuildContext dialogContext) => _ConfirmDialog(
+      child: _ConfirmDialog(
         title: '兑换 $balance 积分 = ${_yuanText(yuan)} 元？',
         message: '会记一条「现金兑现」支出，积分全部扣掉；想只兑换一部分请去账本页',
         okText: '确认兑换',
@@ -1436,13 +1437,20 @@ class _RejectDialogState extends State<_RejectDialog> {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    return AlertDialog(
-      backgroundColor: palette.cardColor(hasBackground: false),
-      title: Text(
-        '驳回「${widget.taskName}」',
-        style: TextStyle(fontSize: AppFontSize.md, fontWeight: FontWeight.w700),
-      ),
-      content: TextField(
+    return CommonDialog(
+      title: '驳回「${widget.taskName}」',
+      hasFields: true,
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(_reason.text),
+          child: const Text('确认驳回'),
+        ),
+      ],
+      child: TextField(
         controller: _reason,
         maxLines: 3,
         maxLength: 100,
@@ -1452,23 +1460,8 @@ class _RejectDialogState extends State<_RejectDialog> {
           counterText: '',
           hintText: '写一句给女儿的话（可选）',
           hintStyle: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            borderSide: BorderSide(color: palette.border),
-          ),
         ),
       ),
-      actions: <Widget>[
-        AppTextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          style: TextButton.styleFrom(foregroundColor: palette.textSecondary),
-          child: const Text('取消'),
-        ),
-        AppFilledButton(
-          onPressed: () => Navigator.of(context).pop(_reason.text),
-          child: const Text('确认驳回'),
-        ),
-      ],
     );
   }
 }
@@ -1488,27 +1481,22 @@ class _ConfirmDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    return AlertDialog(
-      backgroundColor: palette.cardColor(hasBackground: false),
-      title: Text(
-        title,
-        style: TextStyle(fontSize: AppFontSize.md, fontWeight: FontWeight.w700),
-      ),
-      content: Text(
-        message,
-        style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
-      ),
+    return CommonDialog(
+      title: title,
       actions: <Widget>[
-        AppTextButton(
+        TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          style: TextButton.styleFrom(foregroundColor: palette.textSecondary),
           child: const Text('取消'),
         ),
-        AppFilledButton(
+        TextButton(
           onPressed: () => Navigator.of(context).pop(true),
           child: Text(okText),
         ),
       ],
+      child: Text(
+        message,
+        style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+      ),
     );
   }
 }

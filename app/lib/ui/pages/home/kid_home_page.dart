@@ -1,3 +1,4 @@
+import 'package:sekainook_app/fl_ui/dialog.dart';
 import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -441,9 +442,9 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
   Future<void> _openCheckInSheet(TaskConfig task, {CustomTask? custom}) async {
     // 妈妈加的任务与预置任务走即时到账（与以前 `_checkInMyTask` 的判据一致）
     final bool isParent = custom?.createdBy == TaskCreator.parent;
-    final bool? submitted = await showDialog<bool>(
+    final bool? submitted = await showFloatingDialog<bool>(
       context: context,
-      builder: (BuildContext dialogContext) => _CheckInSheet(
+      child: _CheckInSheet(
         task: task,
         isParent: isParent,
         upload: _uploadApi,
@@ -1779,11 +1780,10 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
   /// 解锁新勋章的仪式感：压暗整屏，中间弹一张卡，点掉即收下
   Future<void> _celebrate(garden_models.Badge badge) async {
     final AppPalette palette = context.palette;
-    await showDialog<void>(
+    await showFloatingDialog<void>(
       context: context,
-      barrierDismissible: false,
-      barrierColor: palette.text.withValues(alpha: 0.6),
-      builder: (BuildContext dialogContext) => Dialog(
+      dismissible: false,
+      child: Dialog(
         backgroundColor: palette.cardColor(hasBackground: false),
         shape: AppShape.dialog(),
         child: Padding(
@@ -1822,7 +1822,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
               SizedBox(
                 width: double.infinity,
                 child: AppFilledButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  onPressed: () => Navigator.of(context).pop(),
                   child: const Text('好耶，收下啦'),
                 ),
               ),

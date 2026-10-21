@@ -402,3 +402,38 @@ ThemeData build() => ThemeData(
 - `src/config/changelog.ts`：`APP_VERSION` 2.2.1 → **2.3.0**，新增 2.3.0 条目；`npm run changelog:fallback` 生成 `app/lib/config/changelog.dart`（77 条）；`npm run changelog:sync` 推 D1 成功。
 - `app/pubspec.yaml`：version **2.3.0+31**。
 - `tool/publish_apk.ps1` 打包上传，核对 `latest.json`（见提交记录）。
+
+---
+
+## §12 批 3 第二批：身份选择页重写 + 全站弹窗统一（2.4.0）
+
+**日期**：2026-10-21　**提交**：`89037e4`（role_gate 重写）+ 本次发版提交
+
+### 改动
+
+**身份选择页 `app/lib/ui/pages/role_gate_page.dart` 重写**
+- 标题 / 副标题 / 底部小字改用 `AppTextStyle.title1 / subheadline / caption1`。
+- 两张角色卡改用 `CommonCard`（超椭圆、按压动效、焦点环、选中态），保留 `AnimatedScale` 放大反馈。
+- 家长口令弹窗从 `showDialog + AlertDialog` 改成 `showFloatingDialog + CommonDialog`：超椭圆输入框、抖动提示、`AlertActions` 自动把「进入」渲染成 primary 填充胶囊、「取消」淡底胶囊。
+
+**弹窗路由全站统一（本轮已改）**
+- `parent_home_page.dart`：驳回弹窗 `_RejectDialog`、兑换确认 `_ConfirmDialog` 的内部 `AlertDialog` → `CommonDialog`；两处 `showDialog` → `showFloatingDialog`。
+- `kid_home_page.dart`：打卡弹窗 `_CheckInSheet`、勋章庆祝弹窗改 `showFloatingDialog`（庆祝弹窗保留 `dismissible: false`）。
+- 手感：从底部弹起、点遮罩收起、背景变暗，与 FlClash 一致。
+
+### 验证
+- `flutter analyze --no-pub`：0 error / 0 warning（101 info，全部既有风格提示）。
+- `flutter test --no-pub`：199 通过 / 2 失败（`e2e_flow_test`、`garden_flow_test` 需真实后端，基线即失败）。
+- `flutter build web --debug --no-pub` 成功（87s）。
+- headless Chrome（9336 端口）截图：角色页 → 口令弹窗（超椭圆输入 + 胶囊按钮）→ 家长首页 → 点「驳回」弹出 CommonDialog（标题 + 超椭圆输入框 + 取消/确认驳回胶囊），全部正常；底栏 NavigationDock 5 tab 与 badge 正常。
+
+### 发版
+- `src/config/changelog.ts`：`APP_VERSION` 2.3.0 → **2.4.0**，新增 2.4.0 条目；`npm run changelog:fallback` 生成 `app/lib/config/changelog.dart`（78 条）；`changelog:sync` 推 D1 成功。
+- `app/pubspec.yaml`：version **2.4.0+32**。
+- 线上与本地 `latest.json` 一致：versionCode **32** / sha256 **465860f517f46751bdd8cdc97e66d78982e74565137288b9a4c192ee8f24c205** / size **23,969,981**。
+- 发布前清空 `HTTP_PROXY`/`HTTPS_PROXY`（7890 代理会让 wrangler 传大文件超时）。
+
+### 批 3 状态
+- ✅ 图标系统（2.3.0）
+- ✅ 身份选择页重写 + 弹窗路由统一（2.4.0）
+- ⬜ 剩余弹窗统一（`family_dashboard_page` 9 处、`settings_page` 4 处、`reminder_editor_sheet`、`selftest_panel`）与四页组件化重写 → 批 4

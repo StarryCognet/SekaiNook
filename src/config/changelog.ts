@@ -14,10 +14,20 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.3.0';
+export const APP_VERSION = '2.4.0';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.4.0',
+    date: '2026-10-21 14:45:00',
+    title: '身份选择页重做，全站弹窗换成 FlClash 浮动卡片',
+    changes: [
+      '身份选择页（妈妈 / 孩子）换成 FlClash 的角色卡：超椭圆卡片、选中放大、图标和文案层级重排',
+      '家长口令弹窗改成浮动卡片式：抖动提示、超椭圆输入框、胶囊按钮，输错不再抖整屏',
+      '全站弹窗统一换成 FlClash 的浮动弹窗路由：从底部弹起、点遮罩收起、驳回与兑换确认都是同一套手感',
+    ],
+  },
   {
     version: '2.3.0',
     date: '2026-10-21 14:35:00',
