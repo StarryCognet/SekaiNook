@@ -472,3 +472,19 @@ ThemeData build() => ThemeData(
 - `app/pubspec.yaml`：version **2.5.0+33**。
 - 线上与本地 `latest.json` 一致：versionCode **33** / sha256 **d585af341c7dc0b0a98793a0bc5aa5dc76ffe48235ad0e2e7c31c12bd2ef02d5** / size **23,969,981**。
 - 发布前清空代理环境变量（同 2.4.0）。
+
+## §14 网页版（Flutter Web 主域名）部署到 2.5.0
+
+**方向修正**：`E:\Git\SekaiNook` 的 `app/` 是 Flutter 客户端（一套代码出 APK 与 Flutter Web），README 明确它才是当前主力前端；`src/` 的 React 版是**过渡期保留、切 Flutter Web 后退役**的旧站。所以「把网页版也同步了」不需要改 React 站——重新部署 Flutter Web 即可（同一份 app 代码已含 2.5.0 的全部 FlClash 改动）。此前在 React 站上做的主题令牌/超椭圆/Glyph SVG 化改动已全部 `git checkout` 回滚。
+
+| 项 | 值 |
+|---|---|
+| 部署前线上版本 | 2.1.4+27（落后 app 端 8 个版本） |
+| 构建 | `cd app && flutter build web --release --no-pub --dart-define=API_BASE=https://sn.starrymiku.com`（91.3s，产物 43MB） |
+| 部署 | `npx wrangler pages deploy app/build/web --project-name sekainook --branch main`（44 文件，6.65s） |
+| 部署后线上版本 | **2.5.0 / 33**（`https://sn.starrymiku.com/version.json` 核对） |
+| main.dart.js | 4,797,071 B（与本地 build 一致） |
+
+**浏览器验收**（headless Chrome 1600×1000 打开主域名）：角色选择页（壁纸 + 超椭圆 CommonCard + 中文字体正常）→ 点「女儿」进首页：自研顶栏、粉色 hero 卡、通知卡、今日任务、底栏 NavigationDock（5 tab Glyph 图标 + 选中胶囊）、超椭圆卡片、壁纸玻璃全部正常，积分/任务数据实时来自 API。
+
+**环境注意**：部署前必须清空 `HTTP_PROXY`/`HTTPS_PROXY`（7890 代理会让 wrangler 传 43MB 产物超时）；`flutter build web` 必须带 `--no-pub`（默认 pub get 会重新解析依赖、网络慢时挂住）。
