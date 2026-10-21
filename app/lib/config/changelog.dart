@@ -27,10 +27,20 @@ class ChangelogEntry {
 }
 
 /// 当前版本号（与 [changelog] 第一条保持一致）。
-const String appVersion = '2.1.5';
+const String appVersion = '2.2.0';
 
 /// 版本历史（倒序：最新在前）。
 const List<ChangelogEntry> changelog = <ChangelogEntry>[
+  ChangelogEntry(
+    version: '2.2.0',
+    date: '2026-10-21 13:10:00',
+    title: 'UI 底座换成 FlClash，底栏先换新',
+    changes: <String>[
+      '整套界面开始换成 FlClash v0.9.1 的组件库：超椭圆圆角、统一的间距与字阶，页面会分批换过去',
+      '底部导航换成 NavigationDock：弹簧跟手、按压缩放，五个图标换成自绘矢量 Glyph',
+      '液态玻璃默认关（设置开关留到下一批接上），主题、数据与操作方式都没有变化',
+    ],
+  ),
   ChangelogEntry(
     version: '2.1.5',
     date: '2026-10-20 10:40:00',

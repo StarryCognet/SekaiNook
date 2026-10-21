@@ -7,6 +7,10 @@ import 'package:provider/provider.dart';
 
 import 'core/app_error.dart';
 import 'data/models/ledger_record.dart';
+import 'fl_ui/liquid_glass.dart';
+import 'fl_ui/measure.dart';
+import 'fl_ui/view_scope.dart';
+import 'fl_ui_zh.dart';
 import 'router.dart';
 import 'state/custom_tasks_state.dart';
 import 'state/family_state.dart';
@@ -177,22 +181,43 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
             locale: const Locale('zh', 'CN'),
             supportedLocales: const <Locale>[Locale('zh', 'CN'), Locale('en')],
             localizationsDelegates: const <LocalizationsDelegate<Object>>[
+              FlUiZhDelegate(),
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
             // 底图铺在所有页面之下（页面在设了背景图时背景是透明的）
-            builder: (BuildContext context, Widget? child) => Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                if (theme.hasBackground)
-                  AppBackgroundLayer(
-                    url: theme.background,
-                    veil: context.palette.bgVeil,
+            // 外面再套 FlClash lib/ui 需要的三层作用域（批 1：液态玻璃默认关）：
+            // MeasureScope 供文字量高用、ViewScope 供响应式断点用、
+            // LiquidGlassScope/Host 是液态玻璃的总开关（关掉时组件走普通绘制）。
+            builder: (BuildContext context, Widget? child) {
+              final MediaQueryData media = MediaQuery.of(context);
+              const bool glass = false;
+              return Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  if (theme.hasBackground)
+                    AppBackgroundLayer(
+                      url: theme.background,
+                      veil: context.palette.bgVeil,
+                    ),
+                  LiquidGlassHost(
+                    enabled: glass,
+                    child: LiquidGlassScope(
+                      enabled: glass,
+                      child: MeasureScope(
+                        measure: Measure.of(context, media.textScaler.scale(1)),
+                        child: ViewScope(
+                          size: media.size,
+                          isMobile: media.size.width < 700,
+                          child: child ?? const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
                   ),
-                child ?? const SizedBox.shrink(),
-              ],
-            ),
+                ],
+              );
+            },
           );
         },
       ),

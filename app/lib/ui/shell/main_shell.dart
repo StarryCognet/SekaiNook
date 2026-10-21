@@ -8,14 +8,14 @@ import 'package:provider/provider.dart';
 import '../../config/app_constants.dart';
 import '../../data/models/app_update.dart';
 import '../../data/models/notification_record.dart';
+import '../../fl_ui/icons/icons.dart';
+import '../../fl_ui/navigation_dock.dart';
 import '../../state/family_state.dart';
 import '../../state/garden_state.dart';
 import '../../state/notification_state.dart';
-import '../../state/theme_state.dart';
 import '../../state/update_state.dart';
 import '../widgets/motion_widgets.dart';
 import '../widgets/update_dialog.dart';
-import 'app_nav_bar.dart';
 import 'app_top_bar.dart';
 import 'back_intent.dart';
 
@@ -155,12 +155,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final unread = context.select<NotificationState, int>((state) => state.unreadCount);
     final pending = context.select<FamilyState, int>((state) => state.pendingCount);
     final isParent = context.select<FamilyState, bool>((state) => state.role == FamilyRole.parent);
-    final hasBackground = context.select<ThemeState, bool>(
-      (ThemeState state) => state.background.isNotEmpty,
-    );
-    final navOpacity = context.select<ThemeState, double>(
-      (ThemeState state) => state.navBarOpacity,
-    );
 
     return BackIntentScope(
       dispatcher: _backIntent,
@@ -209,44 +203,34 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               ),
             ],
           ),
-          // 悬浮胶囊底栏：选中靠弹簧透镜滑过去（跟手、会果冻），整条还随按下膨胀
-          bottomNavigationBar: SafeArea(
-            top: false,
-            child: AppNavBar(
-              selectedIndex: index,
-              hasBackground: hasBackground,
-              opacity: navOpacity,
-              onSelected: (value) => context.go(_locations[value]),
-              destinations: <AppNavDestination>[
-                AppNavDestination(
-                  icon: Icons.home_outlined,
-                  selectedIcon: Icons.home,
-                  label: '首页',
-                  badge: unread,
-                ),
-                AppNavDestination(
-                  icon: Icons.receipt_long_outlined,
-                  selectedIcon: Icons.receipt_long,
-                  label: '家庭',
-                  badge: isParent ? pending : 0,
-                ),
-                const AppNavDestination(
-                  icon: Icons.calendar_month_outlined,
-                  selectedIcon: Icons.calendar_month,
-                  label: '计划',
-                ),
-                const AppNavDestination(
-                  icon: Icons.local_florist_outlined,
-                  selectedIcon: Icons.local_florist,
-                  label: '花园',
-                ),
-                const AppNavDestination(
-                  icon: Icons.settings_outlined,
-                  selectedIcon: Icons.settings,
-                  label: '设置',
-                ),
-              ],
-            ),
+          // 悬浮胶囊底栏：FlClash lib/ui 的 NavigationDock（弹簧透镜跟手 + 按下膨胀）
+          bottomNavigationBar: NavigationDock(
+            selectedIndex: index,
+            onSelected: (value) => context.go(_locations[value]),
+            destinations: <NavigationDockDestination>[
+              NavigationDockDestination(
+                glyph: AppGlyphs.dashboard,
+                label: '首页',
+                badge: unread,
+              ),
+              NavigationDockDestination(
+                glyph: AppGlyphs.profiles,
+                label: '家庭',
+                badge: isParent ? pending : 0,
+              ),
+              const NavigationDockDestination(
+                glyph: AppGlyphs.requests,
+                label: '计划',
+              ),
+              const NavigationDockDestination(
+                glyph: AppGlyphs.sparkle,
+                label: '花园',
+              ),
+              const NavigationDockDestination(
+                glyph: AppGlyphs.settings,
+                label: '设置',
+              ),
+            ],
           ),
         ),
       ),

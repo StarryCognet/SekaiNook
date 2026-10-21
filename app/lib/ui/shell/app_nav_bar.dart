@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import '../../fl_ui/navigation_dock.dart';
 import '../../theme/app_shape.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
@@ -93,7 +94,7 @@ class AppNavBar extends StatefulWidget {
   /// 而 `viewPadding` 始终是屏幕自己的安全区原值 —— 手势条该让多少，
   /// 不该取决于外面套了几层 `SafeArea`。
   static double contentInset(BuildContext context) =>
-      MediaQuery.viewPaddingOf(context).bottom + bottomMargin + barHeight + AppSpacing.sm;
+      NavigationDock.insetOf(context) + AppSpacing.sm;
 
   @override
   State<AppNavBar> createState() => _AppNavBarState();

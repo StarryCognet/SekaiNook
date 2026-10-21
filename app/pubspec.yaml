@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 2.1.5+28
+version: 2.2.0+29
 
 environment:
   sdk: ^3.13.0
@@ -54,6 +54,14 @@ dependencies:
   path_provider: ^2.1.6
   share_plus: ^13.3.1
   dynamic_color: 1.9.0
+  # ---- FlClash v0.9.1 lib/ui 移植所需（见 docs/ui-migration-flclash.md） ----
+  material_new_shapes: ^1.0.0
+  material_color_utilities: ^0.13.0
+  collection: ^1.19.1
+  emoji_regex: ^0.0.5
+  freezed_annotation: ^3.1.0
+  path_parsing: ^1.1.0
+  super_sliver_list: ^0.4.1
 
 dev_dependencies:
   flutter_test:
@@ -76,6 +84,16 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # FlClash 移植库用到的字体与液态玻璃着色器
+  assets:
+    - assets/fonts/
+  shaders:
+    - shaders/liquid_glass.frag
+  fonts:
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sekainook_app/config/app_constants.dart';
 import 'package:sekainook_app/core/api_client.dart';
 import 'package:sekainook_app/data/api/settings_api.dart';
+import 'package:sekainook_app/fl_ui/navigation_dock.dart';
 import 'package:sekainook_app/state/theme_state.dart';
 import 'package:sekainook_app/theme/tokens.dart';
 import 'package:sekainook_app/ui/shell/app_nav_bar.dart';
@@ -65,8 +66,9 @@ void main() {
     });
   });
 
-  testWidgets('让位高度 = 手势条 + 离底间距 + 胶囊高 + 一点呼吸', (WidgetTester tester) async {
+  testWidgets('让位高度 = NavigationDock 高度 + 底部安全区 + 一点呼吸', (WidgetTester tester) async {
     late double inset;
+    late double expected;
     await tester.pumpWidget(
       MaterialApp(
         home: MediaQuery(
@@ -78,15 +80,14 @@ void main() {
           child: Builder(
             builder: (BuildContext context) {
               inset = AppNavBar.contentInset(context);
+              // NavigationDock 自己算「条高 + max(离底间距, 安全区)」
+              expected = NavigationDock.heightOf(context) + 34 + AppSpacing.sm;
               return const SizedBox.shrink();
             },
           ),
         ),
       ),
     );
-    expect(
-      inset,
-      closeTo(34 + AppNavBar.bottomMargin + AppNavBar.barHeight + AppSpacing.sm, 1e-9),
-    );
+    expect(inset, closeTo(expected, 1e-9));
   });
 }
