@@ -1,0 +1,28 @@
+# 部署产物缓存策略（Cloudflare Pages 会在部署时读取本文件）
+#
+# 背景：Flutter Web 的 main.dart.js / flutter_bootstrap.js 文件名不带内容 hash，
+# 而 Cloudflare 默认给静态资源 `max-age=14400`（4 小时）。这导致每次发版后
+# 老访客在 4 小时内仍会拿到旧版 JS，页面里显示的版本号滞后（例如已发 2.5.0
+# 但设置页仍显示 2.1.4）。这里把入口类文件设为 no-cache（每次回源验证，
+# 靠 ETag 拿 304），其余带 hash/字体等资源保持默认长缓存。
+
+/index.html
+  Cache-Control: no-cache
+
+/flutter_bootstrap.js
+  Cache-Control: no-cache
+
+/main.dart.js
+  Cache-Control: no-cache
+
+/version.json
+  Cache-Control: no-cache
+
+/manifest.json
+  Cache-Control: no-cache
+
+/sw.js
+  Cache-Control: no-cache
+
+/favicon.png
+  Cache-Control: public, max-age=3600

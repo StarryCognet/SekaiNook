@@ -488,3 +488,20 @@ ThemeData build() => ThemeData(
 **浏览器验收**（headless Chrome 1600×1000 打开主域名）：角色选择页（壁纸 + 超椭圆 CommonCard + 中文字体正常）→ 点「女儿」进首页：自研顶栏、粉色 hero 卡、通知卡、今日任务、底栏 NavigationDock（5 tab Glyph 图标 + 选中胶囊）、超椭圆卡片、壁纸玻璃全部正常，积分/任务数据实时来自 API。
 
 **环境注意**：部署前必须清空 `HTTP_PROXY`/`HTTPS_PROXY`（7890 代理会让 wrangler 传 43MB 产物超时）；`flutter build web` 必须带 `--no-pub`（默认 pub get 会重新解析依赖、网络慢时挂住）。
+
+### §14.1 发版后版本号滞后（Flutter Web 缓存）的根因与根治
+
+**现象**：主域名已部署 2.5.0，但用户浏览器里设置页仍显示 2.1.4。
+
+**根因**：Flutter Web 的入口 JS 文件名固定为 `main.dart.js`（不带内容 hash），而 Cloudflare 对静态资源默认发 `Cache-Control: public, max-age=14400`（4 小时）。发版后老访客在 4 小时内继续用旧 JS。实测 `sn.starrymiku.com` 的 `main.dart.js` / `flutter_bootstrap.js` 响应头都是 `max-age=14400`，而 preview 域名同文件已是 `no-cache` —— 说明主域名所在的 zone 级缓存规则覆盖了 Pages 源站的 `_headers`。
+
+**尝试过但不够的**：在 `app/web/_headers` 里给 `/main.dart.js`、`/flutter_bootstrap.js` 等加 `Cache-Control: no-cache`。preview 域名生效（`92d73dcd.sekainook.pages.dev/main.dart.js` 返回 no-cache），主域名不生效（zone 缓存规则优先）。用 wrangler 的 OAuth token 调 `purge_cache` API 也不行（`10000 Authentication error`，该 token 没有 cache_purge 权限）。
+
+**根治方案（已上线）**：自定义 `app/web/flutter_bootstrap.js`（覆盖 Flutter 自动生成的引导脚本）：
+1. 启动时先 `fetch('version.json', {cache: 'no-store'})`（该文件已是 no-cache）；
+2. 把 `version + build_number` 拼进入口 JS 的 URL：`main.dart.js?v=2.5.0-33`；
+3. 改写 `window._flutter.buildConfig.builds[].mainJsPath` 后调 `_flutter.loader.load()`。
+
+效果：**每次发版入口 JS 的 URL 必变**，浏览器与 CDN 都无法命中旧缓存，以后不用再教用户强刷。注意首次生效仍需老访客当年那次强刷（他浏览器里缓存的还是旧 bootstrap，最多 4 小时自然过期）。
+
+**验证**：preview 域名与主域名 headless Chrome 实测都请求了 `main.dart.js?v=2.5.0-33`，页面正常渲染到 `#/role`（`flt-glass-pane` 存在）。
