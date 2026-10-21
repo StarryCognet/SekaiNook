@@ -1,12 +1,16 @@
-import 'package:sekainook_app/ui/icons/icons.dart';
-import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-import 'package:sekainook_app/ui/widgets/app_loading.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
+import 'package:sekainook_app/fl_ui/card.dart';
+import 'package:sekainook_app/fl_ui/dialog.dart';
+import 'package:sekainook_app/fl_ui/typography.dart';
+import 'package:sekainook_app/ui/icons/icons.dart';
+import 'package:sekainook_app/ui/widgets/app_loading.dart';
+
+import 'dart:async';
+import 'dart:math' as math;
 
 import '../../config/family_rules.dart';
 import '../../state/family_state.dart';
@@ -16,12 +20,15 @@ import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
 import '../widgets/motion_widgets.dart';
-import '../widgets/motion/app_buttons.dart';
 
 /// 身份选择门（对应 Web 版 `src/components/RoleGate.tsx`）。
 ///
 /// 只有真正选过身份才放行 —— **绝不能缺省为家长**，
 /// 否则妹妹手机第一次打开就是家长模式，能自己审批自己的打卡。
+///
+/// 2.4.0 起这一页改用 FlClash 组件：角色卡是 `CommonCard`（选中态、按压、
+/// 焦点环都由组件统一给），口令弹窗是 `CommonDialog` + `showFloatingDialog`
+/// （UIKit 式上下/左右按钮布局、超椭圆胶囊按钮、弹簧入场）。
 class RoleGatePage extends StatefulWidget {
   const RoleGatePage({super.key});
 
@@ -51,18 +58,17 @@ class _RoleGatePageState extends State<RoleGatePage> {
                   scaleFrom: 0.96,
                   child: Text(
                     'SekaiNook',
-                    style: TextStyle(
-                      fontSize: AppFontSize.xl,
-                      fontWeight: FontWeight.w700,
-                      color: palette.text,
-                      letterSpacing: 1,
-                    ),
+                    style: AppTextStyle.title1
+                        .of(context)
+                        .copyWith(color: palette.text, letterSpacing: 1),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   '先选一下你是谁',
-                  style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+                  style: AppTextStyle.subheadline
+                      .of(context)
+                      .copyWith(color: palette.textSecondary),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 EnterBox(
@@ -93,7 +99,9 @@ class _RoleGatePageState extends State<RoleGatePage> {
                 const SizedBox(height: AppSpacing.xl),
                 Text(
                   '开户礼金 +${FamilyRules.welcomeBonus} 分 · ${FamilyRules.exchangeRateText}',
-                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                  style: AppTextStyle.caption1
+                      .of(context)
+                      .copyWith(color: palette.textTertiary),
                 ),
               ],
             ),
@@ -120,10 +128,10 @@ class _RoleGatePageState extends State<RoleGatePage> {
     await Future<void>.delayed(AppMotion.fast);
     if (!mounted) return;
     final family = context.read<FamilyState>();
-    final ok = await showDialog<bool>(
+    final ok = await showFloatingDialog<bool>(
       context: context,
-      barrierDismissible: false,
-      builder: (_) => ChangeNotifierProvider<FamilyState>.value(
+      dismissible: false,
+      child: ChangeNotifierProvider<FamilyState>.value(
         value: family,
         child: const _ParentPinDialog(),
       ),
@@ -154,79 +162,57 @@ class _RoleCard extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  /// 选中的那张卡会弹出去一点、描边转成自己的强调色
+  /// 选中的那张卡会弹出去一点；底色/描边交给 CommonCard 的选中态
   final bool selected;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    // 选中时底色是「强调色 12% 合到卡片底上」：里面的字/图标一律按这层底取色，
-    // 不能再指望 palette.text（强调色淡底上压深字在部分主题里会糊）
-    final Color selectedBase =
-        Color.alphaBlend(color.withValues(alpha: 0.12), palette.surface);
-    return SizedBox(
-      width: 320,
-      child: AnimatedScale(
-        scale: selected ? 1.04 : 1,
-        duration: AppMotion.fast,
-        curve: AppMotion.spring,
-        child: PressInkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          child: AnimatedContainer(
-            duration: AppMotion.fast,
-            curve: AppMotion.standard,
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: ShapeDecoration(
-              // 选中底用「算好的实色」而不是半透明色：设了背景图时半透明会透出照片，
-              // 卡片和上面的字都跟着糊；这层实色 = 12% 强调色合到 surface 上，观感一致、对比度可算
-              color: selected ? selectedBase : palette.surface,
-              shape: AppShape.all(AppRadius.lg, side: BorderSide(color: selected ? color : palette.border, width: selected ? 2 : 1)),
-            ),
-            child: Row(
-              children: <Widget>[
-                Container(
-                  width: 48,
-                  height: 48,
-                  alignment: Alignment.center,
-                  decoration: ShapeDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    shape: AppShape.all(AppRadius.md),
-                  ),
-                  child: Text(emoji, style: const TextStyle(fontSize: 24)),
+    return AnimatedScale(
+      scale: selected ? 1.04 : 1,
+      duration: AppMotion.fast,
+      curve: AppMotion.spring,
+      child: SizedBox(
+        width: 320,
+        child: CommonCard(
+          onPressed: onTap,
+          isSelected: selected,
+          radius: AppRadius.lg,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 48,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: ShapeDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  shape: AppShape.all(AppRadius.md),
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: AppFontSize.md,
-                          fontWeight: FontWeight.w600,
-                          color: selected ? palette.onColor(selectedBase) : palette.text,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: AppFontSize.xs,
-                          color: selected
-                              ? palette.onColorSoft(selectedBase)
-                              : palette.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
+                child: Text(emoji, style: const TextStyle(fontSize: 24)),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: AppTextStyle.headline.of(context),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: AppTextStyle.caption1
+                          .of(context)
+                          .copyWith(color: palette.textSecondary),
+                    ),
+                  ],
                 ),
-                GlyphIcon(
-                  AppIcons.chevronForward,
-                  color: selected ? palette.onColorSoft(selectedBase) : palette.textTertiary,
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              GlyphIcon(AppIcons.chevronForward, color: palette.textTertiary),
+            ],
           ),
         ),
       ),
@@ -302,10 +288,10 @@ class _ParentPinDialogState extends State<_ParentPinDialog> {
     final family = context.watch<FamilyState>();
     final locked = family.pinLockRemaining > Duration.zero;
 
-    return AlertDialog(
-      backgroundColor: palette.surface,
-      title: const Text('家长口令'),
-      content: TweenAnimationBuilder<Offset>(
+    return CommonDialog(
+      title: '家长口令',
+      hasFields: true,
+      child: TweenAnimationBuilder<Offset>(
         // 把「第几次抖动」编进 tween 的终点：每失败一次终点 +1，
         // 组件不重建（输入框不丢焦点），进度落在小数部分里做一次衰减横摆。
         tween: Tween<Offset>(begin: Offset.zero, end: Offset(_shakeTick.toDouble(), 0)),
@@ -332,32 +318,35 @@ class _ParentPinDialogState extends State<_ParentPinDialog> {
             ),
             if (_error != null) ...<Widget>[
               const SizedBox(height: AppSpacing.sm),
-              Text(_error!, style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger)),
+              Text(
+                _error!,
+                style: AppTextStyle.caption1
+                    .of(context)
+                    .copyWith(color: palette.danger),
+              ),
             ],
             if (family.hasCustomParentPin)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.sm),
                 child: Text(
                   '已修改过口令',
-                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                  style: AppTextStyle.caption1
+                      .of(context)
+                      .copyWith(color: palette.textTertiary),
                 ),
               ),
           ],
         ),
       ),
       actions: <Widget>[
-        AppTextButton(
+        TextButton(
           onPressed: _busy ? null : () => Navigator.of(context).pop(false),
           child: const Text('取消'),
         ),
-        AppFilledButton(
+        TextButton(
           onPressed: locked || _busy ? null : _submit,
           child: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: AppLoading(size: 20),
-                )
+              ? const SizedBox(width: 16, height: 16, child: AppLoading(size: 20))
               : const Text('进入'),
         ),
       ],

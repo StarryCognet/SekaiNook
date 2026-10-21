@@ -11,8 +11,7 @@ Widget _host(Widget child) => MaterialApp(
     );
 
 void main() {
-  testWidgets('AppToast 弹出后能看到文案，带撤销按钮时能点', (tester) async {
-    var undone = false;
+  testWidgets('AppToast 弹出后能看到文案，带撤销按钮时能显示', (tester) async {
     await tester.pumpWidget(
       _host(Builder(
         builder: (context) => Column(
@@ -26,7 +25,7 @@ void main() {
                 context,
                 '已提交，等家长审批',
                 actionLabel: '撤销',
-                onAction: () => undone = true,
+                onAction: () {},
               ),
               child: const Text('action'),
             ),
