@@ -14,6 +14,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
 import '../widgets/motion_widgets.dart';
+import '../widgets/motion/app_buttons.dart';
 
 /// 身份选择门（对应 Web 版 `src/components/RoleGate.tsx`）。
 ///
@@ -343,11 +344,11 @@ class _ParentPinDialogState extends State<_ParentPinDialog> {
         ),
       ),
       actions: <Widget>[
-        TextButton(
+        AppTextButton(
           onPressed: _busy ? null : () => Navigator.of(context).pop(false),
           child: const Text('取消'),
         ),
-        FilledButton(
+        AppFilledButton(
           onPressed: locked || _busy ? null : _submit,
           child: _busy
               ? const SizedBox(

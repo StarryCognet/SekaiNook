@@ -8,6 +8,7 @@ import '../../../state/local_notify_state.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/motion_widgets.dart';
+import '../../widgets/motion/app_buttons.dart';
 
 /// 打开「提醒」编辑面板（新增 / 编辑共用）。
 ///
@@ -245,7 +246,7 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
             const _FieldLabel(text: '时间'),
             Align(
               alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
+              child: AppOutlinedButton.icon(
                 onPressed: _busy ? null : _pickTime,
                 icon: const Icon(Icons.schedule_outlined, size: AppFontSize.sm),
                 label: Text(_timeLabel),
@@ -278,7 +279,7 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: <Widget>[
-                  OutlinedButton.icon(
+                  AppOutlinedButton.icon(
                     onPressed: _busy ? null : _pickDay,
                     icon: const Icon(Icons.event_outlined, size: AppFontSize.sm),
                     label: Text(_onceDay ?? '选日期'),
@@ -377,15 +378,15 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
               alignment: WrapAlignment.end,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: <Widget>[
-                OutlinedButton(
+                AppOutlinedButton(
                   onPressed: _busy ? null : _test,
                   child: const Text('试一下这条'),
                 ),
-                TextButton(
+                AppTextButton(
                   onPressed: _busy ? null : () => Navigator.of(context).pop(),
                   child: const Text('取消'),
                 ),
-                FilledButton(
+                AppFilledButton(
                   onPressed: _busy ? null : _save,
                   child: Text(_isNew ? '保存' : '保存修改'),
                 ),

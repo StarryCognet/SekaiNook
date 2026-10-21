@@ -6,6 +6,7 @@ import '../../theme/tokens.dart';
 import 'motion/empty_illustration.dart';
 import 'motion/shape_loader.dart';
 import 'motion_widgets.dart';
+import './motion/app_buttons.dart';
 
 /// 加载中（小范围用，比如按钮旁边、列表尾部）
 ///
@@ -98,7 +99,7 @@ class ErrorView extends StatelessWidget {
       message: message,
       action: onRetry == null
           ? null
-          : OutlinedButton.icon(
+          : AppOutlinedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh, size: 18),
               label: const Text('再试一次'),

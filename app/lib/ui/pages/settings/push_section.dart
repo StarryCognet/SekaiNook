@@ -14,6 +14,7 @@ import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import 'reminder_list.dart';
+import '../../widgets/motion/app_buttons.dart';
 
 /// 「设置 → 手机提醒」区块。
 ///
@@ -214,16 +215,16 @@ class _PushSectionState extends State<PushSection> {
                     runSpacing: AppSpacing.sm,
                     children: <Widget>[
                       if (!local.enabled)
-                        FilledButton(
+                        AppFilledButton(
                           onPressed: local.busy ? null : _localEnable,
                           child: const Text('开启本地提醒'),
                         )
                       else
-                        OutlinedButton(
+                        AppOutlinedButton(
                           onPressed: local.busy ? null : _localDisable,
                           child: const Text('关掉本地提醒'),
                         ),
-                      OutlinedButton(
+                      AppOutlinedButton(
                         onPressed: local.busy ? null : _localTest,
                         child: const Text('发一条本地测试通知'),
                       ),
@@ -356,7 +357,7 @@ class _PushSectionState extends State<PushSection> {
                   style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                FilledButton(
+                AppFilledButton(
                   onPressed: _sending ? null : _send,
                   child: Text(_sending ? '发送中…' : '发一条测试通知'),
                 ),

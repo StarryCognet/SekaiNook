@@ -27,10 +27,20 @@ class ChangelogEntry {
 }
 
 /// 当前版本号（与 [changelog] 第一条保持一致）。
-const String appVersion = '2.1.4';
+const String appVersion = '2.1.5';
 
 /// 版本历史（倒序：最新在前）。
 const List<ChangelogEntry> changelog = <ChangelogEntry>[
+  ChangelogEntry(
+    version: '2.1.5',
+    date: '2026-10-20 10:40:00',
+    title: '主题能正常换了，按钮按下去会跟着手走',
+    changes: <String>[
+      '修好了一个 bug：上一版在部分手机上，不管选哪个主题都只显示壁纸色',
+      '全站按钮和图标按钮：按下去会鼓起来，手指往哪边拉就往哪边走，松手弹回去',
+      '列表行和卡片按下也有反馈了（只鼓不跟手，免得和上下滚动打架）',
+    ],
+  ),
   ChangelogEntry(
     version: '2.1.4',
     date: '2026-10-20 09:20:00',

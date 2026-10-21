@@ -92,6 +92,10 @@ class _ElasticPressState extends State<ElasticPress> with TickerProviderStateMix
 
   void _down(PointerDownEvent event) {
     if (!widget.enabled) return;
+    // 尺寸在按下时现取：用 LayoutBuilder 会破坏 AlertDialog / Table 这类
+    // 需要计算 intrinsic dimensions 的父级（LayoutBuilder 不支持 intrinsic）。
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    if (box != null && box.hasSize) _size = box.size;
     _setPressed(true);
     _downAt = event.localPosition;
     _longPressFired = false;
@@ -143,20 +147,15 @@ class _ElasticPressState extends State<ElasticPress> with TickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        // 无约束环境（比如被放进 Horizontal/Vertical 布局）下 biggest 是 infinity，
-        // 拿它算 center 会得到 NaN，paint 直接抛断 —— 退回零尺寸。
-        _size = constraints.biggest.isFinite ? constraints.biggest : Size.zero;
-        return Listener(
-          behavior: HitTestBehavior.opaque,
-          onPointerDown: _down,
-          onPointerMove: _move,
-          onPointerUp: _up,
-          onPointerCancel: _cancel,
-          child: AnimatedBuilder(
-            animation: _motion,
-            builder: (BuildContext context, Widget? child) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: _down,
+      onPointerMove: _move,
+      onPointerUp: _up,
+      onPointerCancel: _cancel,
+      child: AnimatedBuilder(
+        animation: _motion,
+        builder: (BuildContext context, Widget? child) {
               final double lift = _lift.value;
               final double longest = math.max(1, _size.longestSide);
               final double swell =
@@ -174,10 +173,8 @@ class _ElasticPressState extends State<ElasticPress> with TickerProviderStateMix
                 child: child,
               );
             },
-            child: widget.child,
-          ),
-        );
-      },
+        child: widget.child,
+      ),
     );
   }
 

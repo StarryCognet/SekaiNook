@@ -9,6 +9,7 @@ import '../../state/update_state.dart';
 import '../../theme/app_shape.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
+import './motion/app_buttons.dart';
 
 /// 应用内更新的两个弹层 + 设置页那一行「检查更新」。
 ///
@@ -92,11 +93,11 @@ Future<bool> _confirmUpdate(
         ),
       ),
       actions: <Widget>[
-        TextButton(
+        AppTextButton(
           onPressed: () => Navigator.of(context).pop(false),
           child: Text(allowSkip ? '以后再说' : '取消'),
         ),
-        FilledButton(
+        AppFilledButton(
           onPressed: () => Navigator.of(context).pop(true),
           child: const Text('立即更新'),
         ),
@@ -268,7 +269,7 @@ class UpdateCheckTile extends StatelessWidget {
               ),
             ),
           ),
-          TextButton(
+          AppTextButton(
             onPressed: update.checking ? null : () => _check(context, update),
             child: Text(update.checking ? '检查中…' : '检查更新'),
           ),

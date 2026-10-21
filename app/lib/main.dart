@@ -72,6 +72,7 @@ Future<void> main() async {
       localNotify: LocalNotifyState(prefs: prefs),
       update: UpdateState(prefs: prefs),
         dynamicSeed: lightDynamic?.primary,
+        dynamicDarkSeed: darkDynamic?.primary,
         );
         return app;
       },

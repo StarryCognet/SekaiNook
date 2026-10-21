@@ -9,6 +9,7 @@ import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import 'reminder_editor_sheet.dart';
+import '../../widgets/motion/app_buttons.dart';
 
 /// 「设置 → 手机提醒」里的**提醒项列表**卡片。
 ///
@@ -112,7 +113,7 @@ class _ReminderListState extends State<ReminderList> {
             const SizedBox(height: AppSpacing.xs),
             Align(
               alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
+              child: AppOutlinedButton.icon(
                 onPressed: state.busy ? null : () => _edit(null),
                 icon: const Icon(Icons.add, size: AppFontSize.sm),
                 label: const Text('加一条提醒'),
@@ -129,7 +130,7 @@ class _ReminderListState extends State<ReminderList> {
             ),
             Align(
               alignment: Alignment.centerLeft,
-              child: TextButton(
+              child: AppTextButton(
                 onPressed: state.busy ? null : () => _run((s) => s.restoreBuiltins()),
                 child: const Text('恢复内置提醒'),
               ),
@@ -199,13 +200,13 @@ class _ReminderListState extends State<ReminderList> {
             runSpacing: AppSpacing.xs,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: <Widget>[
-              TextButton(
+              AppTextButton(
                 onPressed: !canAct || !state.supported
                     ? null
                     : () => _run((s) => s.sendTest(reminder: reminder)),
                 child: const Text('试一下'),
               ),
-              TextButton(
+              AppTextButton(
                 onPressed: canAct ? () => _edit(reminder) : null,
                 child: const Text('编辑'),
               ),
@@ -215,7 +216,7 @@ class _ReminderListState extends State<ReminderList> {
                   style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
                 )
               else
-                TextButton(
+                AppTextButton(
                   onPressed: canAct ? () => _run((s) => s.removeReminder(reminder)) : null,
                   style: TextButton.styleFrom(foregroundColor: palette.dangerInk),
                   child: const Text('删除'),

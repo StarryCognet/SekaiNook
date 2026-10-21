@@ -24,6 +24,7 @@ import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
+import '../../widgets/motion/app_buttons.dart';
 
 /// 趋势图天数（对应 Web 版 `BalanceTrend.tsx` 的 `TREND_DAYS`）
 const int _trendDays = 14;
@@ -671,7 +672,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                 ),
               ),
               if (unreadCount > 0)
-                TextButton(
+                AppTextButton(
                   onPressed: () => context.go('/home/notifications'),
                   style: TextButton.styleFrom(
                     foregroundColor: palette.primary,
@@ -870,7 +871,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
             Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                TextButton(
+                AppTextButton(
                   onPressed: () => unawaited(_reject(record)),
                   style: TextButton.styleFrom(
                     foregroundColor: palette.danger,
@@ -878,7 +879,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                   ),
                   child: const Text('驳回'),
                 ),
-                FilledButton(
+                AppFilledButton(
                   onPressed: () => unawaited(_approve(record)),
                   child: const Text('通过'),
                 ),
@@ -1004,7 +1005,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                 ),
               ),
               if (today.length > 5)
-                TextButton(
+                AppTextButton(
                   onPressed: () => context.go(_familyPath('history')),
                   style: TextButton.styleFrom(
                     foregroundColor: palette.primary,
@@ -1073,7 +1074,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
               ),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
+            child: AppTextButton(
               onPressed: () => context.go(_familyPath('history')),
               style: TextButton.styleFrom(foregroundColor: palette.primary),
               child: const Row(
@@ -1199,7 +1200,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                FilledButton(
+                AppFilledButton(
                   onPressed: family.balance > 0 && !_settling
                       ? () => unawaited(_settle())
                       : null,
@@ -1465,12 +1466,12 @@ class _RejectDialogState extends State<_RejectDialog> {
         ),
       ),
       actions: <Widget>[
-        TextButton(
+        AppTextButton(
           onPressed: () => Navigator.of(context).pop(),
           style: TextButton.styleFrom(foregroundColor: palette.textSecondary),
           child: const Text('取消'),
         ),
-        FilledButton(
+        AppFilledButton(
           onPressed: () => Navigator.of(context).pop(_reason.text),
           child: const Text('确认驳回'),
         ),
@@ -1505,12 +1506,12 @@ class _ConfirmDialog extends StatelessWidget {
         style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
       ),
       actions: <Widget>[
-        TextButton(
+        AppTextButton(
           onPressed: () => Navigator.of(context).pop(false),
           style: TextButton.styleFrom(foregroundColor: palette.textSecondary),
           child: const Text('取消'),
         ),
-        FilledButton(
+        AppFilledButton(
           onPressed: () => Navigator.of(context).pop(true),
           child: Text(okText),
         ),

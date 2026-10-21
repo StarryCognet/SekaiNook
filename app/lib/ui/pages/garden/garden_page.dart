@@ -18,6 +18,7 @@ import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
+import '../../widgets/motion/app_buttons.dart';
 
 /// 花园里养着的植物（照抄 Web 版 `src/views/garden/GardenPage.tsx` 的 `PLANTS`）
 class _Plant {
@@ -947,7 +948,7 @@ class _GardenPageState extends State<GardenPage> {
           const SizedBox(height: AppSpacing.xs),
           Row(
             children: <Widget>[
-              TextButton(
+              AppTextButton(
                 onPressed: () => _togglePoem(poem.id),
                 style: TextButton.styleFrom(
                   foregroundColor: palette.primary,
@@ -959,7 +960,7 @@ class _GardenPageState extends State<GardenPage> {
               if (done)
                 _StatusChip(label: '今天已背会', color: palette.success)
               else
-                FilledButton(
+                AppFilledButton(
                   onPressed: () => _recite(poem),
                   style: FilledButton.styleFrom(minimumSize: _buttonSize),
                   child: Text('我背会了 +${poem.reward}'),
@@ -1054,7 +1055,7 @@ class _GardenPageState extends State<GardenPage> {
           const SizedBox(height: AppSpacing.sm),
           SizedBox(
             width: double.infinity,
-            child: FilledButton(
+            child: AppFilledButton(
               onPressed: done ? null : () => _practice(practice, current),
               style: FilledButton.styleFrom(minimumSize: _buttonSize),
               child: Text(
@@ -1206,7 +1207,7 @@ class _GardenPageState extends State<GardenPage> {
             const SizedBox(height: AppSpacing.sm),
             SizedBox(
               width: double.infinity,
-              child: FilledButton(
+              child: AppFilledButton(
                 onPressed: caredToday ? null : _care,
                 style: FilledButton.styleFrom(minimumSize: _buttonSize),
                 child: Text(caredToday ? '今天已照顾' : '浇浇水'),
@@ -1267,7 +1268,7 @@ class _GardenPageState extends State<GardenPage> {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          OutlinedButton(
+          AppOutlinedButton(
             onPressed: caredToday ? null : _care,
             style: OutlinedButton.styleFrom(
               foregroundColor: palette.primary,
@@ -1545,7 +1546,7 @@ class _GardenPageState extends State<GardenPage> {
           ),
           const SizedBox(width: AppSpacing.sm),
           if (owned)
-            OutlinedButton(
+            AppOutlinedButton(
               onPressed: () => _handleToggle(garden, item),
               style: OutlinedButton.styleFrom(
                 foregroundColor:
@@ -1555,7 +1556,7 @@ class _GardenPageState extends State<GardenPage> {
               child: Text(inUse ? '取下' : _equipLabel(item.category)),
             )
           else
-            FilledButton(
+            AppFilledButton(
               onPressed: () => _handleExchange(garden, item),
               style: FilledButton.styleFrom(minimumSize: _buttonSize),
               child: const Text('兑换'),

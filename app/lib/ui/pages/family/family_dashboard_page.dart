@@ -32,6 +32,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 import '../../widgets/task_row.dart';
+import '../../widgets/motion/app_buttons.dart';
 
 /// 历史记录每页条数（手机端长列表一次性渲染会卡，改为「加载更多」分页）
 const int _recordsPageSize = 20;
@@ -764,7 +765,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             const SizedBox(height: AppSpacing.sm),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
+              child: AppFilledButton.icon(
                 onPressed: canExchange
                     ? () => _confirmExchange(exchangeValue, exchangeYuan)
                     : null,
@@ -785,11 +786,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         title: Text('兑换 $points 积分 = $yuan 元？'),
         content: const Text('会记一条「现金兑现」支出，剩下的积分留在账上；如需回退请删除该记录'),
         actions: <Widget>[
-          TextButton(
+          AppTextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('取消'),
           ),
-          FilledButton(
+          AppFilledButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
               unawaited(_settle(points));
@@ -877,7 +878,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           Row(
             children: <Widget>[
               Expanded(
-                child: FilledButton.icon(
+                child: AppFilledButton.icon(
                   // 实色底上的字 / 图标要按这层底色取，不能沿用主题给「主色」配的 onPrimary
                   style: FilledButton.styleFrom(
                     backgroundColor: palette.success,
@@ -892,7 +893,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: FilledButton.icon(
+                child: AppFilledButton.icon(
                   style: FilledButton.styleFrom(backgroundColor: palette.primary),
                   onPressed: sleepTask == null || _isDone(sleepTask, records)
                       ? null
@@ -1662,7 +1663,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                           fontFeatures: kTabularNumbers,
                         ),
                       ),
-                      IconButton(
+                      AppIconButton(
                         tooltip: '删除任务',
                         iconSize: 18,
                         color: palette.danger,
@@ -1688,11 +1689,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         title: const Text('删掉这个任务？'),
         content: Text('「${task.name}」会从快捷任务里移除，已有的流水不受影响。'),
         actions: <Widget>[
-          TextButton(
+          AppTextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('取消'),
           ),
-          TextButton(
+          AppTextButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
               store.removeTask(task.id);
@@ -1729,7 +1730,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                 ),
               ),
               const Spacer(),
-              FilledButton.icon(
+              AppFilledButton.icon(
                 onPressed: _approvingAll ? null : () => _confirmApproveAll(pending),
                 icon: const Icon(Icons.check_circle_outline, size: 18),
                 label: const Text('全部通过'),
@@ -1751,11 +1752,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         title: Text('一次通过全部 ${pending.length} 条？'),
         content: const Text('确认后才入账；要驳回的请单独处理'),
         actions: <Widget>[
-          TextButton(
+          AppTextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('再想想'),
           ),
-          FilledButton(
+          AppFilledButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
               unawaited(_approveAll(pending));
@@ -1825,7 +1826,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                 const SizedBox(height: AppSpacing.sm),
                 Row(
                   children: <Widget>[
-                    FilledButton.icon(
+                    AppFilledButton.icon(
                       style: FilledButton.styleFrom(
                         backgroundColor: positive ? palette.success : palette.danger,
                         foregroundColor: palette.onColor(
@@ -1850,7 +1851,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                       label: const Text('通过'),
                     ),
                     const SizedBox(width: AppSpacing.sm),
-                    OutlinedButton.icon(
+                    AppOutlinedButton.icon(
                       onPressed: () => unawaited(_startReject(record)),
                       icon: const Icon(Icons.cancel_outlined, size: 16),
                       label: const Text('驳回'),
@@ -1907,7 +1908,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   onSelected: (_) => _onFilterChanged(filter),
                 ),
               if (isParent && filtered.isNotEmpty)
-                OutlinedButton.icon(
+                AppOutlinedButton.icon(
                   onPressed: () => unawaited(_exportCsv(filtered)),
                   icon: const Icon(Icons.download_outlined, size: 16),
                   label: const Text('导出 CSV'),
@@ -1938,7 +1939,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                           padding: const EdgeInsets.only(top: AppSpacing.sm),
                           child: SizedBox(
                             width: double.infinity,
-                            child: OutlinedButton(
+                            child: AppOutlinedButton(
                               onPressed: () => setState(() => _visibleCount += _recordsPageSize),
                               child: Text(
                                 '加载更多（还有 $remaining 条）',
@@ -2028,7 +2029,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   children: <Widget>[
                     // 小孩撤回自己待审批的申请
                     if (!isParent && status == LedgerStatus.pending)
-                      OutlinedButton.icon(
+                      AppOutlinedButton.icon(
                         onPressed: () => _confirmWithdraw(record),
                         icon: const Icon(Icons.undo, size: 16),
                         label: const Text('撤回'),
@@ -2036,7 +2037,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                     // 驳回后重新提交：孩子对自己申请的补救动作 ——
                     // 家长端不给这个按钮，只留一句只读说明
                     if (!isParent && status == LedgerStatus.rejected)
-                      OutlinedButton(
+                      AppOutlinedButton(
                         onPressed: () => unawaited(_resubmit(record.id)),
                         child: const Text('重新提交'),
                       ),
@@ -2047,7 +2048,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                       ),
                     // 删除（仅家长）：含图片时后端一并删除 R2 图片
                     if (isParent)
-                      OutlinedButton.icon(
+                      AppOutlinedButton.icon(
                         onPressed: () => _confirmDelete(record),
                         style: OutlinedButton.styleFrom(foregroundColor: palette.danger),
                         icon: const Icon(Icons.delete_outline, size: 16),
@@ -2097,11 +2098,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         title: const Text('撤回这条申请？'),
         content: const Text('撤回后记录会被删除，可以重新打卡'),
         actions: <Widget>[
-          TextButton(
+          AppTextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('取消'),
           ),
-          FilledButton(
+          AppFilledButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
               unawaited(_withdraw(record.id));
@@ -2121,11 +2122,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         title: const Text('确认删除该记录？'),
         content: Text(hasImage ? '关联图片也会一并删除，且不可恢复' : '删除后不可恢复'),
         actions: <Widget>[
-          TextButton(
+          AppTextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('取消'),
           ),
-          FilledButton(
+          AppFilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(dialogContext).colorScheme.error,
               // 实色红底上的字按这层底色取，而不是主题给主色配的 onPrimary
@@ -2205,11 +2206,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             ],
           ),
           actions: <Widget>[
-            TextButton(
+            AppTextButton(
               onPressed: _rejecting ? null : () => Navigator.of(dialogContext).pop(),
               child: const Text('取消'),
             ),
-            FilledButton(
+            AppFilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: Theme.of(builderContext).colorScheme.error,
                 // 同上：实色红底上的字按这层底色取
@@ -2361,7 +2362,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   Row(
                     children: <Widget>[
                       Expanded(
-                        child: OutlinedButton.icon(
+                        child: AppOutlinedButton.icon(
                           onPressed: picking ? null : () => pick(ImageSource.camera),
                           icon: const Icon(Icons.photo_camera_outlined, size: 18),
                           label: const Text('拍照'),
@@ -2369,7 +2370,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
-                        child: OutlinedButton.icon(
+                        child: AppOutlinedButton.icon(
                           onPressed: picking ? null : () => pick(ImageSource.gallery),
                           icon: const Icon(Icons.photo_library_outlined, size: 18),
                           label: const Text('从相册选'),
@@ -2410,11 +2411,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
               ),
             ),
             actions: <Widget>[
-              TextButton(
+              AppTextButton(
                 onPressed: uploading ? null : () => Navigator.of(dialogContext).pop(),
                 child: const Text('取消'),
               ),
-              FilledButton(
+              AppFilledButton(
                 // 必填照片没选时按钮直接置灰：先选照片，再谈提交
                 onPressed: uploading || (needPhoto && photo == null)
                     ? null
@@ -2636,7 +2637,7 @@ class _CustomTaskFormState extends State<_CustomTaskForm> {
           ),
         SizedBox(
           width: double.infinity,
-          child: FilledButton(
+          child: AppFilledButton(
             onPressed: _submitting ? null : _submit,
             child: const Text('添加任务'),
           ),

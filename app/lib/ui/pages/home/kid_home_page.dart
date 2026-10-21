@@ -35,6 +35,7 @@ import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
+import '../../widgets/motion/app_buttons.dart';
 
 /// 花园图标 key → Material 图标（与 `garden_page.dart` 的映射一致，
 /// 对应 Web 版 `components/garden/GardenIcon.tsx`，未知 key 回退星形）。
@@ -972,7 +973,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                   ),
                 ),
               ),
-              TextButton(
+              AppTextButton(
                 onPressed: () => _dismissReject(rejected.id),
                 style: TextButton.styleFrom(
                   foregroundColor: palette.textSecondary,
@@ -1016,7 +1017,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             _gapSm,
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
+              child: AppTextButton(
                 onPressed: () {
                   _dismissReject(rejected.id);
                   _startCheckIn(rejectedTask);
@@ -1105,7 +1106,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
           ),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
+            child: AppTextButton(
               onPressed: () => context.go(_familyPath('pending')),
               style: TextButton.styleFrom(foregroundColor: palette.primary),
               child: const Row(
@@ -1185,7 +1186,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
               EnterBox(index: entry.key, child: _gardenTodoRow(palette, entry.value)),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
+            child: AppTextButton(
               onPressed: () => context.go(_gardenPath('tasks')),
               style: TextButton.styleFrom(foregroundColor: palette.primary),
               child: const Row(
@@ -1383,7 +1384,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
           ),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
+            child: AppTextButton(
               onPressed: () => context.go(_familyPath('tasks')),
               style: TextButton.styleFrom(foregroundColor: palette.primary),
               child: const Row(
@@ -1821,7 +1822,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
               _gapMd,
               SizedBox(
                 width: double.infinity,
-                child: FilledButton(
+                child: AppFilledButton(
                   onPressed: () => Navigator.of(dialogContext).pop(),
                   child: const Text('好耶，收下啦'),
                 ),
@@ -1956,7 +1957,7 @@ class _WishFormState extends State<_WishForm> {
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            FilledButton(onPressed: _submit, child: const Text('加一个')),
+            AppFilledButton(onPressed: _submit, child: const Text('加一个')),
           ],
         ),
       ],
@@ -2180,13 +2181,13 @@ class _CheckInSheetState extends State<_CheckInSheet> {
               _gapXs,
               Row(
                 children: <Widget>[
-                  OutlinedButton.icon(
+                  AppOutlinedButton.icon(
                     onPressed: _submitting ? null : () => unawaited(_pick(ImageSource.camera)),
                     icon: const Icon(Icons.photo_camera_outlined, size: AppFontSize.md),
                     label: const Text('拍照'),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  OutlinedButton.icon(
+                  AppOutlinedButton.icon(
                     onPressed: _submitting ? null : () => unawaited(_pick(ImageSource.gallery)),
                     icon: const Icon(Icons.photo_library_outlined, size: AppFontSize.md),
                     label: const Text('从相册选'),
@@ -2228,7 +2229,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                 ),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: TextButton(
+                  child: AppTextButton(
                     onPressed: _submitting
                         ? null
                         : () => setState(() {
@@ -2273,13 +2274,13 @@ class _CheckInSheetState extends State<_CheckInSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: <Widget>[
-                  TextButton(
+                  AppTextButton(
                     onPressed: _submitting ? null : () => Navigator.of(context).pop(false),
                     style: TextButton.styleFrom(foregroundColor: palette.textSecondary),
                     child: const Text('取消'),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  FilledButton(
+                  AppFilledButton(
                     onPressed: _submitting || (_needPhoto && _photo == null)
                         ? null
                         : () => unawaited(_submit()),

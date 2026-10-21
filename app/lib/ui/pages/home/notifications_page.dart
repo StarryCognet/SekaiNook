@@ -21,6 +21,8 @@ import '../../shell/main_shell.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
+import '../../widgets/motion/app_buttons.dart';
+import '../../widgets/motion/press_scale.dart';
 
 /// 通知收件箱（对应 Web 版 `src/views/home/NotificationsPage.tsx`）。
 ///
@@ -201,7 +203,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
-          IconButton(
+          AppIconButton(
             onPressed: _goBack,
             tooltip: '返回',
             icon: Icon(Icons.arrow_back, color: palette.text),
@@ -239,7 +241,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
               ],
             ),
           ),
-          TextButton(
+          AppTextButton(
             onPressed: unreadCount == 0 || _markingAll ? null : _handleMarkAll,
             child: _markingAll
                 ? SizedBox(
@@ -324,7 +326,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
               ),
             ),
           ),
-          TextButton(
+          AppTextButton(
             onPressed: _reload,
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
@@ -399,7 +401,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(AppRadius.full),
-        child: InkWell(
+        child: PressInkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppRadius.full),
           child: Padding(

@@ -22,6 +22,7 @@ import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
+import '../../widgets/motion/app_buttons.dart';
 
 /// 每个科目的图标（与 Web 版 SUBJECT_ICONS 一致）
 const Map<String, IconData> _subjectIcons = <String, IconData>{
@@ -585,7 +586,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
                   onCommit: () => _handleCommit(plan),
                 ),
                 const SizedBox(width: AppSpacing.xs),
-                FilledButton(
+                AppFilledButton(
                   onPressed: submitting ? null : () => _handleAdd(plan),
                   style: FilledButton.styleFrom(
                     backgroundColor: accent,

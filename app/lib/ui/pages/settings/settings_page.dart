@@ -33,6 +33,8 @@ import '../../shell/app_top_bar.dart';
 import '../../shell/back_intent.dart';
 import 'push_section.dart';
 import 'selftest_panel.dart';
+import '../../widgets/motion/app_buttons.dart';
+import '../../widgets/motion/press_scale.dart';
 
 /// 家长口令长度（与 Web 版一致：4-8 位）。
 const int _pinMinLength = 4;
@@ -981,7 +983,7 @@ class _SettingsPageState extends State<SettingsPage> {
         if (more > 0)
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton(
+            child: AppTextButton(
               onPressed: () => setState(() => _logExpanded = !_logExpanded),
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
@@ -1358,7 +1360,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 runSpacing: AppSpacing.xs,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: <Widget>[
-                  FilledButton(
+                  AppFilledButton(
                     onPressed:
                         _savingBackground || _uploadingBackground ? null : _uploadBackground,
                     child: _uploadingBackground
@@ -1369,7 +1371,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           )
                         : const Text('从相册选照片'),
                   ),
-                  OutlinedButton(
+                  AppOutlinedButton(
                     onPressed:
                         _savingBackground || _uploadingBackground ? null : _saveBackgroundUrl,
                     child: _savingBackground
@@ -1381,7 +1383,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         : const Text('用这个地址'),
                   ),
                   if (theme.hasBackground)
-                    OutlinedButton(
+                    AppOutlinedButton(
                       onPressed:
                           _savingBackground || _uploadingBackground ? null : _removeBackground,
                       child: const Text('移除背景图'),
@@ -1550,7 +1552,7 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: <Widget>[
-                  FilledButton(
+                  AppFilledButton(
                     onPressed: _savingNames ? null : _saveNames,
                     child: _savingNames
                         ? const SizedBox(
@@ -1635,7 +1637,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                 ),
-              OutlinedButton(
+              AppOutlinedButton(
                 onPressed: _changeParentPin,
                 child: const Text('修改家长口令'),
               ),
@@ -1666,7 +1668,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
               Row(
                 children: <Widget>[
-                  OutlinedButton(
+                  AppOutlinedButton(
                     onPressed: _scanning || _cleaning ? null : _scanOrphans,
                     child: _scanning
                         ? const SizedBox(
@@ -1678,7 +1680,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   if (_orphanCount > 0) ...<Widget>[
                     const SizedBox(width: AppSpacing.sm),
-                    FilledButton(
+                    AppFilledButton(
                       onPressed: _cleaning ? null : _cleanOrphans,
                       style: FilledButton.styleFrom(
                         backgroundColor: palette.danger,
@@ -1774,7 +1776,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
-              FilledButton(
+              AppFilledButton(
                 onPressed: _savingPoints ? null : _savePoints,
                 child: _savingPoints
                     ? const SizedBox(
@@ -1799,12 +1801,12 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: <Widget>[
-                  OutlinedButton(
+                  AppOutlinedButton(
                     onPressed: family.balance == 0 ? null : () => _clearLedger(sun: false),
                     child: const Text('家庭积分清零'),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  OutlinedButton(
+                  AppOutlinedButton(
                     onPressed: family.sunBalance == 0 ? null : () => _clearLedger(sun: true),
                     child: const Text('花园阳光清零'),
                   ),
@@ -1877,7 +1879,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
-              OutlinedButton(
+              AppOutlinedButton(
                 onPressed: _changingAdminPassword ? null : _changeAdminPassword,
                 child: _changingAdminPassword
                     ? const SizedBox(
@@ -1932,7 +1934,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
-          TextButton(
+          AppTextButton(
             onPressed: busy ? null : () => _revokeAdjustment(item),
             child: busy
                 ? const SizedBox(
@@ -1967,7 +1969,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _subPageHeader(AppPalette palette, String title) {
     return Row(
       children: <Widget>[
-        IconButton(
+        AppIconButton(
           onPressed: () => setState(() => _section = null),
           tooltip: '返回设置',
           icon: Icon(Icons.arrow_back, color: palette.text),
@@ -2089,11 +2091,11 @@ Future<bool> _confirmDialog(
           style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
         ),
         actions: <Widget>[
-          TextButton(
+          AppTextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('取消'),
           ),
-          FilledButton(
+          AppFilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: danger ? palette.danger : palette.primary,
               // danger 底的按钮：字色按这层底取
@@ -2260,7 +2262,7 @@ class _ChoiceRow extends StatelessWidget {
                 child: Material(
                   color: Colors.transparent,
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: InkWell(
+                  child: PressInkWell(
                     onTap: () => onChanged(index),
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     child: SizedBox(
@@ -2409,11 +2411,11 @@ class _ParentPinDialogState extends State<_ParentPinDialog> {
         ],
       ),
       actions: <Widget>[
-        TextButton(
+        AppTextButton(
           onPressed: _busy ? null : () => Navigator.of(context).pop(false),
           child: const Text('取消'),
         ),
-        FilledButton(
+        AppFilledButton(
           onPressed: _busy ? null : _submit,
           child: _busy
               ? const SizedBox(
@@ -2566,11 +2568,11 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
         ),
       ),
       actions: <Widget>[
-        TextButton(
+        AppTextButton(
           onPressed: _busy ? null : () => Navigator.of(context).pop(false),
           child: const Text('取消'),
         ),
-        FilledButton(
+        AppFilledButton(
           onPressed: _busy ? null : _submit,
           child: _busy
               ? const SizedBox(
@@ -2668,11 +2670,11 @@ class _AdminPasswordDialogState extends State<_AdminPasswordDialog> {
         ],
       ),
       actions: <Widget>[
-        TextButton(
+        AppTextButton(
           onPressed: _busy ? null : () => Navigator.of(context).pop(),
           child: const Text('取消'),
         ),
-        FilledButton(
+        AppFilledButton(
           onPressed: _busy ? null : _submit,
           child: _busy
               ? const SizedBox(

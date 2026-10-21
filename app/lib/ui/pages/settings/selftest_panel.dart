@@ -20,6 +20,8 @@ import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
+import '../../widgets/motion/app_buttons.dart';
+import '../../widgets/motion/press_scale.dart';
 
 /// 「设置 → 管理员 → 全站自检」面板（对应 Web 版同一块控制台）。
 ///
@@ -777,11 +779,11 @@ class _SelftestPanelState extends State<SelftestPanel> {
             style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
           ),
           actions: <Widget>[
-            TextButton(
+            AppTextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('取消'),
             ),
-            FilledButton(
+            AppFilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: danger ? palette.danger : palette.primary,
                 foregroundColor: palette.onColor(danger ? palette.danger : palette.primary),
@@ -860,7 +862,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
   Widget _header(AppPalette palette) {
     return Row(
       children: <Widget>[
-        IconButton(
+        AppIconButton(
           onPressed: widget.onBack,
           tooltip: '返回管理员',
           icon: Icon(Icons.arrow_back, color: palette.text),
@@ -1047,7 +1049,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
                   ),
                 ),
               ),
-              TextButton(
+              AppTextButton(
                 onPressed: _running ? null : () => _toggleAll(false),
                 child: const Text('全不选'),
               ),
@@ -1263,20 +1265,20 @@ class _SelftestPanelState extends State<SelftestPanel> {
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
             children: <Widget>[
-              FilledButton.icon(
+              AppFilledButton.icon(
                 onPressed: _running ? null : _run,
                 icon: const Icon(Icons.play_arrow_rounded, size: 18),
                 label: Text(_running ? '跑着…' : '运行所选（${_selected.length}）'),
               ),
-              OutlinedButton(
+              AppOutlinedButton(
                 onPressed: _running ? null : _runAll,
                 child: const Text('全部跑一遍'),
               ),
-              OutlinedButton(
+              AppOutlinedButton(
                 onPressed: _running || _report == null ? null : _runFailed,
                 child: const Text('只跑失败项'),
               ),
-              OutlinedButton(
+              AppOutlinedButton(
                 onPressed: _running ? null : _runWrites,
                 child: const Text('只跑写库项'),
               ),
@@ -1288,12 +1290,12 @@ class _SelftestPanelState extends State<SelftestPanel> {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: <Widget>[
-                OutlinedButton.icon(
+                AppOutlinedButton.icon(
                   onPressed: _copyJson,
                   icon: const Icon(Icons.copy_all_outlined, size: 18),
                   label: const Text('复制 JSON'),
                 ),
-                OutlinedButton.icon(
+                AppOutlinedButton.icon(
                   onPressed: _copyMarkdown,
                   icon: const Icon(Icons.description_outlined, size: 18),
                   label: const Text('导出 Markdown'),
@@ -1716,7 +1718,7 @@ class _PresetChip extends StatelessWidget {
         Material(
           color: active ? palette.segmentedSelected : palette.surfaceSoft,
           borderRadius: BorderRadius.circular(AppRadius.full),
-          child: InkWell(
+          child: PressInkWell(
             borderRadius: BorderRadius.circular(AppRadius.full),
             onTap: onTap,
             child: Container(
@@ -1758,7 +1760,7 @@ class _OptionChip extends StatelessWidget {
     return Material(
       color: background,
       borderRadius: BorderRadius.circular(AppRadius.full),
-      child: InkWell(
+      child: PressInkWell(
         borderRadius: BorderRadius.circular(AppRadius.full),
         onTap: onTap,
         child: Container(
