@@ -3,6 +3,8 @@ import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:sekainook_app/ui/widgets/app_toast.dart';
+import 'package:sekainook_app/ui/widgets/app_loading.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -284,13 +286,10 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   void _toast(String text, {bool warning = false}) {
     if (!mounted) return;
-    final palette = context.palette;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(text),
-        backgroundColor: warning ? palette.warning : null,
-        duration: Duration(seconds: warning ? 6 : 3),
-      ),
+    AppToast.show(
+      context,
+      text,
+      tone: warning ? AppToastTone.warning : AppToastTone.neutral,
     );
   }
 
@@ -310,12 +309,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         ? '$sign${task.value} 积分！${task.name}'
         : '已提交「${task.name}」，等家长审批';
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(text),
-        duration: const Duration(seconds: 5),
-        action: SnackBarAction(label: '撤销', onPressed: () => unawaited(_undo(recordId))),
-      ),
+    AppToast.show(
+      context,
+      text,
+      actionLabel: '撤销',
+      onAction: () => unawaited(_undo(recordId)),
     );
   }
 
@@ -1840,8 +1838,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                               height: 14,
                               // 转圈也算按钮上的「前景」：默认的 primary 写在
                               // success / danger 实心底上会跟底色撞
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
+                              child: AppLoading(
+                                size: 14,
                                 color: palette.onColor(
                                   positive ? palette.success : palette.danger,
                                 ),
@@ -2450,8 +2448,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                         width: 18,
                         height: 18,
                         // 主色实心按钮上的转圈：默认也是 primary，会跟底撞成一片
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
+                        child: AppLoading(
+                          size: 18,
                           color: palette.onPrimary,
                         ),
                       )

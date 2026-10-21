@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sekainook_app/ui/widgets/app_toast.dart';
+import 'package:sekainook_app/ui/widgets/app_loading.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -303,19 +305,10 @@ class _SettingsPageState extends State<SettingsPage> {
   // ---------------------------------------------------------------- 通用动作
 
   void _toast(String message, {bool error = false}) {
-    final palette = context.palette;
-    // 出错时 SnackBar 的底是 danger：字色按这层底取，别吃主题默认字色
-    final Color? background = error ? palette.danger : null;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: background == null
-              ? null
-              : TextStyle(color: palette.onColor(background)),
-        ),
-        backgroundColor: background,
-      ),
+    AppToast.show(
+      context,
+      message,
+      tone: error ? AppToastTone.error : AppToastTone.neutral,
     );
   }
 
@@ -1367,7 +1360,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ? const SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: AppLoading(size: 20),
                           )
                         : const Text('从相册选照片'),
                   ),
@@ -1378,7 +1371,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ? const SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: AppLoading(size: 20),
                           )
                         : const Text('用这个地址'),
                   ),
@@ -1558,7 +1551,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ? const SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: AppLoading(size: 20),
                           )
                         : const Text('保存称呼'),
                   ),
@@ -1674,7 +1667,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ? const SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: AppLoading(size: 20),
                           )
                         : const Text('扫描闲置照片'),
                   ),
@@ -1691,7 +1684,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ? const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: AppLoading(size: 20),
                             )
                           : Text.rich(
                               TextSpan(
@@ -1782,7 +1775,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: AppLoading(size: 20),
                       )
                     : const Text('保存修改'),
               ),
@@ -1885,7 +1878,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: AppLoading(size: 20),
                       )
                     : const Text('改密码'),
               ),
@@ -1940,7 +1933,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: AppLoading(size: 20),
                   )
                 : const Text('撤销'),
           ),
@@ -2421,7 +2414,7 @@ class _ParentPinDialogState extends State<_ParentPinDialog> {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: AppLoading(size: 20),
                 )
               : const Text('确认'),
         ),
@@ -2578,7 +2571,7 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: AppLoading(size: 20),
                 )
               : const Text('保存'),
         ),
@@ -2680,7 +2673,7 @@ class _AdminPasswordDialogState extends State<_AdminPasswordDialog> {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: AppLoading(size: 20),
                 )
               : const Text('进入'),
         ),

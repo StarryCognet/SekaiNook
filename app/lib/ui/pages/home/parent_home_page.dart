@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:sekainook_app/ui/widgets/app_toast.dart';
+import 'package:sekainook_app/ui/widgets/app_loading.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -227,27 +229,17 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
 
   /// 统一的轻提示（对应 Web 版的 antd `message`）
   void _toast(String message, {bool success = false, bool error = false, bool warning = false}) {
-    final AppPalette palette = context.palette;
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-    // 有颜色的底（成功绿 / 失败红 / 警示橙）上写字，字色得跟着底色算：
-    // 主题默认字色是给深灰底配的，压在浅色主题的绿/橙上就糊了。
-    final Color? background = error
-        ? palette.danger
-        : success
-            ? palette.success
-            : warning
-                ? palette.warning
-                : null;
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: background == null ? null : TextStyle(color: palette.onColor(background)),
-        ),
-        duration: const Duration(seconds: 2),
-        backgroundColor: background,
-      ),
+    AppToast.show(
+      context,
+      message,
+      tone: error
+          ? AppToastTone.error
+          : success
+              ? AppToastTone.success
+              : warning
+                  ? AppToastTone.warning
+                  : AppToastTone.neutral,
+      duration: const Duration(seconds: 2),
     );
   }
 
@@ -865,7 +857,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
             const SizedBox(
               width: AppFontSize.md,
               height: AppFontSize.md,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: AppLoading(size: 20),
             )
           else
             Row(

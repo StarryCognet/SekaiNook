@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sekainook_app/ui/widgets/app_toast.dart';
+import 'package:sekainook_app/ui/widgets/app_loading.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
@@ -741,16 +743,10 @@ class _SelftestPanelState extends State<SelftestPanel> {
   // ------------------------------------------------------------------ 小工具
 
   void _toast(String message, {bool error = false}) {
-    final AppPalette palette = context.palette;
-    final Color? background = error ? palette.danger : null;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: background == null ? null : TextStyle(color: palette.onColor(background)),
-        ),
-        backgroundColor: background,
-      ),
+    AppToast.show(
+      context,
+      message,
+      tone: error ? AppToastTone.error : AppToastTone.neutral,
     );
   }
 
@@ -1239,7 +1235,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
                 SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: palette.primary),
+                  child: AppLoading(size: 20, color: palette.primary),
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(

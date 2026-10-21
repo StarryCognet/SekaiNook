@@ -329,3 +329,35 @@ ThemeData build() => ThemeData(
 2. 页面仍用 Material 组件与旧色板 → 批 2/3/4 逐页替换
 3. 底栏不透明度设置随旧 `AppNavBar` 一起失效（NavigationDock 无 opacity 参数）→ 批 4 决定保留（给 Dock 加 tint）还是移除
 4. 液态玻璃设置入口未接（库已就绪、默认关）→ 批 4
+
+---
+
+## §10 执行记录（真实仓库 · 批 2 · 2.2.1）
+
+批 2 的主题是「横切交互语言」：先把**全站的提示条**与**等待转圈**收敛成 FlClash 的两件套。按钮/输入/弹层的结构替换被有意推迟（见文末原因）。
+
+新增与替换：
+
+| 内容 | 文件 |
+|---|---|
+| `AppToast`：超椭圆浮动卡片提示（neutral/success/warning/error 四档语义色淡底 + Glyph 图标 + 可选撤销动作） | `app/lib/ui/widgets/app_toast.dart`（新） |
+| `AppLoading`：FlClash 彗星环包装（替代 `CircularProgressIndicator`） | `app/lib/ui/widgets/app_loading.dart`（新） |
+| 9 个页面的 `_toast()` helper 内部换成 `AppToast.show()`，**调用点一行未动** | family_dashboard / weekly_plan / garden / kid_home ×2 / parent_home / notifications / selftest_panel / settings_page / update_dialog |
+| 12 处 `CircularProgressIndicator` → `AppLoading`（6 个文件） | kid_home / notifications / parent_home / role_gate / selftest_panel / settings_page / family_dashboard / weekly_plan |
+| 保留 2 处**确定性进度环**（带 `value` 的兑换进度、周计划完成环） | family_dashboard_page:1324、weekly_plan_page:367 |
+| 单测：`test/app_toast_test.dart`（2 例，Toast 渲染 + Loading 渲染） | `app/test/app_toast_test.dart`（新） |
+
+验证：
+
+- `flutter analyze --no-pub`：**0 error / 0 warning**
+- `flutter test --no-pub`：**197 通过 / 3 失败**，3 个失败均为真实后端集成测试（`api_smoke_test` / `e2e_flow_test` / `garden_flow_test`，基线即失败）
+- `flutter build web --debug --no-pub`：成功（122s）
+- 全站 `SnackBar(` 只剩 `app_toast.dart` 内部一处（其他页面全部收敛）
+
+有意留下的（为什么不在批 2 做）：
+
+1. **按钮换 `TonalButton`**：FlClash 的 `TonalButton` 只接受 `Glyph` + `String label`，而 SekaiNook 现有按钮带 `IconData` 图标（约 100 个 Material 图标），要先有 Glyph 映射/新绘——放到批 3 和图标系统一起做，避免二次返工。
+2. **输入框**：`inputDecorationTheme` 在 2.1.5 已经是 `AppInputBorder`（超椭圆 + filled），TextField 视觉已对齐，不需要逐个改。
+3. **弹层（showDialog 21 处 → CommonDialog）**：每处弹窗内容结构不同，跟页面重写一起做更稳（批 3/4）。
+
+进程记录：`changelog:sync`（推 D1）在发版时两次 `fetch failed`（网络波动），但 APK 内置的 `changelog.dart` fallback 已生成 2.2.1（76 条），App 内日志不受影响；D1 同步已在发版后补跑成功（`npm run changelog:sync` → 同步完成，自检 env.changelog=ok）。

@@ -27,10 +27,20 @@ class ChangelogEntry {
 }
 
 /// 当前版本号（与 [changelog] 第一条保持一致）。
-const String appVersion = '2.2.0';
+const String appVersion = '2.2.1';
 
 /// 版本历史（倒序：最新在前）。
 const List<ChangelogEntry> changelog = <ChangelogEntry>[
+  ChangelogEntry(
+    version: '2.2.1',
+    date: '2026-10-21 14:10:00',
+    title: '提示条和等待转圈换成 FlClash 的',
+    changes: <String>[
+      '全站的轻提示换成 FlClash 风格：超椭圆浮动卡片 + 语义色淡底 + 图标，成功/警告/失败一眼分得清',
+      '加载中的转圈统一换成 FlClash 的彗星环（淡色轨道 + 拖尾），列表行里 14/18/20px 的小圈同步换掉',
+      '更新检查、更新失败这类提示也走同一套，不再出现 Material 默认的灰底提示条',
+    ],
+  ),
   ChangelogEntry(
     version: '2.2.0',
     date: '2026-10-21 13:10:00',

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sekainook_app/ui/widgets/app_loading.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -354,7 +355,7 @@ class _ParentPinDialogState extends State<_ParentPinDialog> {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: AppLoading(size: 20),
                 )
               : const Text('进入'),
         ),

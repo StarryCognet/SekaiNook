@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sekainook_app/ui/widgets/app_toast.dart';
+import 'package:sekainook_app/ui/widgets/app_loading.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -200,9 +202,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    AppToast.show(context, message);
   }
 
   /// 保存成功那一下的整页反馈：光环 + 对勾，不挡点击、播完自动消失。
@@ -601,8 +601,8 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
                           width: 14,
                           height: 14,
                           // 转圈也按底色取色，默认的 primary 写在实色底上会跟底撞
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
+                          child: AppLoading(
+                            size: 14,
                             color: palette.onColor(accent),
                           ),
                         )

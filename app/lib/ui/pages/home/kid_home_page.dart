@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:sekainook_app/ui/widgets/app_toast.dart';
+import 'package:sekainook_app/ui/widgets/app_loading.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -323,21 +325,17 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
 
   /// 统一的轻提示（对应 Web 版的 antd `message`）
   void _toast(String message, {bool success = false, bool error = false, bool warning = false}) {
-    final AppPalette palette = context.palette;
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
-        backgroundColor: error
-            ? palette.danger
-            : success
-                ? palette.success
-                : warning
-                    ? palette.warning
-                    : null,
-      ),
+    AppToast.show(
+      context,
+      message,
+      tone: error
+          ? AppToastTone.error
+          : success
+              ? AppToastTone.success
+              : warning
+                  ? AppToastTone.warning
+                  : AppToastTone.neutral,
+      duration: const Duration(seconds: 2),
     );
   }
 
@@ -1878,8 +1876,10 @@ class _WishFormState extends State<_WishForm> {
   void _submit() {
     final String name = _name.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('先写一个任务名吧'), duration: Duration(seconds: 2)),
+      AppToast.show(
+        context,
+        '先写一个任务名吧',
+        duration: const Duration(seconds: 2),
       );
       return;
     }
@@ -2090,19 +2090,15 @@ class _CheckInSheetState extends State<_CheckInSheet> {
   }
 
   void _toast(String message, {bool error = false, bool warning = false}) {
-    final AppPalette palette = context.palette;
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
-        backgroundColor: error
-            ? palette.danger
-            : warning
-                ? palette.warning
-                : null,
-      ),
+    AppToast.show(
+      context,
+      message,
+      tone: error
+          ? AppToastTone.error
+          : warning
+              ? AppToastTone.warning
+              : AppToastTone.neutral,
+      duration: const Duration(seconds: 2),
     );
   }
 
@@ -2220,7 +2216,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                             child: SizedBox(
                               width: AppFontSize.lg,
                               height: AppFontSize.lg,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: AppLoading(size: 20),
                             ),
                           ),
                         ),

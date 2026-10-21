@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:sekainook_app/ui/widgets/app_toast.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/changelog.dart';
@@ -42,21 +43,19 @@ Future<void> promptUpdate(
 
 /// 下载 + 拉起系统安装器，全程一个进度弹窗。
 Future<void> downloadAndInstall(BuildContext context, {required UpdateState update}) async {
-  final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
   final UpdateInstallResult? result = await showDialog<UpdateInstallResult>(
     context: context,
     barrierDismissible: false,
     builder: (BuildContext context) => _DownloadProgressDialog(update: update),
   );
   if (result == null || result == UpdateInstallResult.launched) return;
-  messenger.showSnackBar(
-    SnackBar(
-      content: Text(
-        result == UpdateInstallResult.needPermission
-            ? '系统会问你要「安装未知应用」的权限，允许之后回来再点一次就行'
-            : update.lastError ?? '更新失败，稍后再试',
-      ),
-    ),
+  if (!context.mounted) return;
+  AppToast.show(
+    context,
+    result == UpdateInstallResult.needPermission
+        ? '系统会问你要「安装未知应用」的权限，允许之后回来再点一次就行'
+        : update.lastError ?? '更新失败，稍后再试',
+    tone: AppToastTone.warning,
   );
 }
 
@@ -279,16 +278,15 @@ class UpdateCheckTile extends StatelessWidget {
   }
 
   Future<void> _check(BuildContext context, UpdateState update) async {
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     final UpdateCheckResult result = await update.checkNow();
     if (!context.mounted) return;
     if (!result.reachable) {
-      messenger.showSnackBar(const SnackBar(content: Text('连不上更新服务器，过会儿再试')));
+      AppToast.show(context, '连不上更新服务器，过会儿再试', tone: AppToastTone.error);
       return;
     }
     final AppUpdateInfo? info = result.update;
     if (info == null) {
-      messenger.showSnackBar(const SnackBar(content: Text('已经是最新版本')));
+      AppToast.show(context, '已经是最新版本');
       return;
     }
     await promptUpdate(context, update: update, info: info, allowSkip: false);

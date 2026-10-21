@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:sekainook_app/ui/widgets/app_toast.dart';
+import 'package:sekainook_app/ui/widgets/app_loading.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -121,12 +123,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   void _toast(String message, {bool error = false}) {
-    final palette = context.palette;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: error ? palette.danger : null,
-      ),
+    AppToast.show(
+      context,
+      message,
+      tone: error ? AppToastTone.error : AppToastTone.neutral,
     );
   }
 
@@ -247,7 +247,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 ? SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: palette.primary),
+                    child: AppLoading(size: 20, color: palette.primary),
                   )
                 : const Text('全部已读'),
           ),

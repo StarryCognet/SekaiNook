@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 // Material 也有一个 Badge（小红点角标），花园的勋章模型重名，藏掉 Material 那个
 import 'package:flutter/material.dart' hide Badge;
+import 'package:sekainook_app/ui/widgets/app_toast.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -164,25 +165,15 @@ class _GardenPageState extends State<GardenPage> {
 
   /// 统一的轻提示（对应 Web 版的 antd `message`）
   void _toast(String message, {bool success = false, bool error = false}) {
-    final AppPalette palette = context.palette;
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    // 有颜色的底（成功绿 / 失败红）上写字，字色得跟着底色算：默认字色是给
-    // 深灰底配的，压在浅色主题的绿/红上就糊了
-    final Color? background = error
-        ? palette.danger
-        : success
-            ? palette.success
-            : null;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: background == null ? null : TextStyle(color: palette.onColor(background)),
-        ),
-        duration: const Duration(seconds: 2),
-        backgroundColor: background,
-      ),
+    AppToast.show(
+      context,
+      message,
+      tone: error
+          ? AppToastTone.error
+          : success
+              ? AppToastTone.success
+              : AppToastTone.neutral,
+      duration: const Duration(seconds: 2),
     );
   }
 
