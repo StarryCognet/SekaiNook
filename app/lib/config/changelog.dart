@@ -27,10 +27,23 @@ class ChangelogEntry {
 }
 
 /// 当前版本号（与 [changelog] 第一条保持一致）。
-const String appVersion = '2.5.0';
+const String appVersion = '2.6.0';
 
 /// 版本历史（倒序：最新在前）。
 const List<ChangelogEntry> changelog = <ChangelogEntry>[
+  ChangelogEntry(
+    version: '2.6.0',
+    date: '2026-10-24 17:45:00',
+    title: '性能优化：请求更少、界面更稳、选图更快',
+    changes: <String>[
+      '首页、家庭页、花园的账本与待审批合并成一次请求，同一份数据不再重复拉取',
+      '页面内容没变时不再刷新界面：提醒不再每分钟重排、切页面不再整页重建',
+      '时钟/秒表改成独立小组件刷新，不再带着整页一起跳',
+      '拍照打卡选图时先缩到 1600 长边再压缩，大图不再卡一下；列表缩略图按显示尺寸解码',
+      '版本日志与图片上传接口加了缓存和校验；后台提醒推送改成并发发送，多台设备不再排队',
+      '设置页拖动底栏透明度跟手、称呼输入不卡顿',
+    ],
+  ),
   ChangelogEntry(
     version: '2.5.0',
     date: '2026-10-21 15:05:00',
