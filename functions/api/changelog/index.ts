@@ -21,14 +21,28 @@ interface Env {
   DB: D1Database;
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const snapshot = await readChangelog(env.DB);
-    return Response.json({
-      version: snapshot.version,
-      entries: snapshot.entries,
-      ready: snapshot.entries.length > 0,
-    });
+    // 版本日志只随发版变化，没必要每次下拉都整份重传：
+    // 客户端（浏览器）可直接用 304 / 本地缓存，最长 5 分钟内看到旧值也不算问题。
+    const etag = `W/"changelog-${snapshot.version ?? 'empty'}"`;
+    if (request.headers.get('If-None-Match') === etag) {
+      return new Response(null, { status: 304, headers: { ETag: etag } });
+    }
+    return Response.json(
+      {
+        version: snapshot.version,
+        entries: snapshot.entries,
+        ready: snapshot.entries.length > 0,
+      },
+      {
+        headers: {
+          'Cache-Control': 'public, max-age=300, stale-while-revalidate=86400',
+          ETag: etag,
+        },
+      },
+    );
   } catch (error) {
     // 常见原因：远端/本地库还没跑 0006 迁移，或者还没执行过 npm run changelog:sync
     console.error('get changelog failed', error);

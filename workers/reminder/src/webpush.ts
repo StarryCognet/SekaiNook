@@ -66,7 +66,8 @@ export async function sendWebPush(env: ReminderEnv, msg: PushMessage): Promise<P
   const expired: string[] = [];
   const failed: string[] = [];
 
-  for (const row of rows) {
+  /** 单台设备：构建 + 发送。失败只记进 failed，绝不让一台设备拖垮整次推送。 */
+  const sendOne = async (row: SubscriptionRow): Promise<void> => {
     const subscription: PushSubscription = {
       endpoint: row.endpoint,
       expirationTime: null,
@@ -99,6 +100,13 @@ export async function sendWebPush(env: ReminderEnv, msg: PushMessage): Promise<P
     } catch (error) {
       failed.push(error instanceof Error ? error.message : String(error));
     }
+  };
+
+  // 每台设备最坏等 15s：逐台 await 时 10 台设备就能把一次 cron 拖到 150s。
+  // 限 8 台并发，既压住总耗时，又不会被推送服务商当成异常流量。
+  const CONCURRENCY = 8;
+  for (let i = 0; i < rows.length; i += CONCURRENCY) {
+    await Promise.all(rows.slice(i, i + CONCURRENCY).map(sendOne));
   }
 
   if (expired.length > 0) await deleteSubscriptions(env, expired);

@@ -140,8 +140,11 @@ interface OrphanScan {
  * 这样界面上「共 N 张 / M 张还在用 / K 张闲置」三个数字仍然对得上。
  */
 async function scanOrphans(env: Env, now: number): Promise<OrphanScan> {
-  const objects = await listImageObjects(env.STARRYMIKU_BUCKET);
-  const referenced = await collectReferencedKeys(env.DB);
+  // 列举 R2 与查库互不依赖，并行跑能省掉一半等待
+  const [objects, referenced] = await Promise.all([
+    listImageObjects(env.STARRYMIKU_BUCKET),
+    collectReferencedKeys(env.DB),
+  ]);
   const orphanKeys = objects
     .filter((object) => !referenced.has(object.key) && isPastGrace(object, now))
     .map((object) => object.key);
@@ -195,13 +198,24 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const deletedKeys: string[] = [];
   let failed = 0;
-  for (const key of orphanKeys) {
+  // R2 支持一次删一批（上限 1000）；按 100 个一批删，比逐张 await 快得多，
+  // 也不至于一次删太多把请求拖到超时。
+  const DELETE_BATCH = 100;
+  for (let i = 0; i < orphanKeys.length; i += DELETE_BATCH) {
+    const batch = orphanKeys.slice(i, i + DELETE_BATCH);
     try {
-      await env.STARRYMIKU_BUCKET.delete(key);
-      deletedKeys.push(key);
+      await env.STARRYMIKU_BUCKET.delete(batch);
+      deletedKeys.push(...batch);
     } catch {
-      // 单个对象删除失败不影响整体，计入 failed
-      failed += 1;
+      // 批量删失败就退化成逐张删：尽量把能删的删掉，失败的计入 failed
+      for (const key of batch) {
+        try {
+          await env.STARRYMIKU_BUCKET.delete(key);
+          deletedKeys.push(key);
+        } catch {
+          failed += 1;
+        }
+      }
     }
   }
 
