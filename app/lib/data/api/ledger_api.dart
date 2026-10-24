@@ -35,6 +35,25 @@ class LedgerSettleResult {
   final String day;
 }
 
+/// 轮询用的账本快照：一次请求拿齐「余额 + 待审批 + 流水窗口」。
+///
+/// 见 `functions/api/ledger/snapshot.ts`。轮询频率高，把原来三个接口
+/// （`/api/ledger`、`/api/ledger?status=pending`、`/api/ledger/summary`）
+/// 合成一次往返。
+class LedgerSnapshot {
+  const LedgerSnapshot({
+    required this.family,
+    required this.sun,
+    required this.pending,
+    required this.records,
+  });
+
+  final num family;
+  final num sun;
+  final List<LedgerRecord> pending;
+  final List<LedgerRecord> records;
+}
+
 /// 账本接口（对应 Web 版 `src/api/familyLedger.ts`）。
 ///
 /// 花园流水和家庭账本共用同一张表、同一批接口，靠 task_id 前缀区分，
@@ -48,6 +67,19 @@ class LedgerApi {
   Future<List<LedgerRecord>> fetchRecords() async {
     final raw = await _client.getJson<List<dynamic>>('/api/ledger');
     return _parseRecords(raw);
+  }
+
+  /// 一次拉齐余额、待审批与流水窗口（轮询专用）。
+  ///
+  /// 老部署没有这个路由（或返回格式不对）时返回 null，
+  /// 调用方回退到「三次请求」的旧路径 —— 保证前后端可以分别上线。
+  Future<LedgerSnapshot?> fetchSnapshot() async {
+    try {
+      final raw = await _client.getJson<dynamic>('/api/ledger/snapshot');
+      return _toSnapshot(raw);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// 待审批的打卡申请，按 created_at 倒序
@@ -205,6 +237,24 @@ class LedgerApi {
       if (item is Map<String, dynamic>) result.add(LedgerRecord.fromJson(item));
     }
     return result;
+  }
+
+  /// 只认字段齐全的快照响应，别把错误页 / 半截响应当成空数据
+  static LedgerSnapshot? _toSnapshot(dynamic raw) {
+    if (raw is! Map) return null;
+    final family = raw['family'];
+    final sun = raw['sun'];
+    final pending = raw['pending'];
+    final records = raw['records'];
+    if (family is! num || !family.isFinite) return null;
+    if (sun is! num || !sun.isFinite) return null;
+    if (pending is! List || records is! List) return null;
+    return LedgerSnapshot(
+      family: family,
+      sun: sun,
+      pending: _parseRecords(pending),
+      records: _parseRecords(records),
+    );
   }
 
   /// 只认「两个字段都是有限数字」的响应，别把错误页 / 空对象当成余额 0

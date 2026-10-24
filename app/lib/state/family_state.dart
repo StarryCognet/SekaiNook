@@ -79,6 +79,10 @@ class FamilyState extends ChangeNotifier {
   bool _loading = false;
   bool get loading => _loading;
 
+  /// 是否已经成功加载过一次：只有首次加载才显示 loading，
+  /// 轮询刷新走静默更新，免得每 10~20 秒闪一次骨架。
+  bool _loadedOnce = false;
+
   /// 请求序号 —— 同一个接口会被多路轮询同时打：
   /// 底部导航 15 秒刷待审批、账本页家长态 10 秒、账本页小孩态 15 秒、两端首页 20 秒，
   /// 切回前台时还会再各来一次。
@@ -132,39 +136,110 @@ class FamilyState extends ChangeNotifier {
   /// 拉取流水与余额（单一数据源：余额优先用服务端全量聚合）与待审批数量
   Future<void> loadLedger() async {
     final seq = ++_ledgerSeq;
-    _loading = true;
-    notifyListeners();
-    try {
-      // 三个请求并发发出；summary 失败要有兜底，不能拖垮整次加载
-      final recordsFuture = api.fetchRecords();
-      final pendingFuture = api.fetchPendingRequests();
-      final summaryFuture = _summaryOrNull();
-
-      final allRecords = await recordsFuture;
-      final pending = await pendingFuture;
-      final summary = await summaryFuture;
-
-      // 期间又有更新的一次请求发出去了 ⇒ 这份结果已经过期，丢掉（别覆盖新数据）
-      if (seq != _ledgerSeq) return;
-
-      // 同一个账本拆成两本：家长 / 家庭界面只看非花园流水，花园流水走 gardenRecords
-      _records = allRecords.where((record) => !record.isGarden).toList(growable: false);
-      _gardenRecords = allRecords.where((record) => record.isGarden).toList(growable: false);
-      _pendingRecords = pending;
-      _pendingCount = pending.length;
-      // 全量余额单独兜底：老部署还没有 /api/ledger/summary 时退回用流水算，
-      // 但流水只有最近 200 条，所以能拿到 summary 就一定要用 summary（否则余额会越用越少）
-      _balance = summary?.family ?? LedgerApi.calcApprovedBalance(_records);
-      _sunBalance = summary?.sun ?? LedgerApi.calcGardenBalance(_gardenRecords);
-      _loading = false;
+    final showLoading = !_loadedOnce;
+    if (showLoading) {
+      _loading = true;
       notifyListeners();
+    }
+    try {
+      // 新部署：一个快照请求拿齐三份数据（见 functions/api/ledger/snapshot.ts），
+      // 轮询时把三个往返压成一个。
+      final bool changed;
+      final snapshot = await api.fetchSnapshot();
+      if (snapshot != null) {
+        if (seq != _ledgerSeq) return;
+        changed = _applyLedger(
+          records: snapshot.records,
+          pending: snapshot.pending,
+          familyBalance: snapshot.family,
+          sunBalance: snapshot.sun,
+        );
+      } else {
+        // 老部署回退：三个请求并发发出；summary 失败要有兜底，不能拖垮整次加载
+        final recordsFuture = api.fetchRecords();
+        final pendingFuture = api.fetchPendingRequests();
+        final summaryFuture = _summaryOrNull();
+
+        final allRecords = await recordsFuture;
+        final pending = await pendingFuture;
+        final summary = await summaryFuture;
+
+        // 期间又有更新的一次请求发出去了 ⇒ 这份结果已经过期，丢掉（别覆盖新数据）
+        if (seq != _ledgerSeq) return;
+
+        changed = _applyLedger(
+          records: allRecords,
+          pending: pending,
+          familyBalance: summary?.family,
+          sunBalance: summary?.sun,
+        );
+      }
+      _loadedOnce = true;
+      _loading = false;
+      // 数据没变就不 notify：一次 notify 会连锁触发页面 rebuild、GoRouter 重跑
+      // redirect、提醒全量重排（见 router.dart 的 refreshListenable）。
+      if (changed || showLoading) notifyListeners();
     } catch (e) {
       if (seq == _ledgerSeq) {
         _loading = false;
-        notifyListeners();
+        if (showLoading) notifyListeners();
       }
       rethrow;
     }
+  }
+
+  /// 把一次拉取结果落到状态里（快照路径与回退路径共用，保证拆分口径一致）。
+  ///
+  /// 返回「是否真的有变化」：内容没变时**保留旧 List 实例**，这样
+  /// `app.dart` 用 `identical` 判断要不要重排本地提醒才不会白跑。
+  bool _applyLedger({
+    required List<LedgerRecord> records,
+    required List<LedgerRecord> pending,
+    required num? familyBalance,
+    required num? sunBalance,
+  }) {
+    // 同一个账本拆成两本：家长 / 家庭界面只看非花园流水，花园流水走 gardenRecords
+    final nextRecords = records.where((record) => !record.isGarden).toList(growable: false);
+    final nextGarden = records.where((record) => record.isGarden).toList(growable: false);
+    // 全量余额单独兜底：老部署还没有 /api/ledger/summary 时退回用流水算，
+    // 但流水只有最近 200 条，所以能拿到 summary 就一定要用 summary（否则余额会越用越少）
+    final nextBalance = familyBalance ?? LedgerApi.calcApprovedBalance(nextRecords);
+    final nextSun = sunBalance ?? LedgerApi.calcGardenBalance(nextGarden);
+
+    final changed = !_sameRecordList(_records, nextRecords) ||
+        !_sameRecordList(_gardenRecords, nextGarden) ||
+        !_sameRecordList(_pendingRecords, pending) ||
+        _balance != nextBalance ||
+        _sunBalance != nextSun;
+    if (!changed) return false;
+
+    _records = nextRecords;
+    _gardenRecords = nextGarden;
+    _pendingRecords = pending;
+    _pendingCount = pending.length;
+    _balance = nextBalance;
+    _sunBalance = nextSun;
+    return true;
+  }
+
+  /// 两批流水内容是否一致（顺序敏感：接口按时间倒序返回，顺序变了也算变）
+  static bool _sameRecordList(List<LedgerRecord> a, List<LedgerRecord> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      final x = a[i];
+      final y = b[i];
+      if (x.id != y.id ||
+          x.status != y.status ||
+          x.amount != y.amount ||
+          x.taskId != y.taskId ||
+          x.note != y.note ||
+          x.imageUrl != y.imageUrl ||
+          x.createdAt != y.createdAt) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /// 仅刷新待审批列表（轮询用）
@@ -172,6 +247,7 @@ class FamilyState extends ChangeNotifier {
     final seq = ++_pendingSeq;
     final pending = await api.fetchPendingRequests();
     if (seq != _pendingSeq) return; // 同理：过期响应不落库
+    if (_sameRecordList(_pendingRecords, pending)) return; // 没变化就别惊动整棵树
     _pendingRecords = pending;
     _pendingCount = pending.length;
     notifyListeners();

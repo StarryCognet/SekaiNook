@@ -390,6 +390,10 @@ class GardenState extends ChangeNotifier {
 
   static bool _syncLoopReady = false;
 
+  /// 存档是否已读进内存。启动、孩子首页、花园页都会调 [init]，
+  /// 真源是内存状态（只有本进程写存档），重复读纯属白费一轮解析 + 一次 refreshLedger。
+  bool _inited = false;
+
   bool _appVisible = true;
 
   /// 页面是否在前台（对应 Web 版 `document.hidden`）—— 后台不补发，省电
@@ -640,8 +644,11 @@ class GardenState extends ChangeNotifier {
   Future<void> refreshLedger() async {
     // 捕获 await 之前的本地清单（契约里的已知细节：可能已过期，只会少合并）
     final ownedBefore = List<String>.of(_ownedItems);
-    final summary = await _safeSummary();
-    final records = await _safeRecords();
+    // 先发出去再分别 await —— 两个请求真正并行（此前注释写了并行、实现是串行）
+    final summaryFuture = _safeSummary();
+    final recordsFuture = _safeRecords();
+    final summary = await summaryFuture;
+    final records = await recordsFuture;
     if (summary == null && records == null) return;
 
     final patch = <String, Object?>{};
@@ -668,8 +675,16 @@ class GardenState extends ChangeNotifier {
 
   // ---- init ----
 
-  /// 进入花园 / 应用启动时调用（**可重复调用**，每次重新读一遍本机存档）。
+  /// 进入花园 / 应用启动时调用（**幂等**：首次真正读存档，之后只确保补发定时器）。
+  ///
+  /// 启动（app.dart）、孩子首页、花园页三处都会调；之前每次都重读存档 +
+  /// 重新 refreshLedger，等于进一次花园多打一轮接口。
   void init() {
+    if (_inited) {
+      _ensureSyncLoop();
+      return;
+    }
+    _inited = true;
     final saved = _loadState();
     final today = todayKey();
 

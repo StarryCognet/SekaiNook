@@ -21,8 +21,9 @@ import 'back_intent.dart';
 
 /// 主壳：全局顶栏 + 底部导航 + 通知轮询（对应 Web 版 `src/layouts/MainLayout.tsx`）。
 ///
-/// 轮询**不在 store 里**，在这里：15 秒一次，页面不可见时跳过，
-/// 回到前台立刻补一次；家长身份额外刷新待审批。
+/// 轮询**不在 store 里**，在这里：10 秒一次（`AppConstants.notificationPollInterval`），
+/// 页面不可见时跳过，回到前台立刻补一次；家长身份额外刷新待审批 ——
+/// 但当前页面自己也在轮询待审批时让路（见 `_currentPageRefreshesPending`）。
 class MainShell extends StatefulWidget {
   const MainShell({super.key, required this.child});
 
@@ -103,7 +104,18 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final family = context.read<FamilyState>();
     final notifications = context.read<NotificationState>();
     unawaited(notifications.refresh());
-    if (family.role == FamilyRole.parent) unawaited(family.refreshPending());
+    // 待审批：当前页面自己也在轮询时让路 —— 否则同一个接口每 10s 被两个源各打一次
+    //（首页 20s loadLedger、家庭页家长 10s refreshPending 都会顺带刷新待审批）。
+    if (family.role == FamilyRole.parent && !_currentPageRefreshesPending()) {
+      unawaited(family.refreshPending());
+    }
+  }
+
+  /// 这些页面自己有轮询、且都会顺带刷新待审批，主壳不再重复发。
+  bool _currentPageRefreshesPending() {
+    if (_currentLocation.isEmpty) return false;
+    final path = Uri.parse(_currentLocation).path;
+    return path == '/home' || path == '/family';
   }
 
   int _indexForLocation(String location) {

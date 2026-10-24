@@ -105,6 +105,9 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _syncingNames = false;
   bool _savingNames = false;
 
+  /// 称呼草稿的落盘防抖（每敲一个字就写一次 prefs 太浪费）
+  Timer? _nameDraftPersist;
+
   /// 本机存着的称呼草稿（改了一半、还没保存的那半截）。
   /// 服务端那份到位时**草稿优先** —— 对应 Web 版的 `readNameDraft(nameTarget)`。
   ({String call, String nickname})? _nameDraft;
@@ -163,6 +166,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void dispose() {
     _lockTimer?.cancel();
+    _nameDraftPersist?.cancel();
     _backgroundCtrl.dispose();
     _callCtrl.dispose();
     _nicknameCtrl.dispose();
@@ -176,8 +180,14 @@ class _SettingsPageState extends State<SettingsPage> {
   void _onNameInputChanged() {
     if (_syncingNames) return;
     if (!mounted) return;
-    setState(() => _namesTouched = true);
-    unawaited(_writeNameDraft());
+    // 只有「第一次开始改」需要重建（显示未保存提示），后续按键不必再 setState
+    if (!_namesTouched) setState(() => _namesTouched = true);
+    final String draftKey = _nameDraftKey;
+    _nameDraftPersist?.cancel();
+    _nameDraftPersist = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      unawaited(_writeNameDraft(draftKey));
+    });
   }
 
   /// 草稿记在谁名下：家长编辑的是**孩子**的称呼，孩子编辑的是**妈妈**的
@@ -221,11 +231,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// 有改动就自动留一份草稿（对应 Web 版 `writeNameDraft`）。
   /// 存不下就算了，绝不拦着用户输入。
-  Future<void> _writeNameDraft() async {
+  ///
+  /// [draftKey] 由调用方在 `setState` 之前抓好（定时器回调里可能已经 unmount，
+  /// 那时不能再 `context.read`）。
+  Future<void> _writeNameDraft([String? draftKey]) async {
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-        _nameDraftKey,
+        draftKey ?? _nameDraftKey,
         jsonEncode(<String, String>{'call': _callCtrl.text, 'nickname': _nicknameCtrl.text}),
       );
       _nameDraft = (call: _callCtrl.text, nickname: _nicknameCtrl.text);
@@ -339,25 +352,30 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  /// 从相册选一张照片 → 纯 Dart 压到长边 1600px → 传 R2 → 把地址存进服务端设置。
+  /// 从相册选一张照片 → 压到长边 1600px → 传 R2 → 把地址存进服务端设置。
   /// 与 Web 版 `SettingsPage.tsx` 的背景图链路一致（image_picker + 压缩 + `/api/upload`）。
   Future<void> _uploadBackground() async {
     // 先取好依赖：await 之后就不该再碰 context 了
     final theme = context.read<ThemeState>();
     final uploadApi = UploadApi(_client);
-    XFile? picked;
+    final Uint8List? compressed;
     try {
-      picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+      compressed = await pickCompressedImage(
+        ImagePicker(),
+        source: ImageSource.gallery,
+      );
+    } on ImageUnreadableException {
+      if (!mounted) return;
+      _toast('这张图读不出来，换一张试试', error: true);
+      return;
     } catch (_) {
       if (!mounted) return;
       _toast('打不开相册，检查一下相册权限', error: true);
       return;
     }
-    if (picked == null) return;
+    if (compressed == null) return;
     setState(() => _uploadingBackground = true);
     try {
-      final bytes = await picked.readAsBytes();
-      final compressed = compressImage(bytes) ?? Uint8List.fromList(bytes);
       final result = await uploadApi.upload(compressed);
       await theme.saveBackground(result.url);
       if (!mounted) return;
@@ -1266,7 +1284,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       min: ThemeState.navOpacityMin,
                       max: ThemeState.navOpacityOpaque,
                       divisions: 10,
-                      onChanged: theme.setNavBarOpacity,
+                      // 拖动时只改内存（每帧都会回调），松手才落盘
+                      onChanged: theme.previewNavBarOpacity,
+                      onChangeEnd: theme.setNavBarOpacity,
                     ),
                   ),
                   SizedBox(
@@ -1315,6 +1335,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               theme.background,
                               height: 140,
                               width: double.infinity,
+                              // 只是设置页里的预览条，按 800px 解码足够，别解整张原图
+                              cacheWidth: 800,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) => Container(
                                 height: 140,

@@ -32,6 +32,24 @@ int countTodaySubmissions(List<LedgerRecord> records, String taskId, {DateTime? 
       .length;
 }
 
+/// 今天各任务的提交次数（一次扫完账本）。
+///
+/// 任务区要按「这个任务还能不能做」逐个判断，逐个调 [countTodaySubmissions]
+/// 是 O(任务数 × 流水数)；页面只要重建就会重跑，所以先归并成一张表。
+/// 口径与 [countTodaySubmissions] 完全一致。
+Map<String, int> countTodaySubmissionsByTask(List<LedgerRecord> records, {DateTime? now}) {
+  final ref = now ?? DateTime.now();
+  final counts = <String, int>{};
+  for (final record in records) {
+    final taskId = record.taskId;
+    if (taskId.isEmpty) continue;
+    if (record.status == LedgerStatus.rejected) continue;
+    if (!_isSameLocalDay(record.createdAt, ref)) continue;
+    counts[taskId] = (counts[taskId] ?? 0) + 1;
+  }
+  return counts;
+}
+
 /// 同一自然日。两边都是本地时刻（`createdAt` 入库时已 `toLocal()`），
 /// 与 Web 版 `toDateString()` 的比较口径一致。
 bool _isSameLocalDay(DateTime a, DateTime b) =>

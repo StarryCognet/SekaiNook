@@ -71,7 +71,18 @@ class ThemeState extends ChangeNotifier {
     return raw.clamp(navOpacityMin, navOpacityOpaque).toDouble();
   }
 
-  /// 改底栏不透明度（设置页拖一下即生效并落盘）
+  /// 拖动滑杆时的即时预览：只改内存、不落盘。
+  ///
+  /// 拖动过程中 onChanged 每帧都会调，一帧写一次 SharedPreferences 纯属浪费；
+  /// 松手（onChangeEnd）才走 [setNavBarOpacity] 真正落盘。
+  void previewNavBarOpacity(double value) {
+    final next = value.clamp(navOpacityMin, navOpacityOpaque).toDouble();
+    if (_navOpacity == next) return;
+    _navOpacity = next;
+    notifyListeners();
+  }
+
+  /// 改底栏不透明度并落盘（松手时调一次，别放进 onChanged）
   Future<void> setNavBarOpacity(double value) async {
     final next = value.clamp(navOpacityMin, navOpacityOpaque).toDouble();
     try {

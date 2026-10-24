@@ -51,10 +51,20 @@ class SettingsApi {
 
   final ApiClient _client;
 
+  /// 启动时 theme（要背景图）与 settings（要称呼）会各请求一次设置，
+  /// 内容完全一样 —— 让并发调用共享同一个在途请求，启动少打一次接口。
+  Future<SettingsPayload>? _inflight;
+
   /// 读设置（`GET /api/settings`）。调用方要吞异常，别让设置问题拦住首页。
-  Future<SettingsPayload> fetchSettings() async {
-    final raw = await _client.getJson<dynamic>('/api/settings');
-    return SettingsPayload.fromJson(raw);
+  Future<SettingsPayload> fetchSettings() {
+    final existing = _inflight;
+    if (existing != null) return existing;
+    final future = _client
+        .getJson<dynamic>('/api/settings')
+        .then(SettingsPayload.fromJson)
+        .whenComplete(() => _inflight = null);
+    _inflight = future;
+    return future;
   }
 
   /// 保存设置（`PATCH /api/settings`，写请求**不带 retry**）。

@@ -52,17 +52,40 @@ class ApiClient {
   static const String _timeoutMessage = '请求超时，检查一下网络';
   static const String _networkMessage = '网络连接失败，请检查网络后重试';
 
-  /// GET 并解码 JSON。默认重试 2 次。
+  /// 在途 GET 合并表：key = path + 排序后的 query。
+  ///
+  /// 同一个 URL 在上一轮还没回来时又发一次（多路轮询撞在一起，或弱网下
+  /// 12s 超时 + 重试把一轮拖过 10s 间隔），这里只保留一个在途请求，
+  /// 所有调用方共享同一份结果 —— 既省流量，也让「在途请求数」有上界。
+  /// **只合并 GET**：写请求不幂等，绝不能替调用方合并。
+  final Map<String, Future<dynamic>> _inflightGet = <String, Future<dynamic>>{};
+
+  /// GET 并解码 JSON。默认重试 2 次；同一 URL 在途时复用同一个请求。
   ///
   /// 用法：`final json = await api.getJson<Map<String, dynamic>>('/api/ledger/summary');`
-  Future<T?> getJson<T>(String path, {Map<String, dynamic>? query}) async {
-    final raw = await _send(
+  Future<T?> getJson<T>(String path, {Map<String, dynamic>? query}) {
+    final key = _getKey(path, query);
+    final existing = _inflightGet[key];
+    if (existing != null) {
+      return existing.then((raw) => _cast<T>(raw, path));
+    }
+    final pending = _send(
       path,
       method: 'GET',
       query: query,
       retries: maxRetriesGet,
     );
-    return _cast<T>(raw, path);
+    _inflightGet[key] = pending;
+    return pending.then((raw) => _cast<T>(raw, path)).whenComplete(() {
+      if (identical(_inflightGet[key], pending)) _inflightGet.remove(key);
+    });
+  }
+
+  /// 把 path 与 query 拼成稳定的 key（参数顺序不同也命中同一个在途请求）
+  static String _getKey(String path, Map<String, dynamic>? query) {
+    if (query == null || query.isEmpty) return path;
+    final keys = query.keys.toList()..sort();
+    return '$path?${keys.map((k) => '$k=${query[k]}').join('&')}';
   }
 
   /// POST 并解码 JSON。默认**不**重试。
@@ -119,7 +142,8 @@ class ApiClient {
     final raw = await _send(
       path,
       method: 'POST',
-      data: Uint8List.fromList(bytes),
+      // 调用方通常传的就是 Uint8List（见 upload_api.dart），别再整份复制一遍
+      data: bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
       headers: <String, dynamic>{'Content-Type': contentType},
       retries: 0,
     );

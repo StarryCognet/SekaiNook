@@ -2009,15 +2009,16 @@ class _CheckInSheetState extends State<_CheckInSheet> {
 
   Future<void> _pick(ImageSource source) async {
     try {
-      final XFile? picked = await _picker.pickImage(source: source, imageQuality: 90);
-      if (picked == null) return;
-      final Uint8List raw = await picked.readAsBytes();
-      final Uint8List compressed = compressImage(raw) ?? raw;
+      final Uint8List? compressed =
+          await pickCompressedImage(_picker, source: source);
+      if (compressed == null) return;
       if (!mounted) return;
       setState(() {
         _photo = compressed;
         _photoUrl = null;
       });
+    } on ImageUnreadableException {
+      if (mounted) _toast('这张图读不出来，换一张试试');
     } catch (_) {
       if (mounted) _toast('照片选不了，换一张试试');
     }

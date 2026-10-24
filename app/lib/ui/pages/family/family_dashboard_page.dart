@@ -33,6 +33,7 @@ import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/live_clock.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 import '../../widgets/task_row.dart';
@@ -159,8 +160,16 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       void reload() => unawaited(_reloadLedger());
       reload();
     });
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _now = DateTime.now());
+    // 秒级跳动交给卡片里的 _LiveClock 自己重建；这里只在跨分钟/跨天时
+    // 整页 setState（任务窗口、签到判定都只到分钟粒度）。
+    _clockTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (!mounted) return;
+      final now = DateTime.now();
+      if (now.minute != _now.minute ||
+          now.hour != _now.hour ||
+          now.day != _now.day) {
+        setState(() => _now = now);
+      }
     });
   }
 
@@ -345,8 +354,31 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   String? _checkTask(TaskConfig task, List<LedgerRecord> records) =>
       checkTask(task, records, now: _now);
 
-  bool _isDone(TaskConfig task, List<LedgerRecord> records) =>
-      isTaskDone(task, records, now: _now);
+  /// 今日各任务提交次数缓存：任务区要逐个任务判断「还能不能做」，
+  /// 逐个扫全量账本是 O(任务数 × 流水数)，页面一重建就白跑一遍。
+  /// 账本实例没变（P1 之后内容不变会复用同一个 List）且还是同一天时直接查表。
+  List<LedgerRecord>? _todayCountsFrom;
+  String? _todayCountsDay;
+  Map<String, int> _todayCounts = const <String, int>{};
+
+  Map<String, int> _todayCountsFor(List<LedgerRecord> records) {
+    final String day = '${_now.year}-${_now.month}-${_now.day}';
+    if (identical(records, _todayCountsFrom) && day == _todayCountsDay) {
+      return _todayCounts;
+    }
+    final counts = countTodaySubmissionsByTask(records, now: _now);
+    _todayCountsFrom = records;
+    _todayCountsDay = day;
+    _todayCounts = counts;
+    return counts;
+  }
+
+  bool _isDone(TaskConfig task, List<LedgerRecord> records) {
+    final limit = task.dailyLimit;
+    if (limit == null) return false;
+    if (task.id.isEmpty) return false;
+    return (_todayCountsFor(records)[task.id] ?? 0) >= limit;
+  }
 
   /// 自定义任务在服务端要有对应的「执行 id」：预置两条各走自己的 id
   /// （日限 1、即时到账），其余全部写 `user_task_exec`，服务端按任务名判重。
@@ -820,9 +852,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
     final homeworkTask = byId('finish_homework');
     final sleepTask = byId('sleep_on_time');
-    final hh = _now.hour.toString().padLeft(2, '0');
-    final mm = _now.minute.toString().padLeft(2, '0');
-    final ss = _now.second.toString().padLeft(2, '0');
     // 今日两项内置打卡（作业 / 睡觉）的完成度 —— 底部那条进度条
     final todayTasks =
         <TaskConfig?>[homeworkTask, sleepTask].whereType<TaskConfig>().toList(growable: false);
@@ -848,8 +877,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(
-            '$hh:$mm:$ss',
+          // 只有这一小块需要每秒刷新，别把整张卡片（乃至整页）拖进 setState
+          AppLiveClock(
             style: TextStyle(
               fontSize: AppFontSize.xl,
               fontWeight: FontWeight.w700,
@@ -918,38 +947,61 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   // ---- ③ 近 14 天积分趋势 ----
 
-  Widget _buildTrendCard(List<LedgerRecord> records) {
-    final palette = context.palette;
-    const trendDays = 14;
+  static const int _trendDays = 14;
+
+  List<LedgerRecord>? _trendFrom;
+  String? _trendDay;
+  List<String> _trendLabels = const <String>[];
+  List<int> _trendValues = const <int>[];
+
+  /// 近 [_trendDays] 天趋势原本是「14 天 × 全量流水」的双层循环，页面每次重建
+  /// 都会重跑；账本实例没变、也没跨天时就复用上次结果。
+  ({List<String> labels, List<int> values}) _trendFor(List<LedgerRecord> records) {
+    final String day = '${_now.year}-${_now.month}-${_now.day}';
+    if (identical(records, _trendFrom) && day == _trendDay) {
+      return (labels: _trendLabels, values: _trendValues);
+    }
     final today = DateTime(_now.year, _now.month, _now.day);
     final labels = <String>[];
     final values = <int>[];
-    for (var offset = trendDays - 1; offset >= 0; offset -= 1) {
-      final day = today.subtract(Duration(days: offset));
-      labels.add('${day.month}/${day.day}');
+    for (var offset = _trendDays - 1; offset >= 0; offset -= 1) {
+      final dayAt = today.subtract(Duration(days: offset));
+      labels.add('${dayAt.month}/${dayAt.day}');
       var sum = 0;
       for (final record in records) {
         if (record.status != null && record.status != LedgerStatus.approved) continue;
         final at = record.createdAt.toLocal();
-        if (at.year == day.year && at.month == day.month && at.day == day.day) {
+        if (at.year == dayAt.year && at.month == dayAt.month && at.day == dayAt.day) {
           sum += record.amount;
         }
       }
       values.add(sum);
     }
+    _trendFrom = records;
+    _trendDay = day;
+    _trendLabels = labels;
+    _trendValues = values;
+    return (labels: labels, values: values);
+  }
+
+  Widget _buildTrendCard(List<LedgerRecord> records) {
+    final palette = context.palette;
+    final trend = _trendFor(records);
+    final labels = trend.labels;
+    final values = trend.values;
     final hasData = values.any((value) => value != 0);
 
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          SectionHeader(title: '近 $trendDays 天积分趋势'),
+          SectionHeader(title: '近 $_trendDays 天积分趋势'),
           if (!hasData)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
               child: Center(
                 child: Text(
-                  '最近 $trendDays 天还没有积分记录',
+                  '最近 $_trendDays 天还没有积分记录',
                   style: TextStyle(fontSize: AppFontSize.sm, color: palette.textTertiary),
                 ),
               ),
@@ -1072,11 +1124,13 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final labels = _tabsFor(isParent);
     // 内容分支跟着 URL 派生出来的分区走（不是 TabController.index）
     final index = math.max(0, labels.indexOf(area));
-    final areas = <Widget>[
-      _buildTasksArea(state, isParent),
-      if (isParent) _buildPendingArea(state),
-      _buildRecordsArea(state, isParent),
-    ];
+    // 只构建当前分区：三个 area 各有全量流水/14 天统计/待审批列表，
+    // 之前三个都建（哪怕只显示一个），切一次 tab 就白跑两份重活。
+    final Widget currentArea = switch (labels[index]) {
+      'tasks' => _buildTasksArea(state, isParent),
+      'pending' => _buildPendingArea(state),
+      _ => _buildRecordsArea(state, isParent),
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -1136,7 +1190,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         SlideFadeSwitcher(
           childKey: ValueKey<String>(_tabParamFor(area)),
           axis: Axis.horizontal,
-          child: areas[index],
+          child: currentArea,
         ),
       ],
     );
@@ -1878,9 +1932,16 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   // ---- ④-c 历史记录区 ----
 
-  Widget _buildRecordsArea(FamilyState state, bool isParent) {
-    final palette = context.palette;
-    final records = state.records;
+  /// 历史记录的状态筛选结果缓存：账本实例与筛选口径都没变就不用重新过滤
+  /// （最大 500 条的 where + toList，页面每次重建都跑一遍太浪费）。
+  List<LedgerRecord>? _filteredFrom;
+  _RecordFilter? _filteredBy;
+  List<LedgerRecord> _filteredCache = const <LedgerRecord>[];
+
+  List<LedgerRecord> _filteredRecords(List<LedgerRecord> records) {
+    if (identical(records, _filteredFrom) && _recordFilter == _filteredBy) {
+      return _filteredCache;
+    }
     final filtered = _recordFilter == _RecordFilter.all
         ? records
         : records
@@ -1888,6 +1949,15 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
               (record) => (record.status ?? LedgerStatus.approved).wire == _recordFilter.wire,
             )
             .toList(growable: false);
+    _filteredFrom = records;
+    _filteredBy = _recordFilter;
+    _filteredCache = filtered;
+    return filtered;
+  }
+
+  Widget _buildRecordsArea(FamilyState state, bool isParent) {
+    final palette = context.palette;
+    final filtered = _filteredRecords(state.records);
     final visible = filtered.take(_visibleCount).toList(growable: false);
     final remaining = filtered.length - visible.length;
 
@@ -2258,18 +2328,15 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             if (picking) return;
             setDialogState(() => picking = true);
             try {
-              final picked = await ImagePicker().pickImage(source: source);
-              if (picked == null) return;
-              final raw = await picked.readAsBytes();
-              final compressed = compressImage(raw);
-              if (compressed == null) {
-                setDialogState(() => photoError = '这张图读不出来，换一张试试');
-                return;
-              }
+              final compressed =
+                  await pickCompressedImage(ImagePicker(), source: source);
+              if (compressed == null) return;
               setDialogState(() {
                 photo = compressed;
                 photoError = null;
               });
+            } on ImageUnreadableException {
+              setDialogState(() => photoError = '这张图读不出来，换一张试试');
             } catch (_) {
               setDialogState(() => photoError = '选图失败，请重试');
             } finally {
@@ -2681,6 +2748,9 @@ class _RecordThumb extends StatelessWidget {
           url,
           width: 48,
           height: 48,
+          // 只按显示尺寸解码：48 逻辑像素 × 3 倍屏，别把整张打卡照片解码进内存
+          cacheWidth: 144,
+          cacheHeight: 144,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stack) => Container(
             width: 48,

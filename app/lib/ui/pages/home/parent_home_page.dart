@@ -26,6 +26,7 @@ import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/live_clock.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 import '../../widgets/motion/app_buttons.dart';
@@ -65,12 +66,6 @@ String _dateText(DateTime now) =>
 
 /// 本地日历天键（对应 Web 版 `dayKey`）
 String _dayKey(DateTime date) => '${date.year}-${date.month}-${date.day}';
-
-/// 实时时钟文案（HH:mm:ss）
-String _clockText(DateTime now) =>
-    '${now.hour.toString().padLeft(2, '0')}:'
-    '${now.minute.toString().padLeft(2, '0')}:'
-    '${now.second.toString().padLeft(2, '0')}';
 
 /// 今天的流水（对应 Web 版 `todayRecords`，按设备本地日期比较）
 List<LedgerRecord> _todayRecords(List<LedgerRecord> records, DateTime now) {
@@ -188,9 +183,14 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
       if (!mounted) return;
       unawaited(_refresh());
     });
-    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+    // 秒级跳动由卡片里的 AppLiveClock 自己重建；这里只在跨小时/跨天时
+    // 整页 setState（问候语按小时、今日流水与周统计按天）。
+    _clock = Timer.periodic(const Duration(seconds: 30), (_) {
       if (!mounted) return;
-      setState(() => _now = DateTime.now());
+      final DateTime now = DateTime.now();
+      if (now.hour != _now.hour || now.day != _now.day) {
+        setState(() => _now = now);
+      }
     });
     // 「有没有新申请」要跟上孩子的提交：20 秒问一次
     _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
@@ -495,8 +495,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                   children: <Widget>[
                     GlyphIcon(AppIcons.clock, size: AppFontSize.sm, color: palette.primary),
                     const SizedBox(width: AppSpacing.xs),
-                    Text(
-                      _clockText(now),
+                    AppLiveClock(
                       style: TextStyle(
                         fontSize: AppFontSize.lg,
                         fontWeight: FontWeight.w700,

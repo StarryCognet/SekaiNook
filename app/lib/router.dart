@@ -19,9 +19,16 @@ import 'ui/shell/main_shell.dart';
 /// 六个页面全部挂在 [MainShell] 下（对应 Web 版 `MainLayout` 包住所有页面），
 /// 所以通知页与周计划页也带底部导航。
 GoRouter createRouter(FamilyState family) {
+  // 只把「身份变化」喂给 GoRouter：FamilyState 还会因为账本刷新 notify，
+  // 那些不该让路由重跑 redirect（每次都要重建整张路由表，还会连带重建当前页）。
+  // 身份与 router 同生命周期，这里的 listener 不用拆。
+  final role = ValueNotifier<FamilyRole?>(family.role);
+  family.addListener(() {
+    if (role.value != family.role) role.value = family.role;
+  });
   return GoRouter(
     initialLocation: '/home',
-    refreshListenable: family,
+    refreshListenable: role,
     redirect: (BuildContext context, GoRouterState state) {
       final path = state.uri.path;
       if (family.role == null) {
