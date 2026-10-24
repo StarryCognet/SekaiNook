@@ -37,6 +37,7 @@ import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_sheet.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 import '../../widgets/motion/app_buttons.dart';
@@ -442,9 +443,9 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
   Future<void> _openCheckInSheet(TaskConfig task, {CustomTask? custom}) async {
     // 妈妈加的任务与预置任务走即时到账（与以前 `_checkInMyTask` 的判据一致）
     final bool isParent = custom?.createdBy == TaskCreator.parent;
-    final bool? submitted = await showFloatingDialog<bool>(
+    final bool? submitted = await showAppSheet<bool>(
       context: context,
-      child: _CheckInSheet(
+      builder: (BuildContext sheetContext) => _CheckInSheet(
         task: task,
         isParent: isParent,
         upload: _uploadApi,
@@ -2116,20 +2117,19 @@ class _CheckInSheetState extends State<_CheckInSheet> {
       palette.cardColor(hasBackground: false),
     );
 
-    return Dialog(
-      insetPadding: const EdgeInsets.all(AppSpacing.md),
-      backgroundColor: palette.cardColor(hasBackground: false),
-      shape: AppShape.dialog(),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height - AppSpacing.xl * 2,
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
+    // 内容直接铺在 SnapSheet 里（不要再套 Dialog）：底部圆角、拖拽把手、
+    // 遮罩与关闭手势都由 showAppSheet 的 SnapSheetRoute 负责。
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.lg,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
               Text(
                 '${widget.isParent ? '打卡' : '申请打卡'}：${task.name}',
                 style: TextStyle(
@@ -2294,9 +2294,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
               ),
             ],
           ),
-        ),
-      ),
-    );
+        );
   }
 }
 

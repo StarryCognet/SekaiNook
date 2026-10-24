@@ -1,3 +1,4 @@
+import 'package:sekainook_app/fl_ui/null_status.dart';
 import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:math' as math;
 
@@ -1902,7 +1903,15 @@ class _GardenPageState extends State<GardenPage> {
       const SectionHeader(title: '今日已完成'),
       if (doneTasks.isEmpty)
         const AppCard(
-          child: EmptyView(message: '今天还没有完成任务，快去加油吧！'),
+          // FlClash 空态（带插画）：固定高度给 NullStatus 的滚动容器兜底
+          child: SizedBox(
+            height: 240,
+            child: NullStatus(
+              label: '今天还没有完成任务',
+              description: '去任务区挑一个开始吧',
+              illustration: NullStatusIllustration.profile,
+            ),
+          ),
         )
       else
         AppCard(
@@ -1919,7 +1928,14 @@ class _GardenPageState extends State<GardenPage> {
       const SectionHeader(title: '阳光流水', subtitle: '最近的花园流水（含待同步）'),
       if (records.isEmpty)
         const AppCard(
-          child: EmptyView(message: '还没有学习记录', hint: '完成任务、背古诗、语文打卡都会记在这里'),
+          child: SizedBox(
+            height: 260,
+            child: NullStatus(
+              label: '还没有学习记录',
+              description: '完成任务、背古诗、语文打卡都会记在这里',
+              illustration: NullStatusIllustration.logs,
+            ),
+          ),
         )
       else
         AppCard(

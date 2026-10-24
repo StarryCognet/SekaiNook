@@ -1,4 +1,6 @@
 import 'package:sekainook_app/fl_ui/dialog.dart';
+import 'package:sekainook_app/fl_ui/null_status.dart';
+import 'package:sekainook_app/fl_ui/segmented_control.dart';
 import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -33,6 +35,7 @@ import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_sheet.dart';
 import '../../widgets/live_clock.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
@@ -1118,9 +1121,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   }
 
   Widget _buildTabs(FamilyState state, bool isParent, String area) {
-    final palette = context.palette;
-    final controller = _tabController;
-    if (controller == null) return const SizedBox.shrink();
     final labels = _tabsFor(isParent);
     // 内容分支跟着 URL 派生出来的分区走（不是 TabController.index）
     final index = math.max(0, labels.indexOf(area));
@@ -1131,59 +1131,20 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       'pending' => _buildPendingArea(state),
       _ => _buildRecordsArea(state, isParent),
     };
+    // 分区标题与角标：待审批带数字（原来的红色小徽章塞不进胶囊里，改成文末数字）
+    String labelFor(String key) => switch (key) {
+          'tasks' => '任务区',
+          'pending' => state.pendingCount > 0 ? '待审批 ${state.pendingCount}' : '待审批',
+          _ => '历史记录',
+        };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        TabBar(
-          controller: controller,
-          onTap: (tapped) => _goTab(labels[tapped]),
-          // 选中项的底是实色的 segmentedSelected，字色必须按它算 ——
-          // 石墨黑下 primary 写在这个底上只有 2.5:1，几乎糊在一起
-          labelColor: palette.onColor(palette.segmentedSelected),
-          unselectedLabelColor: palette.textSecondary,
-          // 高亮块在选项之间滑动 —— 仍由 URL 派生出来的 controller 驱动，没有自持状态
-          indicator: ShapeDecoration(
-            color: palette.segmentedSelected,
-            shape: AppShape.all(AppRadius.full, side: BorderSide(color: palette.primary.withValues(alpha: 0.35))),
-          ),
-          indicatorSize: TabBarIndicatorSize.tab,
-          dividerColor: Colors.transparent,
-          splashBorderRadius: BorderRadius.circular(AppRadius.full),
-          tabs: <Widget>[
-            Tab(text: '任务区'),
-            if (isParent)
-              Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    const Text('待审批'),
-                    if (state.pendingCount > 0) ...<Widget>[
-                      const SizedBox(width: AppSpacing.xs),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.xs,
-                          vertical: 1,
-                        ),
-                        decoration: ShapeDecoration(
-                          color: palette.danger,
-                          shape: AppShape.all(AppRadius.full),
-                        ),
-                        child: Text(
-                          '${state.pendingCount}',
-                          style: TextStyle(
-                            fontSize: AppFontSize.xs,
-                            // 实色红底上的数字：surface 在深色主题里也是深色，会看不见
-                            color: palette.onColor(palette.danger),
-                            fontFeatures: kTabularNumbers,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            const Tab(text: '历史记录'),
-          ],
+        // FlClash 的胶囊分段控件：滑块在选项之间滑动，高亮仍由 URL 派生
+        SegmentedControl<String>(
+          segments: <(String, String)>[for (final String key in labels) (key, labelFor(key))],
+          value: labels[index],
+          onChanged: _goTab,
         ),
         const SizedBox(height: AppSpacing.md),
         // 内容切换：横向滑入淡出（childKey 就是地址栏的 tab 口径）
@@ -1766,7 +1727,16 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final pending = state.pendingRecords;
     if (pending.isEmpty) {
       return AppCard(
-        child: EmptyView(message: '暂无待审批申请', icon: AppIcons.checklist),
+        // FlClash 空态：带插画与入场动画，比一行灰字有存在感。
+        // NullStatus 自带滚动容器，塞进卡片里要给个确定高度。
+        child: const SizedBox(
+          height: 280,
+          child: NullStatus(
+            label: '暂无待审批申请',
+            description: '孩子提交打卡后，会在这里等你确认',
+            illustration: NullStatusIllustration.logs,
+          ),
+        ),
       );
     }
     return AppCard(
@@ -1991,9 +1961,17 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             childKey: ValueKey<String>(_recordFilter.wire),
             axis: Axis.horizontal,
             child: filtered.isEmpty
-                ? EmptyView(
-                    message: _recordFilter == _RecordFilter.all ? '暂无流水记录' : '该状态下暂无记录',
-                    icon: AppIcons.history,
+                ? SizedBox(
+                    height: 300,
+                    child: NullStatus(
+                      label: _recordFilter == _RecordFilter.all
+                          ? '暂无流水记录'
+                          : '该状态下暂无记录',
+                      description: _recordFilter == _RecordFilter.all
+                          ? '打卡、加餐、罚款这些都会记在这里'
+                          : '换个筛选条件看看',
+                      illustration: NullStatusIllustration.logs,
+                    ),
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2253,17 +2231,37 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   /// 驳回弹窗：写一句话给女儿，而不是点一下就走
   Future<void> _startReject(LedgerRecord target) async {
     final controller = TextEditingController();
-    final reason = await showFloatingDialog<String>(
+    final reason = await showAppSheet<String>(
       context: context,
-      child: StatefulBuilder(
-        builder: (builderContext, setDialogState) => AlertDialog(
-          title: Text('驳回「${target.taskName}」'),
-          content: Column(
+      builder: (BuildContext sheetContext) => StatefulBuilder(
+        builder: (builderContext, setDialogState) => Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              const Text('写一句为什么不行 —— 女儿会收到这句话；不写的话她只看到「已驳回」。'),
+              Text(
+                '驳回「${target.taskName}」',
+                style: TextStyle(
+                  fontSize: AppFontSize.lg,
+                  fontWeight: FontWeight.w600,
+                  color: builderContext.palette.text,
+                ),
+              ),
               const SizedBox(height: AppSpacing.sm),
+              Text(
+                '写一句为什么不行 —— 女儿会收到这句话；不写的话她只看到「已驳回」。',
+                style: TextStyle(
+                  fontSize: AppFontSize.sm,
+                  color: builderContext.palette.textSecondary,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: controller,
                 maxLines: 3,
@@ -2273,30 +2271,38 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   hintText: '例如：照片看不清，重新拍一张',
                 ),
               ),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: <Widget>[
+                  const Spacer(),
+                  AppTextButton(
+                    onPressed: _rejecting
+                        ? null
+                        : () => Navigator.of(builderContext).pop(),
+                    child: const Text('取消'),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  AppFilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(builderContext).colorScheme.error,
+                      // 同上：实色红底上的字按这层底色取
+                      foregroundColor: builderContext.palette.onColor(
+                        Theme.of(builderContext).colorScheme.error,
+                      ),
+                    ),
+                    onPressed: _rejecting
+                        ? null
+                        : () {
+                            setDialogState(() {});
+                            Navigator.of(builderContext)
+                                .pop(controller.text.trim());
+                          },
+                    child: const Text('确认驳回'),
+                  ),
+                ],
+              ),
             ],
           ),
-          actions: <Widget>[
-            AppTextButton(
-              onPressed: _rejecting ? null : () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            AppFilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(builderContext).colorScheme.error,
-                // 同上：实色红底上的字按这层底色取
-                foregroundColor: builderContext.palette.onColor(
-                  Theme.of(builderContext).colorScheme.error,
-                ),
-              ),
-              onPressed: _rejecting
-                  ? null
-                  : () {
-                      setDialogState(() {});
-                      Navigator.of(context).pop(controller.text.trim());
-                    },
-              child: const Text('确认驳回'),
-            ),
-          ],
         ),
       ),
     );
@@ -2319,9 +2325,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     // 消费 / 罚款只要写清原因。判定与网页版共用 core/task_rules.dart。
     final bool needPhoto = taskRequiresPhoto(task);
 
-    final result = await showFloatingDialog<_CheckInResult>(
+    final result = await showAppSheet<_CheckInResult>(
       context: context,
-      child: StatefulBuilder(
+      builder: (BuildContext sheetContext) => StatefulBuilder(
         builder: (builderContext, setDialogState) {
           final palette = builderContext.palette;
           Future<void> pick(ImageSource source) async {
@@ -2345,41 +2351,28 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           }
 
           final positive = task.value >= 0;
-          // 居中弹窗：胶囊浮在屏幕底部（高 74），AlertDialog 默认 insetPadding 的下边距
-          // 只有 24，弹窗下沿仍会被它压住 —— 这里把下边距放到 96，让按钮始终露在胶囊上方。
-          return AlertDialog(
-            insetPadding: const EdgeInsets.fromLTRB(
+          // 表单内容偏高（照片 160 + 备注三行）：交给 SnapSheet 的高度自适应，
+          // 内部再套一层滚动兜住窄屏与弹出键盘的情况。
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
               AppSpacing.lg,
               AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.xl * 3,
             ),
-            titlePadding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.lg,
-              0,
-            ),
-            contentPadding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.md,
-              AppSpacing.lg,
-              0,
-            ),
-            title: Text(
-              task.name,
-              style: TextStyle(
-                fontSize: AppFontSize.lg,
-                fontWeight: FontWeight.w700,
-                color: palette.text,
-              ),
-            ),
-            // 表单偏高（照片 160 + 三行备注），窄屏或弹出键盘时靠滚动兜住
-            content: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  task.name,
+                  style: TextStyle(
+                    fontSize: AppFontSize.lg,
+                    fontWeight: FontWeight.w700,
+                    color: palette.text,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
                   Row(
                     children: <Widget>[
                       Text(
@@ -2474,57 +2467,61 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                     maxLength: 60,
                     decoration: const InputDecoration(hintText: '写点什么，例如：客厅和书桌都收拾好了'),
                   ),
-                ],
-              ),
-            ),
-            actions: <Widget>[
-              AppTextButton(
-                onPressed: uploading ? null : () => Navigator.of(context).pop(),
-                child: const Text('取消'),
-              ),
-              AppFilledButton(
-                // 必填照片没选时按钮直接置灰：先选照片，再谈提交
-                onPressed: uploading || (needPhoto && photo == null)
-                    ? null
-                    : () async {
-                        setDialogState(() => uploading = true);
-                        String? imageUrl;
-                        try {
-                          if (photo != null) {
-                            final uploaded =
-                                await UploadApi(ApiClient()).upload(photo!);
-                            imageUrl = uploaded.url;
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+              children: <Widget>[
+                const Spacer(),
+                AppTextButton(
+                  onPressed: uploading ? null : () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                AppFilledButton(
+                  // 必填照片没选时按钮直接置灰：先选照片，再谈提交
+                  onPressed: uploading || (needPhoto && photo == null)
+                      ? null
+                      : () async {
+                          setDialogState(() => uploading = true);
+                          String? imageUrl;
+                          try {
+                            if (photo != null) {
+                              final uploaded =
+                                  await UploadApi(ApiClient()).upload(photo!);
+                              imageUrl = uploaded.url;
+                            }
+                          } catch (_) {
+                            setDialogState(() {
+                              uploading = false;
+                              photoError = '图片上传失败，请重试';
+                            });
+                            return;
                           }
-                        } catch (_) {
-                          setDialogState(() {
-                            uploading = false;
-                            photoError = '图片上传失败，请重试';
-                          });
-                          return;
-                        }
-                        final note = noteController.text.trim();
-                        if (mounted) {
-                          Navigator.of(context).pop(
-                            _CheckInResult(
-                              note: note.isEmpty ? null : note,
-                              imageUrl: imageUrl,
-                            ),
-                          );
-                        }
-                      },
-                child: uploading
-                    ? SizedBox(
-                        width: 18,
-                        height: 18,
-                        // 主色实心按钮上的转圈：默认也是 primary，会跟底撞成一片
-                        child: AppLoading(
-                          size: 18,
-                          color: palette.onPrimary,
-                        ),
-                      )
-                    : Text(isParent ? '确认记账' : '提交申请'),
-              ),
-            ],
+                          final note = noteController.text.trim();
+                          if (mounted) {
+                            Navigator.of(context).pop(
+                              _CheckInResult(
+                                note: note.isEmpty ? null : note,
+                                imageUrl: imageUrl,
+                              ),
+                            );
+                          }
+                        },
+                  child: uploading
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          // 主色实心按钮上的转圈：默认也是 primary，会跟底撞成一片
+                          child: AppLoading(
+                            size: 18,
+                            color: palette.onPrimary,
+                          ),
+                        )
+                      : Text(isParent ? '确认记账' : '提交申请'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           );
         },
       ),

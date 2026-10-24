@@ -32,6 +32,7 @@ import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/update_dialog.dart';
+import '../ui_preview_page.dart';
 import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
 import '../../shell/back_intent.dart';
@@ -943,6 +944,20 @@ class _SettingsPageState extends State<SettingsPage> {
                 const UpdateCheckTile(),
                 const UpdateAutoCheckTile(),
               ],
+            ),
+          ),
+        ),
+        EnterBox(
+          index: 6,
+          child: AppCard(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const UiPreviewPage()),
+            ),
+            child: const _EntryRow(
+              icon: AppIcons.settings,
+              title: 'FlClash 试样间',
+              description: 'UI 组件预览：卡片 / 列表 / 空态 / 底部面板（开发者用）',
             ),
           ),
         ),

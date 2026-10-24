@@ -11,6 +11,7 @@ import 'ui/pages/home/notifications_page.dart';
 import 'ui/pages/home/parent_home_page.dart';
 import 'ui/pages/role_gate_page.dart';
 import 'ui/pages/settings/settings_page.dart';
+import 'ui/pages/ui_preview_page.dart';
 import 'ui/shell/main_shell.dart';
 
 /// 路由表（对应 Web 版 `src/App.tsx`）。
@@ -31,6 +32,8 @@ GoRouter createRouter(FamilyState family) {
     refreshListenable: role,
     redirect: (BuildContext context, GoRouterState state) {
       final path = state.uri.path;
+      // 试样间不依赖身份，也不该被踢去 /role —— 没选身份也能进去看看。
+      if (path == '/ui-preview') return null;
       if (family.role == null) {
         return path == '/role' ? null : '/role';
       }
@@ -41,6 +44,10 @@ GoRouter createRouter(FamilyState family) {
       GoRoute(
         path: '/role',
         builder: (BuildContext context, GoRouterState state) => const RoleGatePage(),
+      ),
+      GoRoute(
+        path: '/ui-preview',
+        builder: (BuildContext context, GoRouterState state) => const UiPreviewPage(),
       ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) =>
