@@ -27,10 +27,21 @@ class ChangelogEntry {
 }
 
 /// 当前版本号（与 [changelog] 第一条保持一致）。
-const String appVersion = '2.6.0';
+const String appVersion = '2.7.0';
 
 /// 版本历史（倒序：最新在前）。
 const List<ChangelogEntry> changelog = <ChangelogEntry>[
+  ChangelogEntry(
+    version: '2.7.0',
+    date: '2026-10-24 22:50:00',
+    title: '界面更顺手：底部面板、胶囊分区、空状态插画',
+    changes: <String>[
+      '打卡、代记账、驳回理由、提醒编辑改成从底部升起的面板，可以拖、可以下拉关掉，按钮也不会被底栏挡住',
+      '家庭页三个分区（任务 / 待审批 / 历史）换成胶囊切换，待审批数量还在',
+      '没有内容的页面换成带插画的提示，不再是干巴巴一行字',
+      '设置 → 关于 →「FlClash 试样间」：可以预览新的卡片、列表、空状态和底部面板',
+    ],
+  ),
   ChangelogEntry(
     version: '2.6.0',
     date: '2026-10-24 17:45:00',
