@@ -1,0 +1,13 @@
+# 测试标签约定
+#
+# `live` = 打真实后端的用例（api_smoke / e2e_flow / garden_flow）。
+# 它们默认指向生产后端、会写线上库，所以默认跳过 —— 否则 `flutter test`
+# 会因为网络抖动偶发失败，还会往家里真实的账本里塞测试数据。
+#
+# 需要时显式跑：
+#   flutter test --no-pub --run-skipped --tags live
+# 或者指到本地后端：
+#   flutter test --no-pub --run-skipped --tags live --dart-define=API_BASE=http://127.0.0.1:8788
+tags:
+  live:
+    skip: "打真实后端的用例：默认跳过（--run-skipped --tags live 才跑）"

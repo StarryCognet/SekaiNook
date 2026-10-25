@@ -141,7 +141,7 @@ npm run changelog:sync
 
 ### 装到手机桌面（PWA）
 
-线上部署后（`npm run deploy`）用手机浏览器打开站点：
+线上部署后（`npm run web:deploy`）用手机浏览器打开站点：
 
 - **安卓 Chrome**：菜单 → 「添加到主屏幕」，之后从桌面图标启动即无地址栏全屏
 - **iPhone Safari**：分享 → 「添加到主屏幕」

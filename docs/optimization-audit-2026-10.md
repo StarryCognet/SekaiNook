@@ -418,8 +418,243 @@
 ## 12. 附：本轮没有改任何代码
 
 - 工作区保持干净（`git status` 只有未跟踪的 `docs/web-2.5.0-home.png` 与本文档）。
+
+---
+
+## 13. 第二轮补扫（2026-10-24 深夜）
+
+上一轮的 4 路审查偏「性能与正确性」，这一轮换四个角度：数据模型边界、资源生命周期与内存、
+迁移/schema/R2/隐私、Web 与 Android 行为差异。**仍然只读，不改代码。**
+
+### 13.1 迁移与 schema（A 组）
+
+- **M-A-1（中）`migrations/0002_ledger_member.sql:13` 不可重入** —— 裸 `ALTER TABLE family_ledger ADD COLUMN member TEXT;`，SQLite 没有 `ADD COLUMN IF NOT EXISTS`，而 `README.md:173` 写着「编号递增，必须幂等」，0003–0006 都用了 `IF NOT EXISTS`，只有它破例。重复执行（新环境 / `d1_migrations` 记录丢失 / 有人先手工建过表）会在写迁移记录前中断，`0003`–`0006` 全部不执行，之后每次 `db:migrate:remote` 都死在同一行。建议加 `scripts/db-migrate.mjs` 先查 `PRAGMA table_info` 再决定是否跑 0002。
+- **M-A-2（低）`migrations/.changelog-sync.sql`（86KB / 81 条 INSERT）躺在 migration 目录里** —— 只因为 wrangler 的 `getD1MigrationFiles` 用 `Minimatch(pattern, { dot: false })` 才没被 `d1 migrations apply` 当成迁移。任何 `migrations/*.sql` 通配批量执行都会误跑。建议挪到 `scripts/sql/changelog-sync.sql`。
+- **M-A-3（中）管理员加分被算进「今日完成数」—— 已核实成立** —— `functions/api/admin/index.ts:40-41` 写入 `task_id='admin_adjust'` 与 `garden:admin_adjust`，但 `functions/_lib/rules.ts:202-206` 的 `COMPLETION_EXCLUDED_IDS` 只有 `seed_welcome_bonus / daily_min_tasks_penalty / sleep_penalty`；`DAY_COMPLETION_SQL`（`rules.ts:251-258`）`COUNT(DISTINCT task_id)` 会把管理员加分算成 1 个完成任务 → 抵消当天的 `daily_min_tasks_penalty` 罚款，也让提醒 Worker 少报「还差 N 个任务」。修法：把两个 ADMIN_* id 加进 `COMPLETION_EXCLUDED_IDS`（该数组是唯一真源）。
+- **M-A-4（中低）`migrations/0001_init.sql:34` 唯一索引 `(week_label, task_name)` 不含 subject** —— 配 `functions/api/plans/index.ts:49` 的 `INSERT OR IGNORE`：同一周两个科目下都有同名任务（如「读书」）时第二条被静默丢弃、接口仍回成功，前端周计划缺项且无提示（与 §8 B-7 同源，这里补充「无任何错误提示」）。修法：唯一键改 `(week_label, subject, task_name)` 或换 `ON CONFLICT DO UPDATE`。
+- **M-A-5（低）`functions/api/ledger/summary.ts:24-28` 的 `status IS NULL` 是死分支** —— `migrations/0001_init.sql:14` 是 `status TEXT NOT NULL DEFAULT 'approved'`。要么线上老库真可空（那这类脏行会静默计入余额），要么只是噪音。建议核对线上 `PRAGMA table_info` 后二选一。
+- **M-A-6（低）`push_subscriptions.audience` 无 CHECK 约束** —— `migrations/0005_push_subscriptions.sql` 只是 `TEXT NOT NULL DEFAULT 'child'`，`functions/api/push/subscribe.ts:33-46` 只校验 keys 不校验取值；写错大小写（`Parent`）的订阅永远匹配不到，前端仍显示「订阅成功」。
+- 正面：迁移建的表/列/索引与 `functions/` 实际读写**逐项对得上**（member、weekly_plans.subject、ua、read_at/dedupe_key、sort_order 都有真实读写），除 0002 外无 DROP/RENAME 类破坏性变更。
+
+### 13.2 R2 图片对象（B 组）
+
+- **M-B-1（中）`functions/api/images/[[key]].ts:13-15` 无 key 前缀白名单** —— `bucket.get(key)` 不看前缀，`/api/images/*` 等于整个桶的公开只读网关；以后任何往这个桶写东西的路径（`wrangler r2 object put`、别的 Worker、备份脚本）都会在 `sn.starrymiku.com` 同源可读。
+- **M-B-2（中）`images/[[key]].ts:20-27` Content-Type 由对象元数据决定且无 `nosniff`** —— `writeHttpMetadata` 原样回显上传时的 contentType，响应里没有 `X-Content-Type-Options: nosniff`。能写桶的路径写入 `text/html` 就等于在本站同源执行脚本；该源 localStorage 里有家长口令摘要、角色、余额，API 又全部无鉴权。建议 Content-Type 白名单 + nosniff + `Content-Disposition: inline`。
+- **M-B-3（中高）`functions/api/upload.ts:71-75` 无任何配额** —— key 是 `tasks/${Date.now()}-${uuid8}.${ext}`，猜不到，但没有频率/总量/单账号限制：任何人可无限 POST 5MB 图片，R2 存储与出网流量直接进账单，也能把桶塞到孤儿清理处理不过来的规模。建议 WAF rate limit + 按日上传计数。
+- **M-B-4（高）`functions/api/ledger/index.ts:233` `image_url` 零校验 —— 可删任意 R2 对象** —— `typeof image_url === 'string' ? image_url : null`，长度都不限。危害两层：(a) 可存任意外链，前端 `<img>` 直载 → 第三方追踪像素；(b) `functions/api/ledger/[id].ts` 删除时用 `image_url` 反推 R2 key，只要把 `image_url` 写成 `https://<本站>/api/images/tasks/<别人的照片>` 再删掉这条流水，就能删掉那个对象——包括 `settings.background` 指向的全局背景（`[id].ts` 对 background 没有任何保护）。建议入库前校验 `new URL()` 成功 + `pathname` 前缀 `/api/images/tasks/` + 长度 ≤ 400。
+- **M-B-5（中低）`ledger/[id].ts:122-132` 先删图再删库且吞 R2 错误** —— D1 删除失败时图片已不可恢复、流水留 404 图；R2 删除失败只留孤儿，现场无日志。建议先删 D1（或先把 `image_url` 置 NULL）再删对象，`catch` 至少 `console.warn`。
+- **M-B-6（中）`maintenance/orphans.ts:111-127` 引用判定只认两个字段** —— 只收集 `family_ledger.image_url` + `readBackground`；`extractImageKey` 在 `orphans.ts:51-61` 与 `ledger/[id].ts:19-29` 各写一份。新增图片字段忘了登记 → 6h 后被当孤儿真删；两份实现漂移则「删除流水删得掉、清理删不掉」。建议收敛 `REFERENCE_SOURCES` 常量 + `_lib/` 只留一份。
+- **M-B-7（中）`maintenance/orphans.ts:168-173` GET 无闸门吐 200 个 key** —— 只读扫描接口公开返回 `keys`，而 6h grace 内的孤儿多是自己刚上传、流水还没写进去的照片；配合 `/api/images/:key` 可逐张查看。
+
+### 13.3 数据安全与隐私（C 组）
+
+- **M-C-1（高）`functions/_lib/settings.ts:174` `DEFAULT_ADMIN_PASSWORD = '3398377037'` 是最终回退值** —— `readAdminPassword` 在 settings 表没有 `admin_password` 时回退到它，`admin/index.ts:154` 明文比较。线上若从没改过（很可能，因为默认值能用），任何人读公开仓库就知道口令，可改余额、审批、跑自检（自检能写库、发真通知）。这 10 位数字还与 `wrangler.jsonc` 里 `REMINDER_URL` 的子域一致。建议删回退值（无口令一律 503）+ 口令走 `ADMIN_PASSWORD` secret。
+- **M-C-2（中）`settings.ts:171` 管理员口令明文存在与「公开称呼」同一张表** —— `admin_password` 与 `mom_call` / `background` 同居 `settings`，无可见性分区；一次 `d1 export` 或备份就把口令带走。建议单独表或存 hash+salt。
+- **M-C-3（中）`workers/reminder/src/index.ts:139` `/trigger` 接受 `?token=`** —— 令牌会进 Cloudflare 访问日志、浏览器历史、Referer。建议只收 `Authorization: Bearer`。
+- **M-C-4（中）`workers/reminder/src/index.ts:23-25` cron 把整个 `RunResult` 打进 console.log** —— 含 `sendDetail`（上游推送服务响应原文），而 ntfy 的 topic 本身就是访问凭证，上游错误体常回显它。建议只打 `sent/skipped/sendStatus/sendChannel`。
+- **M-C-5（低）`functions/api/push/test.ts:135`、`workers/reminder/src/channels.ts:166` 上游响应体 300 字回客户端** —— 内部地址 / token 可能被前端拿到（自检面板还会展示并可复制）。建议只回状态码 + 归类原因。
+- **M-C-6（中）`app/lib/core/pin_guard.dart` 4 位数字 + 固定 salt（`sekainook-pin:`）+ 纯客户端门禁** —— 1 万次哈希即可反查；改 localStorage 里的 `sha256:...` 或 `sekainook_role` 就能直接进家长模式；Web 侧在非安全上下文还会降级写 `plain:<明文>`。注：这是纯本地防误触设计，不算漏洞，但「家长模式」被当成隐私边界时它不成立。
+- **M-C-7（低）Web localStorage 缓存了比展示必需更多的东西** —— `sekainook_bg_cache_v1`、`sekainook_garden_state`（余额/兑换/待同步 ops）、`sekainook_family_names`；不含口令，但含家庭消费与作息，同源脚本可一把读走，设备借用/丢弃时也不会随「登出」清掉。
+- **M-C-8（高）图片 URL 即公开相册** —— `GET /api/ledger` 无鉴权返回全部 `image_url`（含孩子照片），`GET /api/maintenance/orphans` 再补 200 个 key，`/api/images/*` 无签名、`ACAO: *`、`Cache-Control: public, max-age=31536000, immutable`。等于「知道 URL 就能看」这层保护不存在；`ACAO: *` 让任意网站跨站 fetch 走流水 JSON；长期公开缓存意味着删了记录也删不掉 CDN/浏览器副本。建议图片改私有 + 短期签名，缓存降 `private, max-age=0, must-revalidate`，ACAO 收成站点白名单。
+- **M-C-9（低）`workers/reminder/src/reminder.ts:147,213` 通知正文进日志** ——「今天还差 N 个任务」落到 Cloudflare 日志（保留期不可控、不可删）。
+- 正面：错误响应体一律中文短句、**不含 SQL / 堆栈 / D1 错误原文**；`functions/` 内无 `console.log`；`workers/reminder/.dev.vars` 已被 `.gitignore:14` 忽略；`GET /api/settings` 只返回 `names/background`，没有泄 `admin_password`。
+
+### 13.4 数据模型与序列化边界（D 组）
+
+整体判断：**这是仓库里做得最用心的一层** —— `_toSnapshot`/`_toSummary`/`_toSettleResult` 都有整体形状校验，
+`app_update`/`changelog` 是「字段不全就当没读到」的正确姿势，camelCase 契约与后端逐一对过**没有漂移**。
+问题集中在「**记录级解析没有隔离**」+「三类兜底在掩盖故障」：缺失→0、坏时间→现在、未知枚举→默认值。
+下面 10 条中等全出自这一族。
+
+- **D-1（中）`app/lib/data/api/ledger_api.dart:237` `_parseRecords` 没有逐条 try/catch** —— 只挡了 `item is Map<String, dynamic>` 就直接 `LedgerRecord.fromJson`，而 `app/lib/data/models/ledger_record.dart:65,69,71,72` 有 4 处 unchecked cast（id/task_name 的 `as String`、amount 的 `as num?`、note/image_url 的 `as String?`）。一条字段类型不对的记录抛 TypeError → 整批解析失败 → `app/lib/state/family_state.dart:182-188` catch rethrow → 账本页停在旧数据并持续报错。SQLite 的 INTEGER 列可能存进文本（脏数据/手改库），不是纯理论。建议逐条 try/catch 跳过并计数 + `_asString/_asNum` 宽松 helper。
+- **D-2（中）`ledger_record.dart:70`（同型 `notification_record.dart:71`）`createdAt: parseTime(...) ?? DateTime.now()`** —— 解析失败静默变成「现在」，于是 `app/lib/core/task_rules.dart:31,47` 的当日提交计数把脏记录算进今天 → 该任务当天直接置灰；`app/lib/core/day_completion.dart:65-66` 当日完成数虚高。建议保留 null 或纪元时间并显式标记，**绝不用 `DateTime.now()` 兜**。
+- **D-3（中）`ledger_record.dart:14-20,89` 未知状态被当成已入账** —— `LedgerStatusX.parse` 对未知非空值返回 null，而 `isCredited => status == null || approved` 把 null 当已入账。后端将来加 `expired/void/cancelled` 时，前端会把它计入 `calcApprovedBalance` 和 CSV，与服务端 `functions/api/ledger/summary.ts:28` 的口径相反且无任何信号。建议区分「字段缺失」与「未知非空值」。
+- **D-4（中）`app/lib/data/models/task_config.dart:11-12` `TaskType.parse` 未知值一律 earning** —— `value == 'spending' ? spending : earning`。未知 type 的流水进「赚钱」分支（`task_rules.dart:18` 要求拍照、`day_completion.dart:62` 计入完成数），而 `signedAmount`（`ledger_record.dart:101`）按 amount 符号显示，可能相反（显示 -50 但计入完成数）。建议加 `TaskType.unknown`。
+- **D-5（中）客户端有两套时区口径** —— `ledger_record.dart:78-86` + `task_rules.dart:55-56` 用**设备本地日历日**判「今天已打卡」，而服务端日限/罚款全部硬编码东八区（`functions/_lib/rules.ts:337-353`），同一客户端里 `day_completion.dart:51-57` 又按东八区算。设备/浏览器不在 UTC+8 时，东八区 00:00–08:00 区间的记录会被算到前一天 → 「客户端说还能打、服务端说超限」。中国境内不触发，属跨时区/旅行才暴露的潜伏 bug。建议客户端统一 `WeekUtil.beijingDayKey`。
+- **D-6（中）`app/lib/state/custom_tasks_state.dart:122` + `custom_task.dart:105,107` 坏存档能崩启动** —— `_restore()` 里 `map(CustomTask.fromStored).whereType<...>()` 无 try/catch，而 `fromStored` 的 `raw['createdBy'] as String?` / `raw['kind'] as String?` 是 unchecked cast（同函数其余字段都用 `is` 检查）。一条 `createdBy: 1` 就让整个自定义任务列表加载失败，而 `_restore` 在构造期调用。建议 `is String` 检查 + 整批 try/catch（`local_notify_state.dart:475-493` 已有正确范式）。
+- **D-7（中）`ledger_record.dart:69` `amount` 缺失静默 0** —— `(json['amount'] as num?)?.toInt() ?? 0`，坏字段显示 `+0` 且仍算已入账 → 余额静默偏差。建议缺失即丢弃该条或整体报错。
+- **D-8（中）花园 id 两套清单已漂移** —— 前端 `app/lib/core/ledger_ids.dart:19-24` 用精确相等比 `gardenLegacyTaskId`，后端 `functions/_lib/rules.ts:305,312-314` 的 `GARDEN_LIKE_CLAUSE` 是 `LIKE 'garden_legacy%'` 前缀匹配。任何 `garden_legacy*` 变体会被服务端算进阳光、被前端算进家庭积分 → 两个余额对不上。建议两侧统一 + 加跨语言一致性断言。
+- **D-9（中）`app/lib/data/api/notification_api.dart:28` + `notification_record.dart:110` 形状不检查就窄化** —— `fromJson` 形参是 `Map<String,dynamic>`，调用处传的是 `getJson<dynamic>` 的 dynamic。服务端返回数组（老版本 `/api/notifications` 直接回 `[]`）时抛 TypeError 而不是 ApiException，`notification_state.dart:77-82` 只能兜成「通知加载失败」、`ready` 语义丢失。建议形参改 dynamic。
+- **D-10（中）`app/lib/data/api/upload_api.dart:43-44` 空 url 能穿过 null 检查** —— `url: (raw?['url'] ?? '') as String`，上传接口「200 但缺 url」被当成功 → `kid_home_page.dart:2064` 只判 `imageUrl == null`，空串一路写进账本 `image_url: ''`（服务端 `typeof === 'string'` 照收），「要拍照」的打卡以一张破图通过。建议空串/非字符串抛 ApiException。
+- D-11（轻微）`task_config.dart:84-95/123-132`：`requirePhoto`（L82）既不在 fromJson 也不在 toJson，JSON 往返一次就丢「不需要拍照」设置。当前全仓无调用点（休眠缺陷），建议补齐或删方法。
+- D-12（轻微）`ledger_api.dart:76-83,243-258`：`fetchSnapshot` 把 500/超时/字段漂移全吞成 null 静默回退三请求 → 后端一改字段就永久走 3 倍请求旧路径且零日志。建议区分 404（老部署，静默）与格式不对（记日志）。
+- D-13（轻微）`ledger_api.dart:152,180`：`LedgerWriteResult.fromJson(raw ?? const {})` 兜底空 id，`autoApprove && result.id.isNotEmpty` 才审批 → 记账返回空体时跳过审批仍当成功。建议空 id 抛错。
+- D-14（轻微）`ledger_record.dart:121-131`：`toJson` 不含 `member` 却带服务端忽略的 id/status/created_at（当前无调用点）。
+- D-15（轻微）时间解析重复三份（`ledger_record.dart:78-86`、`notification_record.dart:75-79`、`admin_api.dart:57`，另 `weekly_plan.dart:36`）且数字分支硬编码毫秒（秒级时间戳会被当成 1970）。建议抽 `parseWireTime`。
+- D-16（轻微）`notification_record.dart:9-10`：`NotifyAudience.parse` 未知值一律 parent → 后端新增 audience 时通知静默落进家长信箱。
+- D-17（轻微）`weekly_plan.dart:34` vs `functions/api/plans/index.ts:55`：前端 `.round()`、后端 `Number(item.target)` 允许小数，两个客户端可能看到不同分母；`created_at` 是全批唯一硬 cast。
+- D-18（轻微）`app_update.dart:57,76` + `apk_installer_io.dart:32`：sha256 只校验 `length == 64` 不验字符集；`fileName => 'SekaiNook-$versionName.apk'` 不做字符清洗，`versionName` 含 `/` 或 `..` 会写出缓存目录（清单在 R2，能写桶就能构造文件名）。**待验证**。
+- D-19（轻微）`local_reminder.dart:309-310,324,328-329`：slot clamp 1..99 + 时间越界静默默认 21:30；两条同 slot 提醒映射到同一 notificationId（`2100 + slot*10`）→ 后注册覆盖前一条。
+- D-20（轻微）`maintenance_api.dart:70,80`：空响应体返回 `{total:0, orphans:0, keys:[]}` 把「接口没返回内容」伪装成「没有问题」。
+
+**最该先做的两件**：给 `_parseRecords` 加逐条 try/catch；禁止用 `DateTime.now()` 兜时间戳。
+
+### 13.5 资源生命周期与内存（L 组）
+
+单个页面的资源纪律**相当好**：定时器、控制器、Observer、键盘处理器几乎都成对，`mounted` 守卫写得比一般项目密
+（逐处核对清单见本节末）。真正的问题全在**跨组件的所有权边界**上。
+
+- **L-1（高）8 个 store 在 `DynamicColorBuilder.builder` 里构造，而 builder 会二次执行 —— 这是 §2 S-1 的完整机制** —— `app/lib/main.dart:58-80` 的 8 个 store 全在 builder 闭包内；`dynamic_color` 1.8.1 的 `DynamicColorBuilderState.initPlatformState()` 拿到 palette/accent 后会 `setState`（`dynamic_color_builder.dart:70-73 / 92-101`）→ builder 再跑一遍 → 造出**第二套 store**，`SekaiNookApp` 因同类型同位置被原地更新 → `app.dart:67` 的 `late final _router`、`:77-82` 的 `addListener`、`:110-128` 的 `_bootstrap` 仍绑第一套，Provider（`app.dart:134-141`）却用 `.value` 暴露第二套。后果：① 第一套被 router 里的 listener 永久钉住 → 泄漏整套 store（含 GardenState 全量存档）；② 第二套永不 bootstrap → `loadBackground()`（全仓唯一调用点 `app.dart:111`）不跑，settings、本地提醒、更新检查全部不跑；③ `_onFamilyChanged` 挂在第一套上，其 `records` 恒空 → `localNotify.syncFromRecords(...)` 永不触发 → **本地提醒不再随账本重排**。**Android 12+ 且系统下发 palette/accent 时，每次冷启动必现**（真机待验证：在 `_bootstrap` 打印 `identityHashCode(widget.family)`，看是否有一段 store 从未被 bootstrap）。修法：把 8 个 store 提到 `main()` 里、`runApp` 之前构造，`DynamicColorBuilder` 只负责把 seed 传给 `SekaiNookApp`。
+- **L-2（高）全屏背景图按原图分辨率常驻** —— `app/lib/ui/widgets/app_background.dart:30-51` 的 `Image.network` 没有 `cacheWidth/cacheHeight`；它挂在 `app.dart:199-203` 的 `MaterialApp.builder` 上，**所有页面常驻**，且 `AnimatedSwitcher` + `key: ValueKey(url)`（`:27`/`:58-63`）在换背景的淡出期新旧两张同时驻留。上传路径已压到长边 1600（≈7.7MB 可接受），但 `app/lib/ui/pages/settings/settings_page.dart:1383-1388` 的「图片地址」输入框允许手填任意 URL，贴一张 4000×3000 就是 ≈48MB 常驻 + 切换瞬间翻倍 → 低端机 OOM。修法：`cacheWidth: (MediaQuery.sizeOf(context).width * MediaQuery.devicePixelRatioOf(context)).round()`。
+- **L-3（中高）每进一次设置页/周计划页泄漏一个 Dio 与连接池** —— `settings_page.dart:89` 与 `weekly_plan_page.dart:52` 把 `final ApiClient _client = ApiClient()` 写在 `State` 字段里；而 `app/lib/core/api_client.dart` 只有 `final Dio _dio`，**整类没有 `close()`/`dispose()`**（`main.dart:52` 明明已有共享 client）。修法：Provider 注入共享 client + 给 `ApiClient` 补 `close()`。
+- **L-4（中）`router.dart:26-29` 的 `ValueNotifier role` 永不 dispose**，且 `createRouter` 每次调用都在 `FamilyState` 上再加一个 listener（注释说「与 router 同生命周期」，但 router 被换掉时没有拆）。
+- **L-5（中）`local_notify_state.dart:103` 的 `bindTapHandler` 只有 setter、没有 unbind** —— 全局 store 永久持有 App 层闭包（捕获 `_router`，进而钉住整个 Provider 图）；store 换代后点通知会跳到已废弃 router。
+- **L-6（中）`garden_state.dart:391` / `:667-674` 的 static 闸与丢弃的 Timer 句柄** —— `static bool _syncLoopReady` + `Timer.periodic(...)` 句柄不保存、全仓无 cancel；`_appVisible` 却是实例字段，闭包绑的是第一个调 `_ensureSyncLoop()` 的实例 → 换代后 30 秒兜底补发驱动的是被弃用的实例。好在下限有保证：每次变更都立即 `flushPending()`，所以**不会丢待发操作**，只是断了定时兜底。
+- **L-7（中）`fl_ui/context_menu.dart:145` 全局按键处理器只在 KeyUp 时摘** —— `_handleHold()` 里 `FocusManager.instance.addEarlyKeyEventHandler(swallow)`，`swallow` 只在收到 `KeyUpEvent` 时移除；`dispose()`（`:55-60`）与 `_closeUnlessEnabled()`（`:64-71`）都不摘。长按触发菜单后不按键、直接点别处关掉 → **全局 handler 永久残留，吞掉该键后续事件**；反复长按可累积多个。
+- L-8（低）`app/lib/core/app_error.dart:10-12`：顶层 `VoidCallback? _reloadHandler` 存的是 `_SekaiNookAppState._handleReload`，全仓唯一「全局变量持有 State」，换代后旧 State 不回收。
+- L-9（低）`kid_home_page.dart:2209-2214`、`family_dashboard_page.dart:2414-2419`：`Image.memory` 预览显示高只有 160，却按原图解码（≈7.7MB / 张）；同文件 `:2744-2751` 的缩略图已经做了 `cacheWidth: 144`，这两处是遗漏。
+- L-10（低）`family_dashboard_page.dart:2730-2738`：点缩略图放大的 `Image.network` 全尺寸解码且关闭后不 `evict`（全仓 `evict()` 0 处），连看十几张就把 100MB 的 `ImageCache` 顶满，把常驻背景图挤出去重下。
+- L-11（低）`kid_home_page.dart:227-231`：`static final UploadApi _uploadApi = UploadApi(ApiClient())` 把 Dio/HttpClient 钉到 isolate 结束、热重载也不换，且与 `main.dart` 的共享 client 重复。
+- L-12（低）`app/lib/ui/widgets/motion/skeleton.dart:24-27`：`AnimationController..repeat()` 无条件启动，而 `build` 在「减少动态效果」开启时直接 `return widget.child`（`:37`）→ 控制器仍每帧空转（不是泄漏，是能耗/掉帧源）。
+- L-13（低，待验证）`selftest_panel.dart:992-998`：`controller: controller ?? TextEditingController(text: …)` 在 `build` 里兜底新建控制器且从不 dispose（正确路径 `:74` / `:100-101` / `:142-149` 都成对）；是否可达取决于 manifest 参数类型是否都在 `_seed` 里预建。
+- L-14（极低）`fl_ui/list_row_separator.dart:370-381`：`addPersistentFrameCallback(_check)` 注册后永不移除（`_rows` 空时立即 return，成本 ≈0）。
+
+**已逐处核对、确认无问题**：Timer 全部有 cancel 且回调有 `mounted` 守卫（`live_clock`、`parent_home_page`、`weekly_plan_page`、`main_shell`、`family_dashboard_page`、`kid_home_page`、`settings_page`、`fl_ui/scroll`、`fl_ui/popup`、`fl_ui/context_menu`、`elastic_press`）；控制器成对释放（`settings_page` 16 个字段、dashboard 三个弹窗、`reminder_editor_sheet`、`role_gate_page`、`parent_home_page`、`kid_home_page`、`garden_page`、`fl_ui/scaffold`、`fl_ui/popup`、`animated_entries`、`keyed_animated_list`、`snap_sheet`）；5 处 `WidgetsBindingObserver` 均成对；全仓 `StreamSubscription` / `Stream.listen` 0 处、`precacheImage` / `imageCache.*` / `evict()` 0 处。
+
+**整体判断**：单页资源纪律好，风险全在跨组件所有权边界。修掉 L-1（store 提到 `runApp` 之前）与 L-4/L-5（给 router / localNotify 补 dispose 路径）即可消掉本轮绝大多数实质问题。
+
+
+
+
+
+### 13.6 Web 构建产物与部署（Lead 实测）
+
+- **`flutter build web --release` 产物 43MB**：`canvaskit/` 占 37MB（`canvaskit.wasm` 7.0MB、`chromium/` 6.5MB、`skwasm_heavy.wasm` 5.0MB、`webparagraph/` 4.6MB、`skwasm.wasm` 3.5MB、`wimp.wasm` 3.5MB，外加各自的 `.js`/`.symbols`），`main.dart.js` 5.06MB（**gzip 后 1.46MB**）。这是 Flutter Web 引擎的多渲染器目录，不是应用代码可裁的；用户实际只会按引擎选择下载其中一套。结论：**不建议为此做拆包/延迟加载改造**（收益 < 破坏风险），但要知道「网页版首屏约 2MB 下载、首次访问 43MB 部署体」这个量级。
+- **`app/web/_headers` 的文件本身没问题**：7 条规则（`/index.html`、`/flutter_bootstrap.js`、`/main.dart.js`、`/version.json`、`/manifest.json`、`/sw.js` 全部 `no-cache`，`/favicon.png` 一小时），且 `app/web/_headers` 与 `app/build/web/_headers` **逐字节相同** → 部署时确实传上去了。所以 §R-4 的「为什么没生效」不是「文件没拷进产物」，而是 Pages 的 `_headers` 匹配/缓存行为，需要按 §11 待实测第 6 条实测确认。
+- **确认无 `_routes.json`**（§R-3 成立）：`app/web/` 下没有该文件，`app/build/web/` 也没有。Cloudflare Pages 在缺省时所有请求都会经过 Functions，静态资源也跑一次函数调用。
+- `version.json` 由构建生成（当前是 `{"version":"2.7.0","build_number":"35"}`），`flutter_bootstrap.js` 拿它拼 `main.dart.js?v=<version>-<build>`，绕过 4 小时缓存 —— 机制本身是对的，前提是 `version.json` 的 `no-cache` 真的生效。
+
+### 13.7 跨端差异、无障碍、崩溃可见性、国际化（W 组）
+
+**真正会被家里人撞上的四处**：Web 推送是一条自指死路、客户端与服务端两套时区口径、字号滑杆对 394 处硬编码字号无效、线上崩溃只有 `debugPrint` 不落盘也不上报。
+
+**A. Web 与 Android 的行为差异**
+
+- **W-1（高）Web 端「手机提醒」卡片是自指死路** —— `app/lib/ui/pages/settings/push_section.dart:328-335` 让人「在手机上打开 `${AppConstants.apiBase}`，进设置 → 手机提醒」，可 `apiBase` 就是 Flutter 版自己，而 Web 上那一页只有一句说明（`push_section.dart:203-213`），没有任何开关；`app/web/sw.js` 是退役脚本（activate 里 `unregister()` + 清缓存），lib 里也没有 `pushManager.subscribe` / `Notification.requestPermission`。结果：Web 端无法新建订阅，旧 React 版留下的订阅随 SW 注销一起失效，用户被指进死路。建议：要么真实现订阅，要么明写「网页版暂不支持推送，请在 App 里开」+ App 下载入口。
+- **W-2（高）打卡时间窗用设备本地钟，服务端用北京钟** —— `app/lib/core/task_rules.dart:61-67` / `app/lib/data/models/task_config.dart:44-47` 用 `DateTime.now().hour*60+minute`，服务端 `functions/_lib/rules.ts:356-366` 用 `beijingClock(now)` 复核 → 非东八区用户（出国/出差/改时区）客户端放行、服务端拒绝（或反之），报错还说「不在打卡时间」。建议客户端统一 `WeekUtil.beijingNow()`（`app/lib/core/week.dart:35-38` 已有）。
+- **W-3（高）日限按设备本地日重置，结算按北京日** —— `task_rules.dart:53-56` 与 `app/lib/core/day_completion.dart:49-57` 两套日界 → 跨时区用户在本地午夜 0:00 后日限重置，服务端仍是同一天，可重复打卡。
+- **W-4（中）`app/lib/core/week.dart:8-26` 的 `isoWeekLabel` 用本地时区推 ISO 周**，而注释 `:4-5` 要求与后端北京时间一致 → 非东八区用户周日晚/周一凌晨看到隔壁一周的计划。
+- **W-5（中）深链在 role 未就绪时被丢弃** —— `app/lib/router.dart:31,33-42` 首次 redirect 时 `family.role` 很可能还是 null，直接返回 `/role` 且**丢掉原目标路径** → Web 上把 `/#/garden` 收藏/分享出去，打开落首页（中间闪一帧角色页）。时序待验证；修法：`state.matchedLocation` 记下目标，role 到位后跳回。
+- **W-6（中）裸路径 404** —— `app/web/` 无 `_redirects`，且全仓无 `usePathUrlStrategy`（默认 hash 路由）→ `sn.starrymiku.com/family` 直接 404，只有 `/#/family` 可用；家里人互发链接很容易发出 404 的裸路径。
+- **W-7（中）Web 上「检查更新」整块消失且无说明** —— `app/lib/state/update_state.dart:76`、`update_dialog.dart:252,305`、`settings_page.dart:948-950` 在 `supported == false` 时都 `return SizedBox.shrink()`，设置页仍显示「当前版本 vX.Y.Z」却没有任何更新语义。建议换成「网页版每次刷新自动取最新；发现新版本点这里刷新」+ `version.json` 轮询。
+- **W-8（中，待验证）`main_shell.dart:150-160,171-178` 的自定义 `_backStack` 与浏览器后退两套账** —— `PopScope(canPop:false)` 拦系统返回，Web 上浏览器后退走 popstate→popRoute，栈空时的 `SystemNavigator.pop()` 在 Web 是 no-op。
+- **W-9（中）`app/web/index.html:2` 没有 `<meta name="viewport">`**（线上已 `curl` 核对，与仓库一致）—— 手机浏览器可能按 980px 布局视口排版再整体缩小。建议补 `width=device-width, initial-scale=1.0`（别加 `user-scalable=no`）。
+- **W-10（低）`app/web/manifest.json` 的 `"orientation": "portrait-primary"`** 把主屏应用锁死竖屏。
+- **W-11（低）`app/lib/fl_ui/drag_back.dart:252` 用 `defaultTargetPlatform` 判桌面**，Web 上它返回宿主 OS 而非「Web」→ 桌面浏览器里手势走 pan-slop 分支。
+
+**B. 无障碍与键盘可达性**
+
+- **W-12（高）字号滑杆基本无效** —— `app/lib/theme/app_theme.dart:514-522` 只做 `textTheme.apply(fontSizeFactor:)`，而 `lib/ui` 里 `fontSize:` 字面量 **394 处**、`textTheme.`/`AppTextStyle.` 只有 13 处 → 用户拖到 140% 看到的还是 12/14/16 的硬编码字。建议把 `AppFontSize.*` 改成走主题派生；短期至少说明「仅影响部分文字」。
+- **W-13（中）`app/lib/ui/widgets/app_toast.dart:87-91` 的「撤销」按钮**是 `GestureDetector` 包 19dp 文本，无 Semantics、不可 Tab 聚焦 → 键鼠/读屏用户点不到，误删救不回来。
+- **W-14（中）`app/lib/core/app_error.dart:100-114` 崩溃页的「重新加载」**同样是 `GestureDetector`（约 38dp、无 Semantics/不可聚焦）—— 恰恰在最需要自救的页面上。
+- **W-15（中）`settings_page.dart:1442-1512` 主题/色板 tile** 由 `PressScale`/`GestureDetector` 承接点击，无 `Semantics(selected:)`、无 Focus 节点 → Tab 走不到、读屏不报「已选中」。
+- **W-16（中）无语言声明** —— `index.html` 缺 `<html lang="zh-CN">`、`manifest.json` 缺 `"lang"`，`app/lib/app.dart:181` 又固定 `Locale('zh','CN')`（只影响 Flutter 内部文案）→ 英文系统下读屏会乱读。
+- **W-17（中）页面转场不尊重「减少动态效果」** —— `app/lib/theme/motion.dart:164-197` 与 `app/lib/ui/widgets/motion/switcher.dart` 没查 `MediaQuery.disableAnimations`（其余动效组件 `celebrate`/`enter_box`/`animated_count`/`animated_progress`/`skeleton`/`press_scale` 都查了）。
+- W-18（中低）`app/lib/ui/widgets/task_row.dart:110-120`：整行可点但无 `Semantics(label/hint)` 说明「点一下打卡」。
+- W-19（低）`app/lib/ui/shell/app_top_bar.dart:314`：图标按钮 32dp 低于 48dp 建议（语义齐全，外扩透明热区即可）。
+- W-20（低）`settings_page.dart:1266-1271,1297`：两个 Slider 缺 `semanticFormatterCallback`，读屏把字号念成「1.0」。
+- W-21（低）`app/lib/theme/app_theme.dart:61-64`：textTertiary 在页面底只到 4.0:1，而 `AppFontSize.xs = 12` 大量直接用它 → 12px 小字不达 AA 的 4.5:1。
+
+**C. 错误上报与崩溃可见性**
+
+- **W-22（高）线上异步异常被彻底吞掉** —— `app/lib/main.dart:40,44`：`PlatformDispatcher.instance.onError` 只 `debugPrint` 然后 `return true`，`FlutterError.onError` 只 `presentError + debugPrint`，**没有 `runZonedGuarded`**。
+- **W-23（高）没有任何崩溃上报与本地落盘** —— 全仓无 Sentry/Crashlytics，无 lastError/crashLog，`debugPrint(` 只有 3 处；唯一诊断出口是自检面板手点复制 JSON/Markdown（`selftest_panel.dart:360-374`）→ 家人报「打不开了」时开发者手上零信息。建议极简本地崩溃记录（prefs/文件环形 20 条：时间 + 异常 + 栈 + 版本 + 平台）+ 设置页「导出诊断」。
+- **W-24（中）`app/lib/core/app_error.dart:24-27` 把异常原文铺在用户可见卡片**（`:117-125`，xs + textTertiary）—— 既泄露实现细节又吓人，而开发者拿不到这份文本。建议只显示「出了点问题」，原文折进「复制错误详情」。
+- **W-25（中）兜底页只有「重新加载」一个动作**（`app_error.dart:100-114`，重载 = 整树重建重走初始化）→ 崩在初始化路径时进入「崩→重载→崩」循环。建议加「清缓存并重启」+ 连续崩溃计数降级。
+
+**D. 国际化与文案**
+
+- **W-26（中）`app.dart:181` 写死 `Locale('zh','CN')` + 无 l10n 基建**（无 arb / l10n 目录），但 `supportedLocales` 里有 `en`、没有任何英文文案 → `en` 是假承诺。
+- **W-27（中）`app/lib/core/day_completion.dart:87-96` 的 `ReminderText.allDone` 写死「5 个任务」「22:00」「扣 10 分」**，而同文件 `:100-109` 的 `reminderTextFor` 用 `FamilyRules` 动态拼 → 改了 `app/lib/config/family_rules.dart:86-92` 后一半提醒文案对不上（「规则改了但通知还在说旧规则」）。
+- **W-28（中）`push_section.dart:376` 的 `_localStatusText` 末支写死「已开启 · 每天 21:30」**（卡片描述 `:175-177` 同病）→ 用户把提醒改成别的时刻后状态行不变，会以为没生效。
+- W-29（低）`settings_page.dart:952-960`：正式设置页挂着「FlClash 试样间 / UI 组件预览（开发者用）」，建议 `kDebugMode` 或连点版本号隐藏。
+- W-30（低）金额无千分位（`parent_home_page.dart:130` 的 `toStringAsFixed(2)`）、日期三套口径混写（`time_text.dart:26-36` vs `push_section.dart:380-386`），全仓 `DateFormat`/`NumberFormat` 0 命中。建议统一走 `time_text.dart` 一个入口 + 金额加千分位。
+
+**整体**：工程质量不差（对比度有校准测试、条件导入干净、动效大多尊重减动画），缺的是「跨端一致」与「出事可追」两块 —— 前者是设计问题，后者是基建缺失。
+
 - 本文档本身是新增的未跟踪文件，等你看完再决定是否提交。
 - 上一轮修完的性能项（P0–P3）在 `docs/perf-audit-2026-10.md` 的 §10 有完整记录。
+
+---
+
+## 14. 实施记录：本轮「全修」做了什么（2026-10-25）
+
+> 用户看完本文档后说「全修」。下面按四批记录实际落地情况，**未做的逐条说明原因**，
+> 不留「看起来修了其实没修」的模糊地带。
+
+### 14.1 批 1：安全与不可逆（后端 + 发版脚本）
+
+| 项 | 落地内容 |
+|---|---|
+| M-C-1 / B-8 默认管理员口令 = 账号 ID | `functions/_lib/settings.ts` 删掉 `DEFAULT_ADMIN_PASSWORD`，口令改存 `sha256:salt+password`；旧明文键首次读取自动迁移；`verifyAdminPassword` 三态（未配置 503 / 错 401 / 锁 429）。env `ADMIN_PASSWORD` 只在**首次初始化**时使用 |
+| B-5 失败计数读改写非原子 | `registerAdminFailure` 改单条 `ON CONFLICT DO UPDATE SET value = CAST(value AS INTEGER)+1` |
+| M-B-4 `image_url` 可删任意 R2 对象 | 写入前用 `sanitizeBackground(image_url, request origin)`：只认 `/api/images/` 且 origin 一致；`[id].ts` 的 `extractImageKey` 强制 `tasks/` 前缀 + 无 `..`；删除前查引用（其他流水 + 全局背景图）；删除顺序改为**先删 D1 再删 R2** |
+| B-3 orphans 破坏性接口无闸 | GET 不再返回 key 列表（只回数量）；POST 先 `gateAdminPassword(body.password)` 再校验 `confirm === true` |
+| B-2 push/test 可群发 | 冷却改条件 upsert 原子占位（先占后再发），加 `HOURLY_LIMIT=10` 小时配额 |
+| B-4 upload 无保护无配额 | 保留「无鉴权但有限制」：类型白名单 + 魔数 + 5MB + `DAILY_UPLOAD_LIMIT=200`（按天原子自增） |
+| B-1 settle 可结算任意过去日期 | 收紧为「今天或昨天」，其余 400 |
+| B-7 plans 同名任务静默丢弃 | POST 重写为先查已有 `(subject, task_name)` 去重、只插新条目、全重复返回 200；新增 `migrations/0007_plans_unique_subject.sql`（唯一索引含 subject，可重入） |
+| M-A-3 管理员加分算进「今日完成数」 | `COMPLETION_EXCLUDED_IDS` 加 `admin_adjust` / `garden:admin_adjust` |
+| R-1 忘 bump versionCode 静默发布 | `publish_apk.ps1` 上传前 GET 线上 `latest.json`，`versionCode <= 线上` 直接 throw |
+| R-2 不比对证书指纹 | 固定 release 证书 SHA-256 写入脚本，`apksigner` 输出不一致即中止 |
+| R-6 / R-19 / R-20 前置检查 | key.properties / jks 检查挪到 build 前且不受 `-SkipBuild` 影响；`ANDROID_HOME` 未设明确报错；`-Changelog` 缺省兜底文案 |
+| M-B-1 / M-B-2 R2 越权与 MIME 注入 | `images/[[key]].ts` key 必须 `tasks/` 前缀、白名单 Content-Type、`X-Content-Type-Options: nosniff` |
+
+### 14.2 批 2：启动链与状态层
+
+- **S-1 / L-1（最灵异的一条）**：8 个 store 从 `DynamicColorBuilder.builder` 提到 `main()`、`runApp` 之前 —— 修「Android 12+ 换壁纸后造出第二套 store，router/启动链还绑着第一套」。
+- **S-2**：`garden_state` 的 `static _syncLoopReady` 改实例字段 + `Timer? _syncTimer` + `dispose()`。
+- **S-3**：`pending` 队列并入 `_saveState()` 同一 payload，删掉 `_savePending()`（读旧键自动迁移），两键非原子写消失。
+- **S-4**：`_bootstrap()` 里 `customTasks.ensurePresets()` 与 `garden.init()` 各包 try/catch。
+- **S-5**：`GardenState.refreshLedger` 加 `_refreshSeq` 守卫。**S-6**：`LocalNotifyState.rescheduleAll` 改串行队列（并发只跑最新一次）。
+- **S-7 / D-1**：`LedgerApi._parseRecords` 逐条 try/catch + 跳过坏 id；**D-2**：`createdAt` 解析失败用 epoch 而不是 `DateTime.now()`（不再把坏时间算进今天）。
+- **M 组 12 条**：update 下载重入守卫、approveMany 不再吞错（带失败 id）、pin verify 并发闸、api_client 只对超时/连接类重试 + 非网络异常透传、records getter 改 unmodifiable、notification refresh seq、`_nextSlot` 找空闲槽、`_nextStreak` 用传入日期、首帧读背景缓存、`todayProgress` 改一次聚合。
+- **L 组 12 条**：主题 setter 等值早退、图片按 EXIF 摆正（`bakeOrientation`）、模型宽松解析（garden/task_config/admin/upload）、`ErrorWidget` 换成通用文案、家庭写操作 `_guardWrite` 在途去重、`custom_tasks` 日界改东八区。
+- **F13 收尾**：`GoRouter` 的 `refreshListenable` 从整个 `FamilyState` 换成 `ValueNotifier<FamilyRole?>`（只在身份变化时重算路由），由 `app.dart` 持有并 dispose。
+
+### 14.3 批 3：页面层与跨端
+
+- **P-1**：自检面板造图 + PNG 编码丢进 `compute`，尺寸 1800×1200 → 900×600（Web 上 compute 退化为同步，所以尺寸也降）。
+- **P-2**：周计划加减改按计划 id 串行队列，连点不再后到的旧值覆盖先到的新值。
+- **P-3 / P-4 / P-5**：提醒测试/保存 `try/finally` 复位 `_busy`；「最近调整」失败保留旧列表并显示错误行；`settleLedgerOncePerDay` 调用点加 catch。
+- **Dio 复用**：`ApiClient.shared` 全局实例，`main.dart` 与 4 处页面 `ApiClient()` 全部改共享（原来每页新建 Dio/连接池）。
+- **P-8**：字号滑杆改 `previewTextScale`（只改内存）+ `onChangeEnd` 落盘，拖动期间零写盘。
+- **W-1**：推送卡片文案改成实话（React 下线后浏览器推送暂不可用，本机提醒才是现役通道）。
+- **P-11**：驳回/扣分等面向家长的文案把写死的「女儿」改成中性「孩子」。
+- **C-1**：`AndroidManifest.xml` 加 `android:allowBackup="false"` + `fullBackupContent="false"`（PIN 摘要、称呼、花园状态不再进 Android Auto Backup）。
+
+### 14.4 批 4：工程化与文档
+
+- **死代码**：从 `main.dart` + `test/` 做 import BFS，删掉 27 个不可达 `fl_ui/*.dart`（约 6 千行），顺带删掉只为死代码存在的 `super_sliver_list` 依赖。
+- **测试标签**：`app/dart_test.yaml` 定义 `live` 标签并默认 skip；`api_smoke_test` / `e2e_flow_test` / `garden_flow_test` 加 `@Tags(['live'])` —— 默认 `flutter test` 不再打生产后端（之前「偶发失败」的根因）。
+- **CI**：新增 `.github/workflows/ci.yml`（`npm ci` → `npm run build` → `flutter analyze --no-pub` → `flutter test --no-pub`）。
+- **R-3**：新增 `app/web/_routes.json`（`include: ["/api/*"]`），随 Flutter 产物部署，静态资源不再走一遍 Functions。
+- **R-9**：changelog 的 ETag 改成「版本 + 内容哈希」，同版本改文案不再永远 304。
+- **R-7 / R-8**：`changelog-sync.mjs` 校验日期真实存在（2026-02-30 过不了）+ 与 `app/pubspec.yaml` 的 version 三方比对。
+- **R-5 / R-24**：`package.json` 加 `engines: node >=22.6`；`npm run deploy`（会盖掉 Flutter 产物）改成直接报错的护栏，回滚专用命令改名 `deploy:legacy-react`。
+- **R-10~R-13 / R-17 / R-14 / R-21**：`project_rules.md`（技术栈、目录、`_routes.json` 约束）、`README.md`（`npm run web:deploy`）对齐；vite 删 `echarts-for-react`；`dynamic_color` 改 caret；`notification-options.html` 挪进 `docs/`。
+
+### 14.5 明确没做的（及原因）
+
+| 项 | 为什么不做 |
+|---|---|
+| **W-12 字号滑杆对 395 处 `fontSize:` 字面量无效** | 真修要统一改成 `AppTextStyle`/`textTheme` 派生，等于重排全库字号体系，风险和收益不成比例。改为在文档记成「已知限制」 |
+| **W-22 / W-23 崩溃上报** | 需要第三方服务或本地环形日志 + 导出 UI；本轮只做了 `ErrorWidget` 文案中性化。建议下一步单独做「本地崩溃环形日志 + 设置页导出」 |
+| **W-26 国际化** | 无 arb/l10n 基建，`supportedLocales` 里的 `en` 应该先删掉而不是补翻译 |
+| **R-26 / R-27 React 归档删除** | 保留回滚价值。建议：打 `react-legacy-2026-10` tag 后再从主干删 `src/` 与 8 个运行时依赖 |
+| **R-4 `_headers` 缓存未生效** | 已补 `_routes.json`，需**部署后实测** `curl -I /main.dart.js` 再决定是否改用构建期 hash |
+| **P-6 历史记录全量建 widget** | 要整页改 `CustomScrollView + SliverList`，会破坏 `AppCard` 视觉与转场；已加载量是 20×N，触发条件未到 |
+| **M-4 时钟回拨绕过锁** | 威胁模型是家里孩子，能改系统时间的场景可以直接清数据，收益低于成本 |
+| **R-16 freezed dev_dependencies** | `fl_ui/models.dart` 当前可达且用 `@freezed`，但补 `build_runner` 要拉一批依赖；生成文件已提交，暂不动 |
+| **批 3 剩余轻微项**（P-10 四份图标工具、P-12 删除提醒确认、P-13 硬编码宽度、P-14 两套弹窗、W-24/25/27/28/29/30） | 单点收益小，且 P-10/P-14 属于重构，留作后续维护时顺手做 |
+
+### 14.6 本轮验证
+
+- `flutter analyze --no-pub`：**96 issues**（删死代码后从 101 降下来），全部 info，唯一 warning 是既有 `lib/ui/icons/app_icons.dart:3:8 unused_import`，**无 error**。
+- `flutter test --no-pub`：**192 通过、3 跳过**（跳过的就是打生产后端的 3 个 live 用例）。
+- `npx tsc --noEmit`：EXIT 0。
+- 后端行为变更需部署后才生效；本轮发版为 **2.8.0+36**。
+
 
 
 

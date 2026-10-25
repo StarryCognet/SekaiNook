@@ -61,7 +61,7 @@ export default defineConfig({
           if (/\/node_modules\/(antd|@ant-design|rc-[^/]+|dayjs)\//.test(nm)) {
             return 'antd-vendor';
           }
-          if (/\/node_modules\/(echarts|echarts-for-react|zrender)\//.test(nm)) {
+          if (/\/node_modules\/(echarts|zrender)\//.test(nm)) {
             return 'echarts-vendor';
           }
           return;

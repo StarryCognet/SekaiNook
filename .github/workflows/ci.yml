@@ -1,0 +1,45 @@
+name: CI
+
+# 目标不是「全绿才算好」，而是「别把明显坏掉的东西推上去」：
+#   * 后端 Functions / React 旧版的类型错误
+#   * Flutter 的编译错误（analyze 的 info 不拦，warning 也不拦）
+#   * 单元测试回归（打真实后端的 live 用例在 dart_test.yaml 里默认跳过）
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      # wrangler types → tsc --noEmit → vite build，一次校验后端 Functions 与 React 旧版
+      - name: 后端与 React 构建
+        run: npm run build
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter 依赖
+        working-directory: app
+        run: flutter pub get
+
+      - name: 静态检查
+        working-directory: app
+        run: flutter analyze --no-pub
+
+      - name: 单元测试（跳过 live）
+        working-directory: app
+        run: flutter test --no-pub

@@ -1,3 +1,6 @@
+@Tags(<String>['live'])
+library;
+
 // 花园阳光链路端到端测试：本地状态 → pending 队列 → 真实后端 → 余额回读。
 //
 // 覆盖的是花园页真正调用的那一层（GardenState + LedgerApi），不是 mock。

@@ -7,7 +7,8 @@ alwaysApply: true
 
 ## 技术栈与架构
 
-- 前端：React 18 + Vite + TypeScript + antd / antd-mobile + zustand
+- 前端（过渡期保留，仅回滚用）：React 18 + Vite + TypeScript + antd + zustand
+- 前端（线上）：Flutter Web（`app/`）→ 仓库根 `npm run web:deploy`
 - 后端：**Cloudflare Pages Functions**（文件即路由）+ **D1**（SQLite）+ **R2**（对象存储）
 - 部署：**主域名 `sn.starrymiku.com` 现在跑 Flutter Web**（Pages 项目 `sekainook`）→ 仓库根 `npm run web:deploy`；该项目的 Git 自动构建已关，`git push` 不再触发部署（详见 `AGENTS.md` 的「网页端」）
 - 数据分层：
@@ -19,19 +20,28 @@ alwaysApply: true
 ## 目录约定
 
 ```
-functions/api/            后端接口（文件路径 = URL 路径）
+functions/api/            后端接口（文件路径 = URL 路径，以实际目录为准）
   ledger/index.ts         GET/POST  /api/ledger
   ledger/[id].ts          PATCH/DELETE /api/ledger/:id
+  ledger/settle.ts        POST      /api/ledger/settle
+  ledger/snapshot.ts      GET       /api/ledger/snapshot（账本一次性快照）
+  ledger/summary.ts       GET       /api/ledger/summary
   plans/index.ts          GET/POST  /api/plans
   plans/[id].ts           PATCH     /api/plans/:id
   upload.ts               POST      /api/upload
   images/[[key]].ts       GET       /api/images/:key（[[key]] 匹配含斜杠的多段）
+  notifications/          站内通知（列表 / 已读 / 单条）
+  push/                   推送订阅与测试
+  settings/               家庭称呼与全局设置
+  changelog/              版本日志（两端共用）
+  admin/                  管理员调整与自检
+  maintenance/orphans.ts  R2 孤儿图片扫描与清理
 migrations/               D1 建表 SQL（编号递增，必须幂等）
-src/api/http.ts           前端 REST 客户端（唯一出口）
-src/api/*.ts              前端业务接口封装
-src/types/*.ts            共享类型
-wrangler.jsonc            D1 / R2 绑定配置
-public/_routes.json       声明 Functions 只接管 /api/*
+src/api/http.ts           前端 REST 客户端（唯一出口，仅 React 版）
+app/lib/data/api/         Flutter 版 REST 客户端
+app/web/_routes.json      Flutter 产物的 Functions 接管范围（= React 版 public/_routes.json 的等价物）
+wrangler.jsonc            D1 / R2 绑定配置（pages_build_output_dir 指向 React 的 dist，仅回滚用）
+public/_routes.json       React 版：声明 Functions 只接管 /api/*
 ```
 
 ## 新增一个后端接口的步骤
@@ -128,7 +138,7 @@ export async function addReward(input: { name: string }): Promise<boolean> {
 
 1. **代理必须用 `127.0.0.1`，不能写 `localhost`**：Node 可能解析到 IPv6 `::1`，而 workerd 只监听 IPv4 → 表现为 500/502
 2. **`build` 脚本必须先跑 `wrangler types`**：`worker-configuration.d.ts` 被 gitignore，CI 上不存在，不生成会导致 `tsc` 找不到 `Env` / `PagesFunction` 类型而构建失败
-3. **`public/_routes.json` 必须保持 `include: ["/api/*"]`**：否则 `public/_redirects` 的 `/* /index.html 200` 兜底会把接口请求吞成 HTML（表现为接口返回 `text/html`）
+3. **`/api/*` 只由 Functions 接管**：Flutter 产物看 `app/web/_routes.json`（`include: ["/api/*"]`），React 旧版看 `public/_routes.json`。少了这个文件，静态资源也会走一遍 Functions，且 SPA 兜底可能把接口请求吞成 HTML（表现为接口返回 `text/html`）
 4. **不要引入鉴权中间件 / 共享口令**：本项目定位是家庭内部简单 CRUD，接口默认公开，不校验 token
 5. **R2 图片读取接口保持匿名**：`<img>` 标签无法携带请求头，`/api/images/*` 不能加鉴权
 6. **改动绑定要同步三处**：`wrangler.jsonc`（本地+构建）、Cloudflare Dashboard 的 Pages 绑定、函数内的 `interface Env`

@@ -68,6 +68,21 @@ function assertEntries(entries, appVersion) {
 
     if (typeof entry.date !== 'string' || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(entry.date)) {
       problems.push(`${entry.version}: date 必须是 'YYYY-MM-DD HH:mm:ss'，现在是 ${JSON.stringify(entry.date)}`);
+    } else {
+      // R-7：形状对不代表日期存在 —— 2026-02-30 会被 Date 悄悄进位成 3 月 2 日，
+      // 写进 D1 后两端都会显示一个「不存在的日期」。
+      const [datePart, timePart] = entry.date.split(' ');
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hour, minute, second] = timePart.split(':').map(Number);
+      const parsed = new Date(year, month - 1, day, hour, minute, second);
+      const real =
+        parsed.getFullYear() === year &&
+        parsed.getMonth() === month - 1 &&
+        parsed.getDate() === day &&
+        parsed.getHours() === hour &&
+        parsed.getMinutes() === minute &&
+        parsed.getSeconds() === second;
+      if (!real) problems.push(`${entry.version}: date ${entry.date} 不是一个真实存在的时间`);
     }
     if (typeof entry.title !== 'string' || !entry.title.trim()) {
       problems.push(`${entry.version}: title 不能为空`);
@@ -83,6 +98,23 @@ function assertEntries(entries, appVersion) {
     problems.push(
       `APP_VERSION（${appVersion}）和最新一条日志（${entries[0].version}）对不上 —— 两者必须一致，兜底页面显示的就是 APP_VERSION`
     );
+  }
+
+  // R-8：三方一致 —— APK 的 versionName 来自 app/pubspec.yaml，网页版读的是
+  // D1 里的 APP_VERSION，两边漂移就会出现「APK 说 2.7.0、网站说 2.6.0」。
+  try {
+    const pubspec = readFileSync(resolve(APP_DIR, 'pubspec.yaml'), 'utf8');
+    const match = pubspec.match(/^version:\s*(\S+)/m);
+    const pubVersion = match?.[1]?.split('+')[0];
+    if (!pubVersion) {
+      problems.push('app/pubspec.yaml 里没找到 version: 行');
+    } else if (pubVersion !== appVersion) {
+      problems.push(
+        `app/pubspec.yaml 的版本（${pubVersion}）和 APP_VERSION（${appVersion}）对不上 —— 发版前先把两边对齐（记得 +N 一起加）`
+      );
+    }
+  } catch (error) {
+    problems.push(`读不到 app/pubspec.yaml：${error instanceof Error ? error.message : String(error)}`);
   }
 
   if (problems.length > 0) fail(problems);

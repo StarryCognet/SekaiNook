@@ -1,3 +1,6 @@
+@Tags(<String>['live'])
+library;
+
 // 接口层冒烟测试：拿真实后端跑一遍「只读」接口，验证 Dart 侧的解析与契约一致。
 //
 // 跑法（连本地后端；后端在 Web 版仓库 `npm run dev:api` 起在 8788）：
