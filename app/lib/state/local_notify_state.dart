@@ -130,7 +130,7 @@ class LocalNotifyState extends ChangeNotifier {
   /// 开启：先要权限，再按当前账本把所有提醒项排上
   Future<bool> enable() async {
     if (!supported) {
-      _message = '这个平台不支持本地通知；网页版请用上面的浏览器推送';
+      _message = '这个平台不支持本地通知；装上安卓 App 之后才能用';
       notifyListeners();
       return false;
     }
@@ -174,7 +174,12 @@ class LocalNotifyState extends ChangeNotifier {
 
   /// 准时模式开关：打开时申请精确闹钟权限，拿不到就保持关闭并说明
   Future<void> setExactMode(bool value) async {
-    if (!supported) return;
+    // 以前这里直接 return：网页版点了开关毫无反应，也没有一句解释（死开关）
+    if (!supported) {
+      _message = '这个平台排不了系统闹钟，准时模式只有在安卓 App 里才能开';
+      notifyListeners();
+      return;
+    }
     _busy = true;
     notifyListeners();
 
@@ -273,6 +278,9 @@ class LocalNotifyState extends ChangeNotifier {
   }
 
   /// 恢复出厂的两条内置提醒（自定义的留着）
+  ///
+  /// 注意：内置那两条会被**整体覆盖**回默认值，改过的时间/文案都会丢 —— 调用方
+  /// 必须先把这句告诉用户再问一次。
   Future<void> restoreBuiltins() async {
     final builtins = LocalReminder.defaults();
     final customs =
@@ -280,7 +288,7 @@ class LocalNotifyState extends ChangeNotifier {
     _reminders = <LocalReminder>[...builtins, ...customs];
     await _persist();
     await rescheduleAll(_lastRecords);
-    _message = '内置的两条提醒已恢复默认';
+    _message = '内置的两条已恢复默认（改过的地方被覆盖了，自己加的没动）';
     notifyListeners();
   }
 
@@ -302,7 +310,7 @@ class LocalNotifyState extends ChangeNotifier {
   /// 不传就用默认表现 + 一句通用文案。
   Future<bool> sendTest({LocalReminder? reminder}) async {
     if (!supported) {
-      _message = '这个平台不支持本地通知；网页版请用上面的浏览器推送';
+      _message = '这个平台不支持本地通知；装上安卓 App 之后才能用';
       notifyListeners();
       return false;
     }

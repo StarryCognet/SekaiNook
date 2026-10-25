@@ -37,6 +37,31 @@ abstract final class AppFontSize {
   static const double num = 48;
 }
 
+/// 组件尺寸 —— 图标块 / 圆形底座 / 触控区这类**方形边长**。
+///
+/// 只收「多处同构、且不属于字号」的尺寸（以前散落着 32/36/40/44/48 一堆字面量，
+/// 同一页里 6 处 44×44 圆角块各写各的）。间距仍走 [AppSpacing]，字号仍走
+/// [AppFontSize] —— 别拿字号当图标尺寸用。
+abstract final class AppSize {
+  /// 统计卡左上角的图标块（32×32，圆角矩形）
+  static const double iconTile = 32;
+
+  /// 列表行里的图标块 / 勋章图标（36×36，圆角矩形）
+  static const double iconBadge = 36;
+
+  /// 圆形图标底座（44×44，头像框 / 植物 / 装饰）
+  static const double iconCircle = 44;
+
+  /// 大圆底（48×48，奖励页顶部那颗）
+  static const double iconCircleLg = 48;
+
+  /// 勾选钮这类小触控区（40×40）
+  static const double touchTarget = 40;
+
+  /// 行内小图标（14，跟 [AppFontSize.xs] 的正文对齐）
+  static const double glyphXs = 14;
+}
+
 abstract final class AppDuration {
   /// 页面切换淡入上滑
   static const Duration pageTransition = Duration(milliseconds: 260);

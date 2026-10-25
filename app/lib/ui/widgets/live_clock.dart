@@ -23,22 +23,44 @@ class AppLiveClock extends StatefulWidget {
   State<AppLiveClock> createState() => _AppLiveClockState();
 }
 
-class _AppLiveClockState extends State<AppLiveClock> {
+class _AppLiveClockState extends State<AppLiveClock> with WidgetsBindingObserver {
   DateTime _now = DateTime.now();
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _now = DateTime.now());
-    });
+    // 切到后台就别再每秒叫醒自己：回来时补一次当前时间再重启。
+    WidgetsBinding.instance.addObserver(this);
+    _start();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      setState(() => _now = DateTime.now());
+      _start();
+    } else {
+      _stop();
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _stop();
     super.dispose();
+  }
+
+  void _start() {
+    _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  void _stop() {
+    _timer?.cancel();
+    _timer = null;
   }
 
   @override

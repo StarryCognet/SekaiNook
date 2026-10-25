@@ -2,7 +2,9 @@ import 'dart:math' as math;
 
 import 'package:sekainook_app/fl_ui/context.dart';
 import 'package:sekainook_app/fl_ui/shape.dart';
+import 'package:sekainook_app/theme/motion.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 /// A pulsing bar that holds the place of one line of [style] text.
 class SkeletonText extends StatelessWidget {
@@ -48,41 +50,27 @@ class SkeletonPill extends StatefulWidget {
   State<SkeletonPill> createState() => _SkeletonPillState();
 }
 
-class _SkeletonPillState extends State<SkeletonPill>
-    with SingleTickerProviderStateMixin {
-  static const _period = Duration(milliseconds: 1600);
+class _SkeletonPillState extends State<SkeletonPill> {
+  final _SkeletonPulse _pulse = _SkeletonPulse.instance;
 
-  late final AnimationController _controller;
-  late final Animation<double> _opacity = _controller.drive(const _Pulse());
-
-  @override
-  void initState() {
-    super.initState();
-    // Starting from the wall clock keeps bars that appear at different times
-    // pulsing in step.
-    _controller = AnimationController(
-      vsync: this,
-      duration: _period,
-      value:
-          DateTime.now().millisecondsSinceEpoch %
-          _period.inMilliseconds /
-          _period.inMilliseconds,
-    );
-  }
+  bool _attached = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (context.disableAnimations) {
-      _controller.stop();
-    } else if (!_controller.isAnimating) {
-      _controller.repeat();
+    // didChangeDependencies 每次 MediaQuery 变化都会再来一遍，挂载只做一次。
+    if (!_attached) {
+      _attached = true;
+      _pulse.attach();
     }
+    _pulse.setStill(context.disableAnimations);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    if (_attached) {
+      _pulse.detach();
+    }
     super.dispose();
   }
 
@@ -100,15 +88,81 @@ class _SkeletonPillState extends State<SkeletonPill>
         height: widget.height,
         child: context.disableAnimations
             ? bar
-            : FadeTransition(opacity: _opacity, child: bar),
+            : ValueListenableBuilder<double>(
+                valueListenable: _pulse.phase,
+                builder: (context, phase, child) => Opacity(
+                  opacity: _SkeletonPulse.opacityAt(phase),
+                  child: child,
+                ),
+                child: bar,
+              ),
       ),
     );
   }
 }
 
-class _Pulse extends Animatable<double> {
-  const _Pulse();
+/// 全站骨架共用一个 ticker。
+///
+/// 原来每个骨架块自己开一个 `AnimationController`，还要用 `DateTime.now()`
+/// 取相位让它们看起来同步 —— 通知页一屏 16 个块就是 16 个常驻 ticker。
+/// 现在一个 [Ticker] 推进 0..1 的相位，所有块共用，也就天然同拍。
+class _SkeletonPulse {
+  _SkeletonPulse._();
 
-  @override
-  double transform(double t) => 0.75 + 0.25 * math.cos(2 * math.pi * t);
+  static final _SkeletonPulse instance = _SkeletonPulse._();
+
+  /// One breath of the skeleton, shared with the rest of the app.
+  static const Duration _period = AppMotion.skeleton;
+
+  /// Where a pill rests when motion is off: half a breath, so it still reads
+  /// as a placeholder rather than as empty space.
+  static const double stillPhase = 0.5;
+
+  /// 0.75..1.0，和原来 `FadeTransition` 的呼吸幅度一致。
+  static double opacityAt(double phase) =>
+      0.75 + 0.25 * math.cos(2 * math.pi * phase);
+
+  final ValueNotifier<double> phase = ValueNotifier<double>(0);
+
+  Ticker? _ticker;
+  int _users = 0;
+  bool _still = false;
+
+  void attach() {
+    _users++;
+    _sync();
+  }
+
+  void detach() {
+    if (_users > 0) {
+      _users--;
+    }
+    _sync();
+  }
+
+  void setStill(bool still) {
+    if (still == _still) {
+      return;
+    }
+    _still = still;
+    _sync();
+  }
+
+  void _sync() {
+    if (_users > 0 && !_still) {
+      final ticker = _ticker ??= Ticker(_tick, debugLabel: 'SkeletonPulse');
+      if (!ticker.isActive) {
+        ticker.start();
+      }
+      return;
+    }
+    _ticker?.stop();
+    phase.value = _still ? stillPhase : 0;
+  }
+
+  void _tick(Duration elapsed) {
+    phase.value =
+        elapsed.inMicroseconds % _period.inMicroseconds /
+        _period.inMicroseconds;
+  }
 }

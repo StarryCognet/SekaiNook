@@ -29,6 +29,13 @@ const String chineseTaskId = 'chinese';
 /// 离线队列补发间隔（页面在前台时）
 const Duration _flushInterval = Duration(seconds: 30);
 
+/// 花园流水在客户端只留最近多少条。
+///
+/// 后端 `/api/ledger` 固定给最新 200 条，历史只增不减；页面只渲前几条，
+/// 全量进 store 只是让每一次打卡/补发都多重建 N 行（U-04）。
+/// [GardenState.refreshLedger] 的 `limit` 参数可以按调用方需要覆盖它。
+const int gardenRecordLimit = 50;
+
 /// 本地日期键（YYYY-MM-DD）。
 ///
 /// 花园**只用设备本地时区** —— 东八区只存在于服务端日结算路径，
@@ -310,7 +317,11 @@ class GardenState extends ChangeNotifier {
 
   int _gardenCareDays = 0;
 
-  /// 累计照顾花园自然日数
+  /// 累计「照顾过花园」的自然日数。
+  ///
+  /// **浇水或完成任一花园活动（任务 / 背诗 / 语文打卡）都算这一天照顾过了**，
+  /// 同一天只记一次（基准是 [lastGardenedDate]）。页面文案必须如实这么说 ——
+  /// 以前只说「浇水」，孩子做完任务就以为天数该涨，却涨的是另一个按钮。
   int get gardenCareDays => _gardenCareDays;
 
   List<String> _ownedItems = <String>[];
@@ -661,7 +672,10 @@ class GardenState extends ChangeNotifier {
   ///
   /// 两个请求并行、独立容忍；**两个都失败**才整体返回（连落盘都不发生
   /// —— 保留旧值，绝不因一次失败把阳光清零）。
-  Future<void> refreshLedger() async {
+  ///
+  /// [limit] 只截断**留在 store 里的列表长度**（默认 [gardenRecordLimit] 条，
+  /// 传 0 表示不截断）。余额口径不受它影响，见下面的注释。
+  Future<void> refreshLedger({int limit = gardenRecordLimit}) async {
     // 并发守卫：两次刷新交错时只让最后发起的那一轮落地，否则旧响应会把新数据盖回去
     final seq = ++_refreshSeq;
     // 捕获 await 之前的本地清单（契约里的已知细节：可能已过期，只会少合并）
@@ -677,9 +691,18 @@ class GardenState extends ChangeNotifier {
     final patch = <String, Object?>{};
     if (summary != null) patch['summarySun'] = summary.sun.round();
     if (records != null) {
-      patch['cachedRecords'] =
+      final gardenRecords =
           records.where((record) => LedgerIds.isGardenTaskId(record.taskId)).toList();
+      patch['cachedRecords'] = limit > 0 && gardenRecords.length > limit
+          ? gardenRecords.take(limit).toList()
+          : gardenRecords;
       patch['ownedItems'] = _mergeOwnedItems(ownedBefore, records);
+      // 截断只砍列表长度，**不动余额口径**：全量接口没给数时，`cachedSun` 是由
+      // 全量流水求和推出来的（[resolveSunBase]），这里先把这份求和固定成基准，
+      // 否则 50 条会算出一个更小的余额 —— 孩子看到的阳光就少了。
+      if (summary == null) {
+        patch['summarySun'] = LedgerApi.calcGardenBalance(gardenRecords).round();
+      }
     }
     _commit(patch);
   }
@@ -968,6 +991,8 @@ class GardenState extends ChangeNotifier {
   ///
   /// **不发阳光、不写后端、不进 pending**（服务端没有对应规则）。
   /// 「今天浇过水没有」只看 [lastWaterDate] —— 以前做完任务会把浇水顶掉，白点。
+  /// 天数（[gardenCareDays]）按天去重：今天已经完成任务的话，浇水不再重复计一天，
+  /// 但 [lastWaterDate] 照写，浇水的反馈与文案不受影响。
   bool careForGarden() {
     final today = todayKey();
     if (_lastWaterDate == today) return false;

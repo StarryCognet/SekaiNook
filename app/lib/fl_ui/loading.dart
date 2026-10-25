@@ -10,11 +10,14 @@ class CommonCircleLoading extends StatefulWidget {
     super.key,
     this.size,
     this.color,
-    this.semanticLabel,
+    this.semanticLabel = '加载中',
   });
 
-  const CommonCircleLoading.page({super.key, this.color, this.semanticLabel})
-    : size = 48;
+  const CommonCircleLoading.page({
+    super.key,
+    this.color,
+    this.semanticLabel = '加载中',
+  }) : size = 48;
 
   final double? size;
   final Color? color;
@@ -28,13 +31,28 @@ class _CommonCircleLoadingState extends State<CommonCircleLoading>
     with SingleTickerProviderStateMixin {
   static const _turnDuration = Duration(milliseconds: 1000);
 
+  /// Where the ring stops when motion is off: a comet still reads as "waiting"
+  /// at rest, an empty track reads as nothing at all.
+  static const _stillTurn = 0.28;
+
   late final AnimationController _turns;
 
   @override
   void initState() {
     super.initState();
-    _turns = AnimationController(vsync: this, duration: _turnDuration)
-      ..repeat();
+    _turns = AnimationController(vsync: this, duration: _turnDuration);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 系统开了「移除动态效果」就只留一圈静态弧线 —— 无限旋转是最难受的那类动效。
+    if (context.disableAnimations) {
+      _turns.stop();
+      _turns.value = _stillTurn;
+    } else if (!_turns.isAnimating) {
+      _turns.repeat();
+    }
   }
 
   @override

@@ -218,30 +218,42 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
             // LiquidGlassScope/Host 是液态玻璃的总开关（关掉时组件走普通绘制）。
             builder: (BuildContext context, Widget? child) {
               final MediaQueryData media = MediaQuery.of(context);
+              // 字号缩放**只有这一个入口**：用户设置（0.8–1.4）× 系统字体缩放。
+              // 用 MediaQuery.textScaler 而不是 textTheme.apply(fontSizeFactor:)，
+              // 这样全站 `fontSize: AppFontSize.*` 的 392 处裸文字也一起生效；
+              // 不需要动的（纯图标尺寸、间距）本来就取 AppFontSize 的数值但不当文字，
+              // 缩放只乘进 Text 的排版，不会把卡片/按钮的固定高度撑破。
+              // 夹到 [0.8, 1.5]：系统 2.0 × 用户 1.4 会把布局撑爆。
+              final double effectiveTextScale =
+                  (media.textScaler.scale(1) * theme.textScale).clamp(0.8, 1.5);
+              final TextScaler textScaler = TextScaler.linear(effectiveTextScale);
               const bool glass = false;
-              return Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  if (theme.hasBackground)
-                    AppBackgroundLayer(
-                      url: theme.background,
-                      veil: context.palette.bgVeil,
-                    ),
-                  LiquidGlassHost(
-                    enabled: glass,
-                    child: LiquidGlassScope(
+              return MediaQuery(
+                data: media.copyWith(textScaler: textScaler),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    if (theme.hasBackground)
+                      AppBackgroundLayer(
+                        url: theme.background,
+                        veil: context.palette.bgVeil,
+                      ),
+                    LiquidGlassHost(
                       enabled: glass,
-                      child: MeasureScope(
-                        measure: Measure.of(context, media.textScaler.scale(1)),
-                        child: ViewScope(
-                          size: media.size,
-                          isMobile: media.size.width < 700,
-                          child: child ?? const SizedBox.shrink(),
+                      child: LiquidGlassScope(
+                        enabled: glass,
+                        child: MeasureScope(
+                          measure: Measure.of(context, effectiveTextScale),
+                          child: ViewScope(
+                            size: media.size,
+                            isMobile: media.size.width < 700,
+                            child: child ?? const SizedBox.shrink(),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               );
             },
           );

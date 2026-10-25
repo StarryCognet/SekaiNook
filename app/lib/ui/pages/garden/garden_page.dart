@@ -1,7 +1,8 @@
-import 'package:sekainook_app/fl_ui/null_status.dart';
-import 'package:sekainook_app/ui/icons/icons.dart';
+import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:sekainook_app/fl_ui/dialog.dart';
+import 'package:sekainook_app/ui/icons/icons.dart';
 // Material 也有一个 Badge（小红点角标），花园的勋章模型重名，藏掉 Material 那个
 import 'package:flutter/material.dart' hide Badge;
 import 'package:sekainook_app/ui/widgets/app_toast.dart';
@@ -12,6 +13,7 @@ import '../../../config/garden_config.dart';
 import '../../../data/models/garden.dart';
 import '../../../data/models/ledger_record.dart';
 import '../../../state/garden_state.dart';
+import '../../../state/theme_state.dart';
 import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
@@ -19,6 +21,8 @@ import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/format.dart';
+import '../../widgets/garden_icon.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 import '../../widgets/motion/app_buttons.dart';
@@ -37,35 +41,6 @@ const List<_Plant> _plants = <_Plant>[
   _Plant(name: '小玫瑰', desc: '需要细心照顾', icon: AppIcons.flower),
   _Plant(name: '仙人掌', desc: '坚强的小植物', icon: AppIcons.leaf),
 ];
-
-/// 图标 key → Material 图标。
-///
-/// key 与 Web 版 `src/components/garden/GardenIcon.tsx` 的 `ICON_MAP` 一一对应
-/// （`flower` → SmileOutlined、`leaf` → EnvironmentOutlined 那两个在 Material 里
-/// 取语义更近的花/叶图标），未知 key 回退星形，与 Web 版一致。
-Glyph _gardenIcon(String key) => switch (key) {
-      'book' => AppIcons.book,
-      'read' => AppIcons.book,
-      'book-open' => AppIcons.book,
-      'calc' => AppIcons.calculate,
-      'pen' => AppIcons.edit,
-      'feather' => AppIcons.edit,
-      'eye' => AppIcons.eye,
-      'sport' => AppIcons.bolt,
-      'home' => AppIcons.home,
-      'sun' => AppIcons.sun,
-      'flower' => AppIcons.flower,
-      'leaf' => AppIcons.leaf,
-      'calendar' => AppIcons.calendar,
-      'trophy' => AppIcons.trophy,
-      'coin' => AppIcons.savings,
-      'dashboard' => AppIcons.dashboard,
-      'check' => AppIcons.checkCircle,
-      'shop' => AppIcons.store,
-      'history' => AppIcons.history,
-      'star' => AppIcons.star,
-      _ => AppIcons.star,
-    };
 
 /// 阳光花园儿童工作台（对应 Web 版 `src/views/garden/` 下的 8 个页面）。
 ///
@@ -108,6 +83,24 @@ class _GardenPageState extends State<GardenPage> {
     GardenShopCategory.decor,
   ];
 
+  /// 菜单胶囊的横向滚动控制器：8 个菜单在 375dp 下放不下，选中项得能被滚进视野。
+  final ScrollController _menuScroll = ScrollController();
+
+  /// 每个菜单胶囊一个 key —— 深链进来（`?tab=records`）时要 ensureVisible 到它，
+  /// 否则选中项落在屏幕外，孩子看到的是「一排没选中任何东西的胶囊」。
+  final Map<String, GlobalKey> _menuKeys = <String, GlobalKey>{};
+
+  /// 上一帧的菜单 key：只在菜单变化（或首帧）时滚一次，不每帧都滚。
+  String? _lastMenu;
+
+  /// 流水列表是否已展开成「全部」（默认只渲前 [_recordPreview] 条）。
+  bool _showAllRecords = false;
+
+  /// 首屏只渲多少条流水，剩下的点「查看全部记录」（U-04：记录只增不减）
+  static const int _recordPreview = 20;
+
+  GlobalKey _menuKey(String key) => _menuKeys.putIfAbsent(key, () => GlobalKey());
+
   @override
   void initState() {
     super.initState();
@@ -117,6 +110,35 @@ class _GardenPageState extends State<GardenPage> {
       if (!mounted) return;
       context.read<GardenState>().init();
     });
+  }
+
+  @override
+  void dispose() {
+    _menuScroll.dispose();
+    super.dispose();
+  }
+
+  /// 把选中菜单滚进视野（居中；首帧与深链进入都要走这一下）。
+  void _revealMenu(String menu) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final BuildContext? chip = _menuKeys[menu]?.currentContext;
+      if (chip == null) return;
+      Scrollable.ensureVisible(
+        chip,
+        alignment: 0.5,
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
+      );
+    });
+  }
+
+  /// 卡在骨架屏时的出路：重读存档 + 重拉一次流水（以前这里没有任何按钮可点）。
+  void _retryLoad() {
+    final GardenState garden = context.read<GardenState>();
+    garden.init();
+    unawaited(garden.flushPending());
+    unawaited(garden.refreshLedger());
   }
 
   // ---- 本页派生值 ----
@@ -132,17 +154,10 @@ class _GardenPageState extends State<GardenPage> {
   int _earnedToday(GardenState garden) =>
       garden.todayEarnedDate == todayKey() ? garden.todayEarned : 0;
 
-  /// 时刻文案：今天显示「今天 HH:mm」，更早显示「M/d HH:mm」
-  /// （与家庭账本页同一口径 —— 流水里混着不同日期的记录，只给 HH:mm 会把日子看错）
-  String _timeLabel(DateTime time) {
-    final DateTime local = time.toLocal();
-    final DateTime now = DateTime.now();
-    final String hh = local.hour.toString().padLeft(2, '0');
-    final String mm = local.minute.toString().padLeft(2, '0');
-    final bool sameDay =
-        local.year == now.year && local.month == now.month && local.day == now.day;
-    return sameDay ? '今天 $hh:$mm' : '${local.month}/${local.day} $hh:$mm';
-  }
+  /// 时刻文案统一走 `format.dart` 的 `formatDateTime`（「今天 / 昨天 / MM-dd HH:mm」），
+  /// 不再在本页自己拼一套：以前这里读 `DateTime.now()`，跨零点不会翻成「昨天」、
+  /// 也没法注入 now；而同一页的「今日已完成」又用了另一种格式。
+  /// 调用点自己把 `now` 传下去（一次 build 只取一次 now，整屏口径一致）。
 
   /// 流水标题：服务端写的是规则名（如「背一首古诗」）；万一拿到的是裸 task_id，
   /// 就翻回本地名字，别把 `garden:poem` 这种串丢给孩子看。
@@ -160,7 +175,9 @@ class _GardenPageState extends State<GardenPage> {
     for (final GardenShopItem item in GardenConfig.shopItems) {
       if (raw == 'garden_shop:${item.id}') return item.name;
     }
-    return raw;
+    // 兜底也要是人话：宁可给一句「花园记录」，也不把 `garden:xxx` 这种内部 id
+    // 摆到孩子面前（审计 §4）。
+    return '花园记录';
   }
 
   // ---- 轻提示与动作 ----
@@ -261,11 +278,17 @@ class _GardenPageState extends State<GardenPage> {
     // 不写死 'tab'）。缺省或非法值回退 GardenConfig.defaultMenu，不渲染空白。
     final String raw = GoRouterState.of(context).uri.queryParameters[GardenConfig.menuParam] ?? '';
     final String menu = GardenConfig.isMenuKey(raw) ? raw : GardenConfig.defaultMenu;
+    // 菜单变了（含首帧 / 深链进入）就把选中胶囊滚进视野；放在 build 里是因为
+    // 菜单本身由地址栏派生，没有「菜单 setter」可以挂。
+    if (menu != _lastMenu) {
+      _lastMenu = menu;
+      _revealMenu(menu);
+    }
 
     return Scaffold(
       body: SafeArea(
         child: garden.tasks.isEmpty
-            ? const _GardenLoading()
+            ? _GardenLoading(onRetry: _retryLoad)
             : Column(
                 children: <Widget>[
                   if (garden.pending.isNotEmpty) _buildPendingBanner(garden, palette),
@@ -286,10 +309,11 @@ class _GardenPageState extends State<GardenPage> {
     );
   }
 
-  /// 离线队列提示：还没同步的打卡 / 兑换，点一下立刻重试
+  /// 离线队列提示：还没同步的打卡 / 兑换，点一下立刻重试。
+  /// 文案说人话（「还没传到云端」），不说「未同步 / 重试」这类工程词。
   Widget _buildPendingBanner(GardenState garden, AppPalette palette) {
     final int delta = garden.pendingDelta;
-    final String deltaText = delta == 0 ? '' : '（未同步阳光 ${delta > 0 ? '+' : ''}$delta）';
+    final String deltaText = delta == 0 ? '' : '（还没传到云端 ${delta > 0 ? '+' : ''}$delta）';
     return EnterBox(
       index: 0,
       child: Padding(
@@ -316,7 +340,7 @@ class _GardenPageState extends State<GardenPage> {
                         const SizedBox(width: AppSpacing.xs),
                         Flexible(
                           child: Text(
-                            '${garden.pending.length} 条记录待同步',
+                            '还有 ${garden.pending.length} 条没传上去',
                             style: TextStyle(
                               fontSize: AppFontSize.sm,
                               fontWeight: FontWeight.w600,
@@ -328,7 +352,7 @@ class _GardenPageState extends State<GardenPage> {
                       ],
                     ),
                     Text(
-                      '点一下马上重试$deltaText',
+                      '再点一下试试$deltaText',
                       style: TextStyle(
                         fontSize: AppFontSize.xs,
                         color: palette.onColorSoft(palette.primarySoft),
@@ -338,7 +362,7 @@ class _GardenPageState extends State<GardenPage> {
                 ),
               ),
               Text(
-                '重试',
+                '再试一次',
                 style: TextStyle(
                   fontSize: AppFontSize.sm,
                   fontWeight: FontWeight.w700,
@@ -367,39 +391,33 @@ class _GardenPageState extends State<GardenPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: StatBlock(
-                    label: '阳光余额',
-                    number: garden.balance,
-                    unit: '阳光',
-                    color: _readableAccent(palette, palette.warning),
-                    icon: AppIcons.sun,
-                  ),
-                ),
-                Expanded(
-                  child: StatBlock(
-                    label: '连续学习',
-                    number: garden.streakDays,
-                    unit: '天',
-                    color: _readableAccent(palette, palette.danger),
-                    icon: AppIcons.fire,
-                  ),
-                ),
-                Expanded(
-                  child: StatBlock(
-                    label: '今日任务',
-                    number: garden.completedCount,
-                    // 分母不参与滚动，只让分子滚（文案与原来一字不差）
-                    formatter: (num value) => '${value.round()}/${garden.tasks.length}',
-                    unit: '个',
-                    color: _readableAccent(palette, palette.primary),
-                    icon: AppIcons.checkCircle,
-                  ),
-                ),
-              ],
-            ),
+            _statRow(<Widget>[
+              StatBlock(
+                label: '阳光余额',
+                number: garden.balance,
+                // 四位数以上加千分位（1095 → 1,095），不然一串数字孩子要数零
+                formatter: (num value) => formatCount(value),
+                unit: '阳光',
+                color: _readableAccent(palette, palette.warning),
+                icon: AppIcons.sun,
+              ),
+              StatBlock(
+                label: '连续学习',
+                number: garden.streakDays,
+                unit: '天',
+                color: _readableAccent(palette, palette.danger),
+                icon: AppIcons.fire,
+              ),
+              StatBlock(
+                label: '今日任务',
+                number: garden.completedCount,
+                // 分母不参与滚动，只让分子滚（文案与原来一字不差）
+                formatter: (num value) => '${value.round()}/${garden.tasks.length}',
+                unit: '个',
+                color: _readableAccent(palette, palette.primary),
+                icon: AppIcons.checkCircle,
+              ),
+            ]),
             const SizedBox(height: AppSpacing.md),
             AnimatedProgressBar(
               value: percent / 100,
@@ -442,10 +460,46 @@ class _GardenPageState extends State<GardenPage> {
     );
   }
 
+  /// 横排统计卡：宽屏一行 [tiles.length] 列，窄屏 / 无障碍大字号下退成两列 Wrap。
+  ///
+  /// 320dp + 大字号时三列每列只剩 ≈74dp，24px 的数字会被 `AppCard` 的
+  /// `Clip.antiAlias` 直接切掉（审计 §3.4 实拍）；两列放得下，也不必把字号缩糊。
+  /// 注意别改成 `FittedBox` 包 StatBlock：Row 里的 StatBlock 是 `mainAxisSize.max`，
+  /// 在 FittedBox 的无界宽度下会拿到 ∞ 约束。
+  Widget _statRow(List<Widget> tiles) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double scaled = MediaQuery.textScalerOf(context).scale(AppFontSize.xl);
+        final bool narrow = constraints.maxWidth < 320 || scaled > AppFontSize.xl * 1.2;
+        if (!narrow) {
+          return Row(
+            children: <Widget>[
+              for (int index = 0; index < tiles.length; index++) ...<Widget>[
+                if (index > 0) _gapSm,
+                Expanded(child: tiles[index]),
+              ],
+            ],
+          );
+        }
+        final double width = (constraints.maxWidth - AppSpacing.sm) / 2;
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: <Widget>[
+            for (final Widget tile in tiles) SizedBox(width: width, child: tile),
+          ],
+        );
+      },
+    );
+  }
+
   /// 横向 Tab 条：8 个菜单（375px 下横向滚动，不做换行挤压）。
   /// [current] 是地址栏上的当前菜单，点谁就把地址栏改成谁。
   Widget _buildMenuBar(String current) {
     return SingleChildScrollView(
+      // 控制器 + 每个胶囊一个 key：深链（?tab=records）进来时把选中项滚进视野，
+      // 否则选中态落在屏幕外，孩子只看到一排「谁都没选中」的胶囊。
+      controller: _menuScroll,
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       child: Row(
@@ -456,6 +510,7 @@ class _GardenPageState extends State<GardenPage> {
               index: index,
               axis: Axis.horizontal,
               child: _MenuChip(
+                key: _menuKey(menu.key),
                 menu: menu,
                 selected: menu.key == current,
                 onTap: () => _switchMenu(menu.key, current),
@@ -519,39 +574,32 @@ class _GardenPageState extends State<GardenPage> {
 
     return _pageList(<Widget>[
       const SectionHeader(title: '学习总览'),
-      Row(
-        children: <Widget>[
-          Expanded(
-            child: _statTile(
-              label: '阳光余额',
-              number: garden.balance,
-              unit: '阳光',
-              icon: AppIcons.sun,
-              color: palette.warning,
-            ),
-          ),
-          _gapSm,
-          Expanded(
-            child: _statTile(
-              label: '连续学习',
-              number: garden.streakDays,
-              unit: '天',
-              icon: AppIcons.fire,
-              color: palette.danger,
-            ),
-          ),
-          _gapSm,
-          Expanded(
-            child: _statTile(
-              label: '已获勋章',
-              number: earnedBadges,
-              unit: '枚',
-              icon: AppIcons.trophy,
-              color: palette.success,
-            ),
-          ),
-        ],
-      ),
+      // 这一排只放**顶部三件套没有**的数字：余额 / 连续天数 / 今日进度已经常驻
+      // 在顶上（不随菜单滚走），这里再摆一遍只是把孩子往下推（审计 §3.4）。
+      _statRow(<Widget>[
+        _statTile(
+          label: '已获勋章',
+          number: earnedBadges,
+          unit: '枚',
+          icon: AppIcons.trophy,
+          color: palette.success,
+        ),
+        _statTile(
+          label: '累计完成',
+          number: garden.totalCompleted,
+          formatter: (num value) => formatCount(value),
+          unit: '次',
+          icon: AppIcons.checkCircle,
+          color: palette.primary,
+        ),
+        _statTile(
+          label: '背会古诗',
+          number: garden.poemCount,
+          unit: '首',
+          icon: AppIcons.book,
+          color: palette.warning,
+        ),
+      ]),
       _gapMd,
       AppCard(
         child: Column(
@@ -609,7 +657,7 @@ class _GardenPageState extends State<GardenPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
                         GlyphIcon(
-                          _gardenIcon(item.icon),
+                          gardenGlyph(item.icon),
                           size: 18,
                           color: _readableAccent(palette, palette.success),
                         ),
@@ -683,8 +731,8 @@ class _GardenPageState extends State<GardenPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Container(
-            width: 32,
-            height: 32,
+            width: AppSize.iconTile,
+            height: AppSize.iconTile,
             alignment: Alignment.center,
             decoration: ShapeDecoration(
               color: color.withValues(alpha: 0.14),
@@ -702,43 +750,11 @@ class _GardenPageState extends State<GardenPage> {
   // ---- 2. 今日任务（Web 版 TasksPage.tsx）----
 
   Widget _buildTasks(GardenState garden, AppPalette palette) {
-    final int percent = _percent(garden);
+    // 原来这里有一排「今日完成 / 完成率 / 连续学习」的统计卡，跟顶部常驻三件套
+    // 完全重复（同屏出现两遍同样的数字），还把任务列表推到第二屏。删掉后
+    // 孩子点进「今日任务」第一眼就是今天要做什么（审计 §3.4）。
     return _pageList(<Widget>[
-      const SectionHeader(title: '今日任务'),
-      Row(
-        children: <Widget>[
-          Expanded(
-            child: _statTile(
-              label: '今日完成',
-              number: garden.completedCount,
-              unit: '个任务',
-              icon: AppIcons.checkCircle,
-              color: palette.success,
-            ),
-          ),
-          _gapSm,
-          Expanded(
-            child: _statTile(
-              label: '完成率',
-              number: percent,
-              formatter: (num value) => '${value.round()}%',
-              icon: AppIcons.trendUp,
-              color: palette.primary,
-            ),
-          ),
-          _gapSm,
-          Expanded(
-            child: _statTile(
-              label: '连续学习',
-              number: garden.streakDays,
-              unit: '天',
-              icon: AppIcons.fire,
-              color: palette.danger,
-            ),
-          ),
-        ],
-      ),
-      _gapMd,
+      const SectionHeader(title: '今日任务', subtitle: '点左边的圆圈就能打勾'),
       for (final GardenTask task in garden.tasks)
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -758,15 +774,15 @@ class _GardenPageState extends State<GardenPage> {
           _CheckButton(done: done, onTap: done ? null : () => _completeTask(task)),
           const SizedBox(width: AppSpacing.sm),
           Container(
-            width: 36,
-            height: 36,
+            width: AppSize.iconBadge,
+            height: AppSize.iconBadge,
             alignment: Alignment.center,
             decoration: ShapeDecoration(
               color: accent.withValues(alpha: 0.12),
               shape: AppShape.all(AppRadius.md),
             ),
             child: GlyphIcon(
-              _gardenIcon(task.icon),
+              gardenGlyph(task.icon),
               size: 20,
               color: _tintForeground(palette, accent, alpha: 0.12),
             ),
@@ -908,7 +924,7 @@ class _GardenPageState extends State<GardenPage> {
         children: <Widget>[
           Row(
             children: <Widget>[
-              GlyphIcon(_gardenIcon('book'), size: 18, color: palette.primary),
+              GlyphIcon(gardenGlyph('book'), size: 18, color: palette.primary),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
@@ -996,7 +1012,7 @@ class _GardenPageState extends State<GardenPage> {
         children: <Widget>[
           Row(
             children: <Widget>[
-              GlyphIcon(_gardenIcon('read'), size: 18, color: accent),
+              GlyphIcon(gardenGlyph('read'), size: 18, color: accent),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
@@ -1083,8 +1099,8 @@ class _GardenPageState extends State<GardenPage> {
             Row(
               children: <Widget>[
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: AppSize.iconCircle,
+                  height: AppSize.iconCircle,
                   alignment: Alignment.center,
                   decoration: ShapeDecoration(
                     color: palette.warning.withValues(alpha: 0.14),
@@ -1145,8 +1161,8 @@ class _GardenPageState extends State<GardenPage> {
             Row(
               children: <Widget>[
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: AppSize.iconCircle,
+                  height: AppSize.iconCircle,
                   alignment: Alignment.center,
                   decoration: ShapeDecoration(
                     color: palette.primary.withValues(alpha: 0.12),
@@ -1191,10 +1207,13 @@ class _GardenPageState extends State<GardenPage> {
               height: AppSpacing.sm,
             ),
             const SizedBox(height: AppSpacing.sm),
+            // 文案如实说明机制：这一栏的「X/7 天」是**花园活跃天数**，浇水和完成
+            // 任务都算（以前只说「浇浇水」，但做任务也会把它 +1，孩子算不明白）。
             Text(
               caredToday
                   ? '今天已经照顾过植物啦，明天记得再来～'
-                  : '给植物浇浇水，坚持 $careTarget 天就能解锁「植物战士」勋章',
+                  : '浇浇水，或者完成一个任务，今天就算照顾过花园；'
+                      '坚持 $careTarget 天解锁「植物战士」勋章',
               style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -1226,8 +1245,8 @@ class _GardenPageState extends State<GardenPage> {
           _GrowPulse(
             cared: caredToday,
             child: Container(
-              width: 44,
-              height: 44,
+              width: AppSize.iconCircle,
+              height: AppSize.iconCircle,
               alignment: Alignment.center,
               decoration: ShapeDecoration(
                 color: palette.success.withValues(alpha: 0.12),
@@ -1261,13 +1280,12 @@ class _GardenPageState extends State<GardenPage> {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          AppOutlinedButton(
-            onPressed: caredToday ? null : _care,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: palette.primary,
-              side: BorderSide(color: palette.border),
-            ),
-            child: Text(caredToday ? '今天已照顾' : '浇浇水'),
+          // 植物卡只是「状态」：四张卡原来各带一个「浇浇水」按钮（描边样式，
+          // 与上面照顾卡的主按钮两套样式），同一个动作出现 5 次。浇水的唯一
+          // 入口留上面那颗主按钮，这里只说今天浇过没有。
+          _StatusChip(
+            label: caredToday ? '今天浇过水' : '今天还没浇',
+            color: caredToday ? palette.success : palette.textTertiary,
           ),
         ],
       ),
@@ -1285,48 +1303,9 @@ class _GardenPageState extends State<GardenPage> {
         .toList();
 
     return _pageList(<Widget>[
-      const SectionHeader(title: '阳光商城'),
-      AppCard(
-        child: Row(
-          children: <Widget>[
-            Container(
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: ShapeDecoration(
-                color: palette.warning.withValues(alpha: 0.14),
-                shape: AppShape.all(AppRadius.full),
-              ),
-              child: GlyphIcon(
-                AppIcons.sun,
-                color: _tintForeground(palette, palette.warning),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                '我的阳光余额',
-                style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
-              ),
-            ),
-            AnimatedCount(
-              value: garden.balance,
-              style: TextStyle(
-                fontSize: AppFontSize.xl,
-                fontWeight: FontWeight.w700,
-                color: _readableAccent(palette, palette.warning),
-                fontFeatures: kTabularNumbers,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              '阳光',
-              style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
-            ),
-          ],
-        ),
-      ),
-      _gapMd,
+      const SectionHeader(title: '阳光商城', subtitle: '阳光余额在最上面，随时能看见'),
+      // 原来这里还有一张「我的阳光余额」大卡：同屏第二次出现同一个数字
+      // （顶部三件套常驻、不随菜单滚走），删掉后商品列表直接上首屏。
       // 现在戴着 / 挂着的：买过的东西一眼能看见，不再只有一句「已拥有」
       AppCard(
         child: Column(
@@ -1343,14 +1322,14 @@ class _GardenPageState extends State<GardenPage> {
             _wearingRow(
               '头像框',
               avatarItem?.shortName,
-              avatarItem == null ? null : _gardenIcon(avatarItem.icon),
+              avatarItem == null ? null : gardenGlyph(avatarItem.icon),
               '还没戴',
               palette,
             ),
             _wearingRow(
               '称号',
               titleItem?.shortName,
-              titleItem == null ? null : _gardenIcon(titleItem.icon),
+              titleItem == null ? null : gardenGlyph(titleItem.icon),
               '还没挂',
               palette,
             ),
@@ -1359,7 +1338,7 @@ class _GardenPageState extends State<GardenPage> {
               decorItems.isEmpty
                   ? null
                   : decorItems.map((GardenShopItem item) => item.shortName).join('、'),
-              decorItems.isEmpty ? null : _gardenIcon(decorItems.first.icon),
+              decorItems.isEmpty ? null : gardenGlyph(decorItems.first.icon),
               '还没有装饰',
               palette,
             ),
@@ -1473,15 +1452,15 @@ class _GardenPageState extends State<GardenPage> {
       child: Row(
         children: <Widget>[
           Container(
-            width: 44,
-            height: 44,
+            width: AppSize.iconCircle,
+            height: AppSize.iconCircle,
             alignment: Alignment.center,
             decoration: ShapeDecoration(
               color: palette.primary.withValues(alpha: 0.12),
               shape: AppShape.all(AppRadius.md),
             ),
             child: GlyphIcon(
-              _gardenIcon(item.icon),
+              gardenGlyph(item.icon),
               size: 22,
               color: _tintForeground(palette, palette.primary, alpha: 0.12, base: cardBase),
             ),
@@ -1513,10 +1492,10 @@ class _GardenPageState extends State<GardenPage> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        GlyphIcon(AppIcons.sun, size: 14, color: priceColor),
+                        GlyphIcon(AppIcons.sun, size: AppSize.glyphXs, color: priceColor),
                         const SizedBox(width: AppSpacing.xs),
                         Text(
-                          '${item.cost}',
+                          formatCount(item.cost),
                           style: TextStyle(
                             fontSize: AppFontSize.sm,
                             fontWeight: FontWeight.w700,
@@ -1579,18 +1558,43 @@ class _GardenPageState extends State<GardenPage> {
   }
 
   /// 兑换。买之前先按显示余额拦一道（Web 版同口径：balance 含未同步增量），
-  /// 再把 [ShopBuyResult] 的四种结果都回给孩子。
-  void _handleExchange(GardenState garden, GardenShopItem item) {
+  /// 再让孩子**确认一次**（一次兑换 60–200 阳光，差不多是两天的任务量，
+  /// 以前点一下就扣、没有撤销，审计 §3.4），最后把 [ShopBuyResult] 的四种
+  /// 结果都回给孩子。
+  Future<void> _handleExchange(GardenState garden, GardenShopItem item) async {
     if (garden.balance < item.cost) {
       _toast('阳光不够啦，先去完成任务攒阳光吧！');
       return;
     }
+    final int after = garden.balance - item.cost;
+    final bool? ok = await showFloatingDialog<bool>(
+      context: context,
+      child: AlertDialog(
+        title: Text('兑换「${item.shortName}」？'),
+        content: Text(
+          '要花掉 ${formatCount(item.cost)} 阳光，兑换后还剩 ${formatCount(after)} 阳光。\n'
+          '换到手就退不回来啦，想好了再点「兑换」。',
+        ),
+        actions: <Widget>[
+          AppTextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('再想想'),
+          ),
+          AppFilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('兑换'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
     final ShopBuyResult result = garden.buyItem(item.id);
     final String message = switch (result) {
       ShopBuyResult.owned => '已经拥有「${item.shortName}」啦，不用重复兑换',
       ShopBuyResult.insufficient => '阳光不够啦，先去完成任务攒阳光吧！',
-      ShopBuyResult.unknown => '没有找到这个物品，请刷新后再试',
-      ShopBuyResult.ok => '兑换成功！「${item.shortName}」已拥有（-${item.cost} 阳光）',
+      ShopBuyResult.unknown => '没有找到这个物品，再试一次吧',
+      ShopBuyResult.ok =>
+        '兑换成功！「${item.shortName}」已拥有（-${formatCount(item.cost)} 阳光）',
     };
     _toast(
       message,
@@ -1613,12 +1617,23 @@ class _GardenPageState extends State<GardenPage> {
       );
       return;
     }
+    // 花园最多挂 GardenConfig.maxDecor 件装饰：挂满时 [GardenState.equipItem] 会把
+    // 最早挂的那件挤掉（顺序是「先挂的在前」）。以前挤掉得静悄悄，孩子会发现
+    // 昨天挂的东西不见了 —— 这里把被挤掉的那件说清楚（审计 §3.4）。
+    String? displaced;
+    if (item.category == GardenShopCategory.decor &&
+        garden.equippedDecor.length >= GardenConfig.maxDecor &&
+        garden.equippedDecor.isNotEmpty) {
+      displaced = _itemById(garden.equippedDecor.first)?.shortName;
+    }
     final EquipResult result = garden.equipItem(item.id);
     final String message = switch (result) {
       EquipResult.owned => '还没有这件东西，先去兑换吧',
-      EquipResult.unknown => '没有找到这个物品，请刷新后再试',
+      EquipResult.unknown => '没有找到这个物品，再试一次吧',
       EquipResult.ok => item.category == GardenShopCategory.decor
-          ? '「${item.shortName}」挂到花园里啦'
+          ? displaced == null
+              ? '「${item.shortName}」挂到花园里啦'
+              : '「${item.shortName}」挂到花园里啦，位置不够，「$displaced」被摘下来了'
           : '「${item.shortName}」戴上啦',
     };
     _toast(
@@ -1659,8 +1674,8 @@ class _GardenPageState extends State<GardenPage> {
         child: Row(
           children: <Widget>[
             Container(
-              width: 48,
-              height: 48,
+              width: AppSize.iconCircleLg,
+              height: AppSize.iconCircleLg,
               alignment: Alignment.center,
               decoration: ShapeDecoration(
                 color: palette.warning.withValues(alpha: 0.16),
@@ -1786,15 +1801,15 @@ class _GardenPageState extends State<GardenPage> {
           Row(
             children: <Widget>[
               Container(
-                width: 36,
-                height: 36,
+                width: AppSize.iconBadge,
+                height: AppSize.iconBadge,
                 alignment: Alignment.center,
                 decoration: ShapeDecoration(
                   color: accent.withValues(alpha: 0.14),
                   shape: AppShape.all(AppRadius.md),
                 ),
                 child: GlyphIcon(
-                  _gardenIcon(badge.icon),
+                  gardenGlyph(badge.icon),
                   size: 20,
                   color: _tintForeground(palette, accent),
                 ),
@@ -1832,7 +1847,9 @@ class _GardenPageState extends State<GardenPage> {
             Text.rich(
               TextSpan(
                 children: <InlineSpan>[
-                  TextSpan(text: badge.id == 'poet' ? '背诵 ' : '照顾花园 '),
+                  // 「照顾花园」这个措辞和实际机制对不上：做任务也会 +1 天（见
+                  // GardenState.careForGarden 的注释）。改成「花园活跃」如实说。
+                  TextSpan(text: badge.id == 'poet' ? '背诵 ' : '花园活跃 '),
                   WidgetSpan(
                     alignment: PlaceholderAlignment.baseline,
                     baseline: TextBaseline.alphabetic,
@@ -1868,97 +1885,160 @@ class _GardenPageState extends State<GardenPage> {
     final List<LedgerRecord> records = garden.cachedRecords;
     final List<GardenTask> doneTasks =
         garden.tasks.where((GardenTask task) => task.done).toList();
+    // 一次 build 只取一次 now：整屏时间口径一致，跨零点不会半屏「今天」半屏「昨天」。
+    final DateTime now = DateTime.now();
+    // U-04：记录只增不减，store 已截到 gardenRecordLimit 条，但一次把几十行全建出来
+    // 还是白花 —— 默认只渲最近 [_recordPreview] 条，剩下点「查看全部记录」。
+    final int shown = _showAllRecords
+        ? records.length
+        : math.min(records.length, _recordPreview);
+    final bool hasMore = records.length > shown;
+    final bool hasBackground =
+        context.select<ThemeState, bool>((ThemeState state) => state.background.isNotEmpty);
+    // 流水整段画在一张卡上（和 AppCard 同一套底色 / 描边），但行交给
+    // SliverList 虚拟化 —— 不能再用「AppCard 里套 Column 全量 for」。
+    final ShapeBorder rowsShape = AppShape.card(palette.border);
 
-    return _pageList(<Widget>[
-      const SectionHeader(title: '学习记录'),
-      // 今日完成是任务数口径：completedCount 由 store 从 tasks 派生，最多等于任务总数；
-      // 「获得阳光」按今天实际入账求和（背诗、语文练习一天可能入账多次）
-      AppCard(
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: StatBlock(
-                label: '今日完成',
-                number: garden.completedCount,
-                formatter: (num value) => '${value.round()}/${garden.tasks.length}',
-                unit: '个任务',
-                color: palette.primary,
-                icon: AppIcons.checkCircle,
-              ),
-            ),
-            Expanded(
-              child: StatBlock(
-                label: '获得阳光',
-                number: _earnedToday(garden),
-                unit: '阳光',
-                color: palette.warning,
-                icon: AppIcons.sun,
-              ),
-            ),
-          ],
-        ),
-      ),
-      _gapMd,
-      // 「今日已完成」（Web 版 RecordsPage 的那张列表卡）：任务名 + 完成时刻 + 奖励标签
-      const SectionHeader(title: '今日已完成'),
-      if (doneTasks.isEmpty)
-        const AppCard(
-          // FlClash 空态（带插画）：固定高度给 NullStatus 的滚动容器兜底
-          child: SizedBox(
-            height: 240,
-            child: NullStatus(
-              label: '今天还没有完成任务',
-              description: '去任务区挑一个开始吧',
-              illustration: NullStatusIllustration.profile,
-            ),
+    return CustomScrollView(
+      slivers: <Widget>[
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.sm + AppTopBar.contentInset(context),
+            AppSpacing.md,
+            AppSpacing.sm,
           ),
-        )
-      else
-        AppCard(
-          child: Column(
+          sliver: SliverList.list(
             children: <Widget>[
-              for (int index = 0; index < doneTasks.length; index++) ...<Widget>[
-                if (index > 0) Divider(height: AppSpacing.md, color: palette.border),
-                _doneTaskRow(doneTasks[index], palette),
-              ],
+              const SectionHeader(title: '学习记录'),
+              // 今日完成是任务数口径：completedCount 由 store 从 tasks 派生，最多等于任务总数；
+              // 「获得阳光」按今天实际入账求和（背诗、语文练习一天可能入账多次）
+              AppCard(
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: StatBlock(
+                        label: '今日完成',
+                        number: garden.completedCount,
+                        formatter: (num value) => '${value.round()}/${garden.tasks.length}',
+                        unit: '个任务',
+                        color: palette.primary,
+                        icon: AppIcons.checkCircle,
+                      ),
+                    ),
+                    Expanded(
+                      child: StatBlock(
+                        label: '获得阳光',
+                        number: _earnedToday(garden),
+                        formatter: (num value) => formatCount(value),
+                        unit: '阳光',
+                        color: palette.warning,
+                        icon: AppIcons.sun,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _gapMd,
+              // 「今日已完成」（Web 版 RecordsPage 的那张列表卡）：任务名 + 完成时刻 + 奖励标签
+              const SectionHeader(title: '今日已完成'),
+              if (doneTasks.isEmpty)
+                const AppCard(
+                  // 换成自适应空态：原来 SizedBox(height: 240) + NullStatus 会把
+                  // 引导文案裁在卡底下面，卡里还套了一层可滚动容器抢手势（审计 §3.4）
+                  child: EmptyView(
+                    message: '今天还没有完成任务',
+                    hint: '去「今日任务」挑一个开始吧',
+                    icon: AppIcons.checkCircle,
+                  ),
+                )
+              else
+                AppCard(
+                  child: Column(
+                    children: <Widget>[
+                      for (int index = 0; index < doneTasks.length; index++) ...<Widget>[
+                        if (index > 0) Divider(height: AppSpacing.md, color: palette.border),
+                        _doneTaskRow(doneTasks[index], palette, now: now),
+                      ],
+                    ],
+                  ),
+                ),
+              _gapMd,
+              SectionHeader(
+                title: '阳光记录',
+                subtitle: hasMore
+                    ? '先看最近 $shown 条，更早的可以展开'
+                    : '最近的花园记录（还没传上去的也在里面）',
+              ),
             ],
           ),
         ),
-      _gapMd,
-      const SectionHeader(title: '阳光流水', subtitle: '最近的花园流水（含待同步）'),
-      if (records.isEmpty)
-        const AppCard(
-          child: SizedBox(
-            height: 260,
-            child: NullStatus(
-              label: '还没有学习记录',
-              description: '完成任务、背古诗、语文打卡都会记在这里',
-              illustration: NullStatusIllustration.logs,
+        if (records.isEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            sliver: SliverToBoxAdapter(
+              child: const AppCard(
+                child: EmptyView(
+                  message: '还没有学习记录',
+                  hint: '完成任务、背古诗、语文打卡都会记在这里',
+                  icon: AppIcons.history,
+                ),
+              ),
+            ),
+          )
+        else ...<Widget>[
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            sliver: DecoratedSliver(
+              decoration: ShapeDecoration(
+                color: palette.cardColor(hasBackground: hasBackground),
+                shape: rowsShape,
+              ),
+              sliver: SliverPadding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                sliver: SliverList.separated(
+                  itemCount: shown,
+                  itemBuilder: (BuildContext context, int index) =>
+                      _recordRow(records[index], palette, now: now),
+                  separatorBuilder: (BuildContext context, int index) =>
+                      Divider(height: AppSpacing.md, color: palette.border),
+                ),
+              ),
             ),
           ),
-        )
-      else
-        AppCard(
-          child: Column(
-            children: <Widget>[
-              for (int index = 0; index < records.length; index++) ...<Widget>[
-                if (index > 0) Divider(height: AppSpacing.md, color: palette.border),
-                _recordRow(records[index], palette),
-              ],
-            ],
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
+            sliver: SliverToBoxAdapter(
+              child: Center(
+                child: hasMore
+                    ? AppTextButton(
+                        onPressed: () => setState(() => _showAllRecords = true),
+                        child: Text('查看全部记录（共 ${formatCount(records.length)} 条）'),
+                      )
+                    : _showAllRecords && records.length > _recordPreview
+                        ? AppTextButton(
+                            onPressed: () => setState(() => _showAllRecords = false),
+                            child: const Text('只看最近 20 条'),
+                          )
+                        : const SizedBox.shrink(),
+              ),
+            ),
           ),
+        ],
+        SliverToBoxAdapter(
+          child: SizedBox(height: AppSpacing.xl + AppNavBar.contentInset(context)),
         ),
-    ]);
+      ],
+    );
   }
 
   /// 「今日已完成」的一行：任务名 + 完成时刻 + 奖励标签
   /// （对应 Web 版 RecordsPage 的 `List.Item`）
-  Widget _doneTaskRow(GardenTask task, AppPalette palette) {
+  Widget _doneTaskRow(GardenTask task, AppPalette palette, {required DateTime now}) {
     final DateTime? at = task.completedAt;
     final Color rewardColor = _readableAccent(palette, palette.warning);
-    final String timeText = at == null
-        ? ''
-        : '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    // 时间与流水行同一套格式（以前这里是裸 HH:mm，跟下面的「今天 HH:mm」两套）
+    final String timeText = at == null ? '' : formatDateTime(at, now: now);
 
     return Row(
       children: <Widget>[
@@ -1988,11 +2068,11 @@ class _GardenPageState extends State<GardenPage> {
             ],
           ),
         ),
-        GlyphIcon(AppIcons.sun, size: AppFontSize.sm, color: rewardColor),
+        GlyphIcon(AppIcons.sun, size: AppSize.glyphXs, color: rewardColor),
         const SizedBox(width: AppSpacing.xs),
         AnimatedCount(
           value: task.reward,
-          formatter: (num value) => '+${value.round()}',
+          formatter: (num value) => '+${formatCount(value.round())}',
           style: TextStyle(
             fontSize: AppFontSize.sm,
             fontWeight: FontWeight.w700,
@@ -2004,7 +2084,7 @@ class _GardenPageState extends State<GardenPage> {
     );
   }
 
-  Widget _recordRow(LedgerRecord record, AppPalette palette) {
+  Widget _recordRow(LedgerRecord record, AppPalette palette, {required DateTime now}) {
     final bool rejected = record.isRejected;
     final bool pending = record.isPending;
     final Glyph icon = rejected
@@ -2018,7 +2098,8 @@ class _GardenPageState extends State<GardenPage> {
             ? palette.warning
             : palette.success;
     final String? statusLabel = record.status?.label;
-    final String timeText = _timeLabel(record.createdAt);
+    // now 由调用方注入（一次 build 只取一次）：跨零点「今天」才会跟着翻成「昨天」
+    final String timeText = formatDateTime(record.createdAt, now: now);
     // 金额也是卡片底上的强调色：正绿 / 负红都按底色压一档
     final Color amountColor = _readableAccent(
       palette,
@@ -2055,7 +2136,8 @@ class _GardenPageState extends State<GardenPage> {
         AnimatedCount(
           value: record.amount,
           // 符号跟最终值走（滚动中途不会出现「+0」这种别扭的中间态）
-          formatter: (num value) => record.amount >= 0 ? '+${value.round()}' : '${value.round()}',
+          formatter: (num value) =>
+              record.amount >= 0 ? '+${formatCount(value.round())}' : formatCount(value.round()),
           style: TextStyle(
             fontSize: AppFontSize.md,
             fontWeight: FontWeight.w700,
@@ -2115,16 +2197,60 @@ Color _readableAccent(
 
 // ---- 复用的小组件 ----
 
-/// 首屏加载中的花园：骨架屏 + 原来那句提示。
+/// 首屏加载中的花园：骨架屏；超过 [_stuckAfter] 还没出来就换成「重试」空态。
 ///
-/// 「什么时候算加载中」的判定仍在 [GardenPage] 的 build 里（`tasks.isEmpty`），
-/// 这里只把转圈的视觉换成骨架，文案保持原样。
-class _GardenLoading extends StatelessWidget {
-  const _GardenLoading();
+/// 「什么时候算加载中」的判定仍在 [GardenPage] 的 build 里（`tasks.isEmpty`）——
+/// 这个判定本身是有问题的（请求失败后 tasks 也一直是空的），但页面拿不到
+/// 「失败」信号，所以在这一层兜底：等太久就当作失败，给一个能点的出路。
+class _GardenLoading extends StatefulWidget {
+  const _GardenLoading({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  State<_GardenLoading> createState() => _GardenLoadingState();
+}
+
+class _GardenLoadingState extends State<_GardenLoading> {
+  /// 骨架屏最多显示多久就改给「重试」按钮
+  static const Duration _stuckAfter = Duration(seconds: 8);
+
+  Timer? _timer;
+  bool _stuck = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(_stuckAfter, () {
+      if (!mounted) return;
+      setState(() => _stuck = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
+    if (_stuck) {
+      return ErrorView(
+        message: '花园打不开，可能是网络不太好',
+        onRetry: () {
+          // 点了重试就回到骨架屏，别停在错误页等下一次 build
+          setState(() => _stuck = false);
+          _timer?.cancel();
+          _timer = Timer(_stuckAfter, () {
+            if (!mounted) return;
+            setState(() => _stuck = true);
+          });
+          widget.onRetry();
+        },
+      );
+    }
     return Column(
       children: <Widget>[
         // 文案与原来一字不差，只是从「转圈」挪到骨架屏上方（Column 默认居中）
@@ -2212,7 +2338,12 @@ class _GrowPulseState extends State<_GrowPulse> with SingleTickerProviderStateMi
 
 /// 横向菜单胶囊（选中态用 AppCard 的 highlight）
 class _MenuChip extends StatelessWidget {
-  const _MenuChip({required this.menu, required this.selected, required this.onTap});
+  const _MenuChip({
+    super.key,
+    required this.menu,
+    required this.selected,
+    required this.onTap,
+  });
 
   final GardenMenu menu;
   final bool selected;
@@ -2221,31 +2352,41 @@ class _MenuChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    return AppCard(
+    // 读屏：把「哪个菜单是当前页」念出来（以前选中态只体现在颜色上，看不见屏幕
+    // 的人无从得知；语义对齐 fl_ui/navigation_dock.dart 的写法）
+    return Semantics(
+      container: true,
+      button: true,
+      selected: selected,
+      label: menu.label,
+      excludeSemantics: true,
       onTap: onTap,
-      highlight: selected,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      margin: const EdgeInsets.only(right: AppSpacing.sm),
-      borderRadius: BorderRadius.circular(AppRadius.full),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          GlyphIcon(
-            _gardenIcon(menu.icon),
-            size: 18,
-            // 选中态整颗胶囊是 highlight（淡主色底），字与图标都跟着这层底走
-            color: selected ? palette.onSoft : palette.textTertiary,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Text(
-            menu.label,
-            style: TextStyle(
-              fontSize: AppFontSize.sm,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? palette.onSoft : palette.textSecondary,
+      child: AppCard(
+        onTap: onTap,
+        highlight: selected,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        margin: const EdgeInsets.only(right: AppSpacing.sm),
+        borderRadius: BorderRadius.circular(AppRadius.full),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            GlyphIcon(
+              gardenGlyph(menu.icon),
+              size: 18,
+              // 选中态整颗胶囊是 highlight（淡主色底），字与图标都跟着这层底走
+              color: selected ? palette.onSoft : palette.textTertiary,
             ),
-          ),
-        ],
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              menu.label,
+              style: TextStyle(
+                fontSize: AppFontSize.sm,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected ? palette.onSoft : palette.textSecondary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2261,20 +2402,25 @@ class _CheckButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    // 水波纹 + 按压缩放（onTap 为 null 时自带禁用态：不可点）
-    return PressInkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.full),
-      child: Container(
-        width: 40,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: ShapeDecoration(
-          color: done ? palette.success : Colors.transparent,
-          shape: AppShape.all(AppRadius.full, side: BorderSide(color: done ? palette.success : palette.border, width: 2)),
+    // 读屏：这个圆钮没有文字，只说「按钮」等于什么都没说 —— 补 label 与状态。
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: done ? '已完成' : '点击标记完成',
+      child: PressInkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.full),
+        child: Container(
+          width: AppSize.touchTarget,
+          height: AppSize.touchTarget,
+          alignment: Alignment.center,
+          decoration: ShapeDecoration(
+            color: done ? palette.success : Colors.transparent,
+            shape: AppShape.all(AppRadius.full, side: BorderSide(color: done ? palette.success : palette.border, width: 2)),
+          ),
+          // 勾压在实心 success 底上：字色跟底色算，别拿卡片底色（surface）当字色
+          child: done ? GlyphIcon(AppIcons.check, size: 22, color: palette.onColor(palette.success)) : null,
         ),
-        // 勾压在实心 success 底上：字色跟底色算，别拿卡片底色（surface）当字色
-        child: done ? GlyphIcon(AppIcons.check, size: 22, color: palette.onColor(palette.success)) : null,
       ),
     );
   }

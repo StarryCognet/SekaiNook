@@ -17,6 +17,10 @@ const double _actionGap = 8;
 const double _actionInset = 16;
 const double _actionHeight = 48;
 const double _textInset = 30;
+
+/// [_textInset] on a screen too narrow to hold it: a 320 dp screen keeps 24 dp
+/// a side for the inset and still has to leave the title 240 dp.
+const double _narrowTextInset = 20;
 const double _alertWidth = 348;
 const double _contentMaxWidth = 300;
 // Material 3 sets a filled field's text 4 in past its content padding.
@@ -37,6 +41,10 @@ final _alertSpring = SpringCurve(
   seconds: _alertDuration.inMicroseconds / Duration.microsecondsPerSecond,
 );
 
+/// Raises an alert over the page, as UIKit raises an alert.
+///
+/// A dialog that holds fields passes `dismissible: false`: a rejection reason
+/// or a PIN typed halfway is lost the moment the scrim takes a tap.
 Future<T?> showFloatingDialog<T>({
   required BuildContext context,
   required Widget child,
@@ -348,12 +356,39 @@ class CommonDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actions = this.actions ?? const <Widget>[];
-    final contentInset = hasFields ? _actionInset : _textInset;
     final glass = LiquidGlassScope.of(context);
     final colorScheme = context.colorScheme;
     final fill = glass ? glassFillOf(colorScheme) : null;
+    // Flutter reserves 40 dp a side, which on a 320 dp screen leaves the title
+    // column 180 dp and overflows at 2.0 type. 24 a side leaves 272 dp; a
+    // screen narrower than the panel takes 16 more so the title keeps 240 dp.
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final narrow = screenWidth < 360;
+    // At large type, or on a narrow screen, the title and the actions no
+    // longer fit one column; scrolling them beats clipping the last button.
+    final typeScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    final scrollable = screenWidth < 400 || typeScale > 1.3;
+    final textInset = narrow ? _narrowTextInset : _textInset;
+    final contentInset = hasFields ? _actionInset : textInset;
+    // A pure black panel shares its colour with the page behind it and its
+    // shadow has nothing to fall on; an outline keeps it a panel.
+    final onBlack =
+        colorScheme.brightness == Brightness.dark &&
+        colorScheme.surface == Colors.black;
     final dialog = AlertDialog(
       backgroundColor: glass ? Colors.transparent : null,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: narrow ? 16 : 24,
+        vertical: 24,
+      ),
+      scrollable: scrollable,
+      // Same geometry as the theme's `AppShape.dialog()` (xxl = 28), plus the
+      // side the theme leaves out.
+      shape: onBlack && !glass
+          ? AppShape.xxl.copyWith(
+              side: BorderSide(color: colorScheme.outlineVariant),
+            )
+          : null,
       titleTextStyle: hasFields
           ? AppTextStyle.body.of(context)
           : AppTextStyle.headline.of(context),
@@ -380,7 +415,7 @@ class CommonDialog extends StatelessWidget {
         _actionInset,
         _actionInset,
       ),
-      titlePadding: const EdgeInsets.fromLTRB(_textInset, 21, _textInset, 0),
+      titlePadding: EdgeInsets.fromLTRB(textInset, 21, textInset, 0),
       contentPadding:
           padding ??
           EdgeInsets.fromLTRB(
@@ -401,8 +436,12 @@ class CommonDialog extends StatelessWidget {
               ? FilledInputTheme(
                   fillColor: fill,
                   borderRadius: AppRadius.all(_actionHeight / 2),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: _textInset - _actionInset - _fieldInputGap,
+                  contentPadding: EdgeInsets.symmetric(
+                    // 窄屏收窄的 inset 不能把输入框的内边距也吃掉
+                    horizontal: math.max(
+                      _textInset - _actionInset - _fieldInputGap,
+                      textInset - _actionInset - _fieldInputGap,
+                    ),
                     vertical: 12,
                   ),
                   child: child ?? const SizedBox.shrink(),
@@ -411,19 +450,25 @@ class CommonDialog extends StatelessWidget {
         ),
       ),
     );
+    final surface = glass
+        ? _AlertGlass(
+            style: LiquidGlassStyle.alert(colorScheme),
+            rim: LiquidGlassRim.alert(colorScheme),
+            shadows: glassMenuShadows(colorScheme),
+            child: dialog,
+          )
+        : dialog;
+    // A press only lifts the panel; a dialog with fields leaves it to the
+    // buttons, so resting a finger in a text field never pulls the alert.
+    if (hasFields) {
+      return surface;
+    }
     return ElasticPress(
       pullPastEdges: true,
       maxGrowth: _pressGrowth,
       maxPull: _pressPull,
       panelOf: _surfaceRectIn,
-      child: glass
-          ? _AlertGlass(
-              style: LiquidGlassStyle.alert(colorScheme),
-              rim: LiquidGlassRim.alert(colorScheme),
-              shadows: glassMenuShadows(colorScheme),
-              child: dialog,
-            )
-          : dialog,
+      child: surface,
     );
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../fl_ui/card.dart';
 import '../../fl_ui/list.dart';
@@ -32,6 +33,9 @@ class _UiPreviewPageState extends State<UiPreviewPage> {
   Widget build(BuildContext context) {
     return CommonScaffold(
       title: 'FlClash 试样间',
+      // 这页不在 MainShell 里，是从「设置 → 管理员 → 高级 · 排障」go 进来的：
+      // 用 go 进门时栈里只有这一页，不自己指定返回就既没有返回箭头、系统返回还会退出 App
+      backAction: () => context.go('/settings'),
       onKeywordsUpdate: (List<String> keywords) {},
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),

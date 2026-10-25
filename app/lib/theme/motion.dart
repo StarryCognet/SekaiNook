@@ -186,6 +186,9 @@ class SharedAxisPageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
+    // 系统开了「减少动态效果」就直给页面 —— 否则滑动/缩放对前庭敏感的人是负担。
+    // 各级页面用的是同一份 AppMotion.pageTransitionsTheme，改一处全站生效。
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return child;
     return SharedAxisTransition(
       animation: animation,
       secondaryAnimation: secondaryAnimation,

@@ -120,6 +120,9 @@ class _PressInkWellState extends State<PressInkWell> {
           curve: AppMotion.spring,
           child: Material(
             color: Colors.transparent,
+            // 放大后的描边会超出原来的边界：这层 Material 千万别裁剪，
+            // 否则卡片/任务行「按下边框转主色」会被切掉一圈（见 AppCard / TaskRow）
+            clipBehavior: Clip.none,
             child: InkWell(
               onTap: interactive
                   ? () {

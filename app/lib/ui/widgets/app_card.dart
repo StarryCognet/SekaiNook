@@ -85,7 +85,11 @@ class _AppCardState extends State<AppCard> {
       child: Material(
         color: fill,
         shape: AppShape.of(radius),
-        clipBehavior: Clip.antiAlias,
+        // **不要裁剪**：按压缩放（[PressInkWell] 的 AnimatedScale）会把描边胀到
+        // 卡片边界之外几个像素，`Clip.antiAlias` 会把那一圈切掉 —— 表现出来就是
+        // 「按下时看不出描边转主色」。水波纹已在 `app_theme.dart` 里关掉
+        // （`NoSplash.splashFactory`），所以不需要靠这里裁 splash。
+        clipBehavior: Clip.none,
         child: !tappable
             ? inner
             : PressInkWell(

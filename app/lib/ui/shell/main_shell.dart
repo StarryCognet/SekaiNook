@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +16,7 @@ import '../../fl_ui/navigation_dock.dart';
 import '../../state/family_state.dart';
 import '../../state/garden_state.dart';
 import '../../state/notification_state.dart';
+import '../../state/theme_state.dart';
 import '../../state/update_state.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
@@ -68,6 +71,15 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _update.removeListener(_onUpdateChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 记页面栈放在这里（而不是 build 里）：`GoRouterState.of` 注册了依赖，
+    // 路由一变这里先被调用。build 里改自身字段属于副作用，
+    // 新页面那一帧也容易和「build 期间标记重建」撞上。
+    _recordLocation(GoRouterState.of(context).uri.toString());
   }
 
   /// 有新版本就弹一次窗。通知可能在 build 过程中发出来，所以延到下一帧再弹。
@@ -135,6 +147,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   /// 首屏那点回弹不会被误判成滚动。
   static const double _topBarElevatedAt = 8;
 
+  /// 版心最大宽度 —— Web / 平板宽屏下正文不铺满整屏（一行字太长眼睛要来回扫）。
+  /// 手机（≤720）上不会触发，布局与原来完全一致。
+  static const double _contentMaxWidth = 720;
+
+  /// 悬浮底栏的最大宽度：5 个 Tab 在宽屏上没必要拉满整屏。
+  static const double _dockMaxWidth = 480;
+
   bool _handleScroll(ScrollNotification notification) {
     // 只认最外层那条列表；卡片里的横向列表、聊天流之类的内层滚动不该摇顶栏
     if (notification.depth != 0) return false;
@@ -176,23 +195,35 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _currentLocation = location;
   }
 
-  /// 系统返回键：先让页面内层关，再退回上一个页面，真的没地方退了才退出 App
+  /// 系统返回键：先让页面内层关，再退回上一个页面，真的没地方退了才退出 App。
+  ///
+  /// 冷启动直接落在二级页（深链 / 网页刷新在 `/family/plan` 之类）时返回栈是空的：
+  /// 以前这时直接 `SystemNavigator.pop()`，手机上一下退出应用、Web 上用户只能
+  /// 自己改 URL。现在先回首页，**没有「无路可退」这一步**。
   void _handleSystemBack() {
     if (_backIntent.dispatch()) return;
-    if (_backStack.isEmpty) {
-      SystemNavigator.pop();
+    if (_backStack.isNotEmpty) {
+      final String target = _backStack.removeLast();
+      // 先认账，免得这次「回退」又被当成往前走了一步
+      _currentLocation = target;
+      context.go(target);
       return;
     }
-    final String target = _backStack.removeLast();
-    // 先认账，免得这次「回退」又被当成往前走了一步
-    _currentLocation = target;
-    context.go(target);
+    final String path = Uri.parse(_currentLocation).path;
+    if (path != '/home') {
+      _currentLocation = '/home';
+      context.go('/home');
+      return;
+    }
+    // Web 没有「退出 App」这回事（浏览器也不允许脚本关标签页），停在首页即可。
+    if (kIsWeb) return;
+    SystemNavigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final location = GoRouterState.of(context).uri.toString();
-    _recordLocation(location);
+    // didChangeDependencies 已经把当前 location 记进 _currentLocation（见那里注释）
+    final location = _currentLocation;
     final index = _indexForLocation(location);
     final unread = context.select<NotificationState, int>((state) => state.unreadCount);
     final pending = context.select<FamilyState, int>((state) => state.pendingCount);
@@ -239,10 +270,23 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   // AnimatedContainer 里）。只认最外层那条列表的滚动，
                   // `depth != 0` 是卡片内部横向列表之类，别拿它摇顶栏。
                   onNotification: _handleScroll,
-                  child: SlideFadeSwitcher(
-                    childKey: ValueKey<String>(location),
-                    offset: 16,
-                    child: widget.child,
+                  child: LayoutBuilder(
+                    builder: (BuildContext context, BoxConstraints constraints) {
+                      // 版心：宽屏居中、窄屏不裁。高度必须显式给（Stack 里是
+                      // 紧约束），否则 Center 的松约束会让 ListView 拿不到高。
+                      return Align(
+                        alignment: Alignment.topCenter,
+                        child: SizedBox(
+                          width: math.min(constraints.maxWidth, _contentMaxWidth),
+                          height: constraints.maxHeight,
+                          child: SlideFadeSwitcher(
+                            childKey: ValueKey<String>(location),
+                            offset: 16,
+                            child: widget.child,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -270,7 +314,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 right: 0,
                 child: ListenableBuilder(
                   listenable: cover,
-                  child: AppTopBarHost(location: location, elevated: _topBarElevated),
+                  // 宽屏版心：顶栏与正文同宽，页名不会飘到内容左边老远。
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: _contentMaxWidth),
+                      child: AppTopBarHost(location: location, elevated: _topBarElevated),
+                    ),
+                  ),
                   builder: (BuildContext context, Widget? child) =>
                       _CoveredBar(covered: cover.covered, slideUp: true, child: child!),
                 ),
@@ -280,10 +330,17 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           // 悬浮胶囊底栏：FlClash lib/ui 的 NavigationDock（弹簧透镜跟手 + 按下膨胀）
           bottomNavigationBar: ListenableBuilder(
             listenable: cover,
-            child: NavigationDock(
-              selectedIndex: index,
-              onSelected: (value) => context.go(_locations[value]),
-              destinations: <NavigationDockDestination>[
+            // 宽屏上胶囊底栏限宽居中：5 个 Tab 拉满 1440px 会散架。
+            // `heightFactor: 1` 必须给 —— 底栏槽位的约束有界，裸 `Center` 会撑满
+            // 整屏高，胶囊就被摆到屏幕正中间去了（实测 2026-10-25）。
+            child: Center(
+              heightFactor: 1,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: _dockMaxWidth),
+                child: NavigationDock(
+                  selectedIndex: index,
+                  onSelected: (value) => context.go(_locations[value]),
+                  destinations: <NavigationDockDestination>[
                 NavigationDockDestination(
                   glyph: AppGlyphs.dashboard,
                   label: '首页',
@@ -306,7 +363,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   glyph: AppGlyphs.settings,
                   label: '设置',
                 ),
-              ],
+                  ],
+                ),
+              ),
             ),
             builder: (BuildContext context, Widget? child) =>
                 _CoveredBar(covered: cover.covered, slideUp: false, child: child!),
@@ -343,6 +402,13 @@ class _TopBarFade extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    // 设了自定义背景图时，页面底色是「照片 + 薄纱」，这里再用不透明的 palette.bg
+    // 盖一条就会在照片上直接切出一道色带。换成 bgVeil（与背景层同一层薄纱），
+    // 照片还透得出来，文字也不会和下面的内容叠在一起。
+    final bool hasBackground = context.select<ThemeState, bool>(
+      (ThemeState state) => state.background.isNotEmpty,
+    );
+    final Color veil = hasBackground ? palette.bgVeil : palette.bg;
     final double top = MediaQuery.viewPaddingOf(context).top;
     // 纯底色这一段要正好盖住「状态栏 + 条身」；2.9.8 起顶栏是贴死状态栏的通栏，
     // 这一段占整个渐变的绝大部分（以前是悬空胶囊，46% 就够）。
@@ -358,9 +424,9 @@ class _TopBarFade extends StatelessWidget {
               end: Alignment.bottomCenter,
               stops: <double>[0, solid / total, 1],
               colors: <Color>[
-                palette.bg,
-                palette.bg,
-                palette.bg.withValues(alpha: 0),
+                veil,
+                veil,
+                veil.withValues(alpha: 0),
               ],
             ),
           ),
@@ -385,15 +451,18 @@ class _CoveredBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 系统「减少动态效果」下直接切位、不滑不淡（前庭敏感人群友好）
+    final bool reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final Duration duration = reduceMotion ? Duration.zero : AppMotion.normal;
     return IgnorePointer(
       ignoring: covered,
       child: AnimatedOpacity(
         opacity: covered ? 0 : 1,
-        duration: const Duration(milliseconds: 260),
+        duration: duration,
         curve: AppMotion.standard,
         child: AnimatedSlide(
           offset: covered ? Offset(0, slideUp ? -0.25 : 0.35) : Offset.zero,
-          duration: const Duration(milliseconds: 260),
+          duration: duration,
           curve: AppMotion.standard,
           child: child,
         ),

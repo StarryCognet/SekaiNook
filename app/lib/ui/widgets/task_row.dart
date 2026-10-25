@@ -116,117 +116,139 @@ class TaskRow extends StatelessWidget {
     // 会有一个能看出来的折点，超椭圆整条边曲率连续。
     final RoundedSuperellipseBorder shape = AppShape.all(AppRadius.md);
 
-    return Material(
-      color: fill,
-      shape: shape,
-      clipBehavior: Clip.antiAlias,
-      // 底色在 Material 上、描边在内层容器上 —— 与 AppCard 同一套分工，
-      // 否则水波纹会被底色压住看不见
-      child: PressInkWell(
-        onTap: tappable ? onTap : null,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        child: AnimatedContainer(
-          duration: AppMotion.fast,
-          curve: AppMotion.standard,
-          constraints: BoxConstraints(minHeight: compact ? 48 : 56),
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: ShapeDecoration(
-            shape: AppShape.all(AppRadius.md, side: BorderSide(color: borderColor)),
-          ),
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: 36,
-                height: 36,
-                decoration: ShapeDecoration(
-                  color: iconFill,
-                  shape: AppShape.all(AppRadius.sm),
+    // 整行可点却没有任何语义：读屏只念得到「任务名 +10」，听不出这是个按钮。
+    // 这里只补「按钮 / 可点」这一层，内部文字仍照原样朗读。
+    return Semantics(
+      container: true,
+      button: tappable,
+      enabled: tappable,
+      child: Material(
+        color: fill,
+        shape: shape,
+        // 与 [AppCard] 同一处理：按压缩放会把描边胀出边界，裁掉就看不见了
+        // （水波纹已在 `app_theme.dart` 关掉，不靠这里裁 splash）
+        clipBehavior: Clip.none,
+        // 底色在 Material 上、描边在内层容器上 —— 与 AppCard 同一套分工，
+        // 否则水波纹会被底色压住看不见
+        child: PressInkWell(
+          onTap: tappable ? onTap : null,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: AnimatedContainer(
+            duration: AppMotion.fast,
+            curve: AppMotion.standard,
+            constraints: BoxConstraints(minHeight: compact ? 48 : 56),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.sm,
+            ),
+            decoration: ShapeDecoration(
+              shape: AppShape.all(AppRadius.md, side: BorderSide(color: borderColor)),
+            ),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: ShapeDecoration(
+                    color: iconFill,
+                    shape: AppShape.all(AppRadius.sm),
+                  ),
+                  child: GlyphIcon(icon, size: 20, color: iconColor),
                 ),
-                child: GlyphIcon(icon, size: 20, color: iconColor),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Flexible(
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: AppFontSize.sm,
-                              fontWeight: FontWeight.w600,
-                              color: titleColor,
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Flexible(
+                            child: Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: AppFontSize.sm,
+                                fontWeight: FontWeight.w600,
+                                color: titleColor,
+                              ),
                             ),
                           ),
-                        ),
-                        if (mustBadge) ...<Widget>[
-                          const SizedBox(width: AppSpacing.xs),
-                          _mustBadge(palette, fill),
+                          if (mustBadge) ...<Widget>[
+                            const SizedBox(width: AppSpacing.xs),
+                            _mustBadge(palette, fill),
+                          ],
                         ],
-                      ],
-                    ),
-                    if (meta != null && meta!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 1),
-                        child: Row(
-                          children: <Widget>[
-                            if (metaIcon != null) ...<Widget>[
-                              GlyphIcon(
-                                metaIcon!,
-                                size: 12,
-                                color: metaDanger
-                                    ? palette.ink(palette.danger, fill)
-                                    : palette.textTertiary,
-                              ),
-                              const SizedBox(width: AppSpacing.xs),
-                            ],
-                            Flexible(
-                              child: Text(
-                                meta!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: AppFontSize.xs,
+                      ),
+                      if (meta != null && meta!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Row(
+                            children: <Widget>[
+                              if (metaIcon != null) ...<Widget>[
+                                GlyphIcon(
+                                  metaIcon!,
+                                  size: 12,
                                   color: metaDanger
                                       ? palette.ink(palette.danger, fill)
                                       : palette.textTertiary,
-                                  fontFeatures: kTabularNumbers,
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                              ],
+                              Flexible(
+                                child: Text(
+                                  meta!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: AppFontSize.xs,
+                                    color: metaDanger
+                                        ? palette.ink(palette.danger, fill)
+                                        : palette.textTertiary,
+                                    fontFeatures: kTabularNumbers,
+                                  ),
                                 ),
                               ),
-                            ),
-                            if (weekTarget != null) ...<Widget>[
-                              const SizedBox(width: 6),
-                              _weekDots(palette, weekDone: weekDone ?? 0, target: weekTarget!),
+                              if (weekTarget != null) ...<Widget>[
+                                const SizedBox(width: 6),
+                                _weekDots(palette, weekDone: weekDone ?? 0, target: weekTarget!),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              if (value != null) ...<Widget>[
+                if (value != null) ...<Widget>[
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    value!,
+                    style: TextStyle(
+                      fontSize: AppFontSize.md,
+                      fontWeight: FontWeight.w700,
+                      color: valueColor,
+                      fontFeatures: kTabularNumbers,
+                    ),
+                  ),
+                ],
                 const SizedBox(width: AppSpacing.sm),
-                Text(
-                  value!,
-                  style: TextStyle(
-                    fontSize: AppFontSize.md,
-                    fontWeight: FontWeight.w700,
-                    color: valueColor,
-                    fontFeatures: kTabularNumbers,
+                // 完成态只剩一个对勾图标：读屏要知道这是「做满了」而不是「点它」
+                Semantics(
+                  label: switch (state) {
+                    TaskRowState.ready => '可以打卡',
+                    TaskRowState.later => '还没到时间',
+                    TaskRowState.done => '今天已做满',
+                  },
+                  excludeSemantics: true,
+                  child: _statusDot(
+                    palette: palette,
+                    accent: accent,
+                    hasBackground: hasBackground,
                   ),
                 ),
               ],
-              const SizedBox(width: AppSpacing.sm),
-              _statusDot(palette: palette, accent: accent, hasBackground: hasBackground),
-            ],
+            ),
           ),
         ),
       ),

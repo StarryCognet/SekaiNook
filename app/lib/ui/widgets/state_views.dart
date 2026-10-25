@@ -16,6 +16,10 @@ import './motion/app_buttons.dart';
 /// 有明确的「还在推进」的节奏。
 ///
 /// 整页加载优先用 [SkeletonList] —— 骨架屏比转圈更不打断视线。
+///
+/// **加载语汇只留一套**：全站默认是 `fl_ui/loading.dart` 的
+/// `AppLoading`（彗星环，带 `加载中` 语义标签）。这个变形块版本只留给
+/// 预览页和「不需要占一块骨架的局部」这类特殊场景，新代码别再引它。
 class LoadingView extends StatelessWidget {
   const LoadingView({super.key, this.message});
 
@@ -84,43 +88,60 @@ class SkeletonList extends StatelessWidget {
 }
 
 /// 出错了（带重试）
+///
+/// [action] 给了就用它当按钮（比如「重新登录」「换个筛选」），否则按
+/// [onRetry] 出「再试一次」。
 class ErrorView extends StatelessWidget {
-  const ErrorView({super.key, required this.message, this.onRetry, this.icon = AppIcons.cloudOff});
+  const ErrorView({
+    super.key,
+    required this.message,
+    this.onRetry,
+    this.icon = AppIcons.cloudOff,
+    this.action,
+  });
 
   final String message;
   final VoidCallback? onRetry;
   final Glyph icon;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final Widget? button =
+        action ??
+        (onRetry == null
+            ? null
+            : AppOutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const GlyphIcon(AppIcons.refresh, size: 18),
+                label: const Text('再试一次'),
+              ));
     return _StateHint(
       icon: icon,
       iconColor: palette.danger,
       message: message,
-      action: onRetry == null
-          ? null
-          : AppOutlinedButton.icon(
-              onPressed: onRetry,
-              icon: const GlyphIcon(AppIcons.refresh, size: 18),
-              label: const Text('再试一次'),
-            ),
+      action: button,
     );
   }
 }
 
 /// 空状态
+///
+/// [action] 给空态一个「下一步」—— 别只告诉用户这儿是空的。
 class EmptyView extends StatelessWidget {
   const EmptyView({
     super.key,
     required this.message,
     this.icon = AppIcons.inbox,
     this.hint,
+    this.action,
   });
 
   final String message;
   final String? hint;
   final Glyph icon;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -130,6 +151,7 @@ class EmptyView extends StatelessWidget {
       iconColor: palette.textTertiary,
       message: message,
       hint: hint,
+      action: action,
     );
   }
 }

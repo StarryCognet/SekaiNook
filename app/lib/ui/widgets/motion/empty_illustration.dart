@@ -4,7 +4,20 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_shape.dart';
+import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
+
+/// 主轴落位占整段编排的比例：0.69 × 900ms ≈ 620ms，剩下留给小圆收尾。
+const double _mainSpan = 0.69;
+
+/// 三颗小圆的编排：第一颗晚 0.16，每颗再晚 0.12，单颗入场跨度 0.34。
+///
+/// ⚠️ 这几个是「编排比例」而不是时长，`AppMotion` 里没有对应档位；
+/// 待 Lead 把这一组收进 `AppMotion`（如 `enterMainSpan` / `satelliteStep`），
+/// 见交付说明的跨域待办。
+const double _satelliteDelay = 0.16;
+const double _satelliteStep = 0.12;
+const double _satelliteSpan = 0.34;
 
 /// 空态 / 错误态的程序化插画（移植 FlClash `widgets/null_status.dart` 的入场编排）。
 ///
@@ -35,7 +48,7 @@ class _EmptyIllustrationState extends State<EmptyIllustration>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 900),
+    duration: AppMotion.celebrate,
   );
 
   bool _started = false;
@@ -68,7 +81,9 @@ class _EmptyIllustrationState extends State<EmptyIllustration>
       builder: (BuildContext context, Widget? child) {
         final double t = _controller.value;
         // 主轴：前 69% 的时间转着落位（≈620ms），剩下的留给小圆收尾
-        final double main = Curves.easeOutCubic.transform((t / 0.69).clamp(0.0, 1.0));
+        final double main = Curves.easeOutCubic.transform(
+          (t / _mainSpan).clamp(0.0, 1.0),
+        );
         return SizedBox(
           width: size,
           height: size,
@@ -105,8 +120,8 @@ class _EmptyIllustrationState extends State<EmptyIllustration>
 
   /// 第 [i] 颗强调小圆：晚 120ms×i 登场，从中心往外弹到固定角位。
   Widget _satellite(int i, double t, double size, Color color) {
-    final double delay = 0.16 + i * 0.12;
-    final double local = ((t - delay) / 0.34).clamp(0.0, 1.0);
+    final double delay = _satelliteDelay + i * _satelliteStep;
+    final double local = ((t - delay) / _satelliteSpan).clamp(0.0, 1.0);
     if (local <= 0) return const SizedBox.shrink();
     final double e = Curves.easeOutBack.transform(local);
     final double angle = -math.pi / 2 + i * (2 * math.pi / 3) + 0.6;

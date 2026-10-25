@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:sekainook_app/ui/widgets/app_toast.dart';
 import 'package:sekainook_app/ui/widgets/app_loading.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,16 +24,18 @@ import '../../../data/api/maintenance_api.dart';
 import '../../../data/api/upload_api.dart';
 import '../../../data/models/family_names.dart';
 import '../../../state/family_state.dart';
+import '../../../state/local_notify_state.dart';
 import '../../../state/settings_state.dart';
 import '../../../state/theme_state.dart';
+import '../../../state/update_state.dart';
 import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/format.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/update_dialog.dart';
-import '../ui_preview_page.dart';
 import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
 import '../../shell/back_intent.dart';
@@ -446,6 +449,8 @@ class _SettingsPageState extends State<SettingsPage> {
     if (next == FamilyRole.parent && family.role != FamilyRole.parent) {
       final ok = await showFloatingDialog<bool>(
         context: context,
+        // 带输入的弹窗：点外面别把已输入的口令连同弹窗一起关掉
+        dismissible: false,
         child: _ParentPinDialog(family: family),
       );
       if (ok != true || !mounted) return;
@@ -467,6 +472,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final family = context.read<FamilyState>();
     final ok = await showFloatingDialog<bool>(
       context: context,
+      dismissible: false,
       child: _ChangePinDialog(family: family),
     );
     if (ok != true || !mounted) return;
@@ -589,6 +595,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final api = _adminApi;
     final password = await showFloatingDialog<String>(
       context: context,
+      dismissible: false,
       child: _AdminPasswordDialog(api: api),
     );
     if (password == null || !mounted) return;
@@ -629,7 +636,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       // 失败保留上一次的列表（P-4）：清空 + 显示「还没改过」会被误读成记录没了
       setState(() {
-        _adjustmentsError = '最近调整没拉到，下拉或用下面的按钮再试一次';
+        _adjustmentsError = '最近调整没拉到';
         _loadingAdjustments = false;
       });
     }
@@ -826,6 +833,10 @@ class _SettingsPageState extends State<SettingsPage> {
     final theme = context.watch<ThemeState>();
     final family = context.watch<FamilyState>();
     final isParent = family.role == FamilyRole.parent;
+    // 网页版装不了 APK：更新入口整块没有内容，这里换成一句说明（别让「关于」卡空半截）
+    final bool appUpdatable = context.watch<UpdateState>().supported;
+    // 网页版也排不了本地提醒：入口文案跟着平台走，别许愿
+    final bool notifierSupported = context.watch<LocalNotifyState>().supported;
 
     return ListView(
       // 底部让出底栏胶囊的高度（`MainShell` 开了 extendBody，它是浮在内容上的）
@@ -875,10 +886,13 @@ class _SettingsPageState extends State<SettingsPage> {
           child: AppCard(
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             onTap: () => setState(() => _section = _SettingsSection.push),
-            child: const _EntryRow(
+            child: _EntryRow(
               icon: AppIcons.bell,
               title: '手机提醒',
-              description: '任务快到期时手机收提醒 · 可以发一条测试通知',
+              // 网页版排不了本地通知：入口别承诺「手机收提醒」
+              description: notifierSupported
+                  ? '任务快到期时手机收提醒 · 可以发一条测试通知'
+                  : '网页版不会提醒你 · 装上安卓 App 才能开',
             ),
           ),
         ),
@@ -951,24 +965,23 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ],
                 ),
-                // 安卓才有这两行：装上就能自己更新；网页版刷新即最新，不摆这个入口
-                const UpdateCheckTile(),
-                const UpdateAutoCheckTile(),
+                // 装得上 App 更新才有这两行；网页版刷新即最新，只留一句说明
+                if (appUpdatable) ...<Widget>[
+                  const UpdateCheckTile(),
+                  const UpdateAutoCheckTile(),
+                ] else
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.sm),
+                    child: Text(
+                      '网页版不用更新：刷新一下页面就是最新版。装安卓 App 之后这里会多出「检查更新」。',
+                      style: TextStyle(
+                        fontSize: AppFontSize.xs,
+                        color: palette.textSecondary,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
               ],
-            ),
-          ),
-        ),
-        EnterBox(
-          index: 6,
-          child: AppCard(
-            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const UiPreviewPage()),
-            ),
-            child: const _EntryRow(
-              icon: AppIcons.settings,
-              title: 'FlClash 试样间',
-              description: 'UI 组件预览：卡片 / 列表 / 空态 / 底部面板（开发者用）',
             ),
           ),
         ),
@@ -1026,8 +1039,9 @@ class _SettingsPageState extends State<SettingsPage> {
               onPressed: () => setState(() => _logExpanded = !_logExpanded),
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                // 展开 / 收起也是要点的：别用 Size.zero + shrinkWrap，留够 44dp
+                minimumSize: const Size(0, 44),
+                tapTargetSize: MaterialTapTargetSize.padded,
               ),
               child: Text(
                 _logExpanded
@@ -1181,33 +1195,26 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: AppSpacing.md),
               Divider(height: 1, color: palette.border),
               const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: <Widget>[
-                  Text(
-                    '明暗',
-                    style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
-                  ),
-                  const Spacer(),
-                  SegmentedButton<ThemeBrightness>(
-                    segments: const <ButtonSegment<ThemeBrightness>>[
-                      ButtonSegment<ThemeBrightness>(
-                        value: ThemeBrightness.light,
-                        label: Text('浅色'),
-                      ),
-                      ButtonSegment<ThemeBrightness>(
-                        value: ThemeBrightness.dark,
-                        label: Text('深色'),
-                      ),
-                      ButtonSegment<ThemeBrightness>(
-                        value: ThemeBrightness.system,
-                        label: Text('跟随系统'),
-                      ),
-                    ],
-                    selected: <ThemeBrightness>{theme.brightness},
-                    showSelectedIcon: false,
-                    onSelectionChanged: (Set<ThemeBrightness> value) => _setBrightness(value.first),
-                  ),
-                ],
+              // 三选一改成整行等分的 _ChoiceRow：窄屏上 SegmentedButton 会挤到出界
+              Text(
+                '明暗',
+                style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              _ChoiceRow(
+                options: const <String>['浅色', '深色', '跟随系统'],
+                selectedIndex: switch (theme.brightness) {
+                  ThemeBrightness.light => 0,
+                  ThemeBrightness.dark => 1,
+                  ThemeBrightness.system => 2,
+                },
+                onChanged: (int index) => _setBrightness(
+                  switch (index) {
+                    0 => ThemeBrightness.light,
+                    1 => ThemeBrightness.dark,
+                    _ => ThemeBrightness.system,
+                  },
+                ),
               ),
               // 纯黑只在深色下有意义，浅色下不给这个开关（点了也不会变）
               if (Theme.of(context).brightness == Brightness.dark) ...<Widget>[
@@ -1268,7 +1275,8 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: AppSpacing.sm),
               const _CardHead(
                 title: '字号',
-                description: '整体放大或缩小正文；图标、间距不跟着变',
+                // 2026-10 起字号走 MediaQuery.textScaler，全站文字与 fl_ui 度量同源放大
+                description: '整体放大：正文、按钮、导航会一起变大；个别固定尺寸的小图标不跟着变',
               ),
               Row(
                 children: <Widget>[
@@ -1278,6 +1286,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       min: 0.8,
                       max: 1.4,
                       divisions: 12,
+                      // 读屏念出来是「110%」而不是「1.1」
+                      semanticFormatterCallback: (double value) => '${(value * 100).round()}%',
                       onChanged: (double value) => theme.previewTextScale(value),
                       onChangeEnd: theme.setTextScale,
                     ),
@@ -1311,6 +1321,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       min: ThemeState.navOpacityMin,
                       max: ThemeState.navOpacityOpaque,
                       divisions: 10,
+                      // 读屏念出来是「80%」而不是「0.8」
+                      semanticFormatterCallback: (double value) => '${(value * 100).round()}%',
                       // 拖动时只改内存（每帧都会回调），松手才落盘
                       onChanged: theme.previewNavBarOpacity,
                       onChangeEnd: theme.setNavBarOpacity,
@@ -1454,64 +1466,69 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _themeTile(AppPalette palette, AppThemePreset preset, ThemeId current) {
     final bool selected = preset.id == current;
     final List<Color> swatch = AppTheme.swatchOf(preset.id);
-    return PressScale(
-      scale: 0.94,
-      onTap: () => _pickTheme(preset),
-      child: SizedBox(
-        width: 62,
-        child: Column(
-          children: <Widget>[
-            AnimatedContainer(
-              duration: AppMotion.fast,
-              curve: AppMotion.standard,
-              padding: const EdgeInsets.all(3),
-              decoration: ShapeDecoration(
-                shape: AppShape.all(
-                  AppRadius.full,
-                  side: BorderSide(
-                    color: selected ? palette.primary : palette.border,
-                    width: selected ? 2 : 1,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${preset.name}主题',
+      child: PressScale(
+        scale: 0.94,
+        onTap: () => _pickTheme(preset),
+        child: SizedBox(
+          width: 62,
+          child: Column(
+            children: <Widget>[
+              AnimatedContainer(
+                duration: AppMotion.fast,
+                curve: AppMotion.standard,
+                padding: const EdgeInsets.all(3),
+                decoration: ShapeDecoration(
+                  shape: AppShape.all(
+                    AppRadius.full,
+                    side: BorderSide(
+                      color: selected ? palette.primary : palette.border,
+                      width: selected ? 2 : 1,
+                    ),
+                  ),
+                ),
+                child: ClipOval(
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Stack(
+                      children: <Widget>[
+                        Positioned.fill(child: ColoredBox(color: swatch[0])),
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          width: 22,
+                          height: 22,
+                          child: ColoredBox(color: swatch[1]),
+                        ),
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          width: 22,
+                          height: 22,
+                          child: ColoredBox(color: swatch[2]),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-              child: ClipOval(
-                child: SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: Stack(
-                    children: <Widget>[
-                      Positioned.fill(child: ColoredBox(color: swatch[0])),
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        width: 22,
-                        height: 22,
-                        child: ColoredBox(color: swatch[1]),
-                      ),
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        width: 22,
-                        height: 22,
-                        child: ColoredBox(color: swatch[2]),
-                      ),
-                    ],
-                  ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                preset.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppFontSize.xs,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: selected ? palette.primary : palette.textSecondary,
                 ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              preset.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: AppFontSize.xs,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: selected ? palette.primary : palette.textSecondary,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1623,7 +1640,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.xs),
                   child: Text(
-                    '还没连上云端称呼表（本地库需要执行 0004 迁移），当前显示的是本机缓存',
+                    '还没连上云端称呼，现在显示的是这台手机上记着的那份',
                     style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
                   ),
                 ),
@@ -1710,7 +1727,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
               ],
-              Row(
+              // 两个按钮宽度不定（「清理 N 张」还会变长）：改用 Wrap，窄屏自动换行
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: <Widget>[
                   AppOutlinedButton(
                     onPressed: _scanning || _cleaning ? null : _scanOrphans,
@@ -1722,8 +1743,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           )
                         : const Text('扫描闲置照片'),
                   ),
-                  if (_orphanCount > 0) ...<Widget>[
-                    const SizedBox(width: AppSpacing.sm),
+                  if (_orphanCount > 0)
                     AppFilledButton(
                       onPressed: _cleaning ? null : _cleanOrphans,
                       style: FilledButton.styleFrom(
@@ -1751,7 +1771,6 @@ class _SettingsPageState extends State<SettingsPage> {
                               ),
                             ),
                     ),
-                  ],
                 ],
               ),
             ],
@@ -1778,15 +1797,6 @@ class _SettingsPageState extends State<SettingsPage> {
       children: <Widget>[
         _subPageHeader(palette, '管理员'),
         const SectionHeader(title: '管理员', subtitle: '直接校准积分数，改完立刻生效'),
-        AppCard(
-          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-          onTap: () => setState(() => _selftestOpen = true),
-          child: const _EntryRow(
-            icon: AppIcons.checklist,
-            title: '全站自检',
-            description: '把后端整条链路逐项跑一遍 · 按组勾选、套预设、导出 JSON / Markdown',
-          ),
-        ),
         AppCard(
           margin: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: Column(
@@ -1843,13 +1853,15 @@ class _SettingsPageState extends State<SettingsPage> {
                 description: '把某一本账直接归零；同样会记一条「管理员调整」，改错了在下面撤销',
               ),
               const SizedBox(height: AppSpacing.sm),
-              Row(
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: <Widget>[
                   AppOutlinedButton(
                     onPressed: family.balance == 0 ? null : () => _clearLedger(sun: false),
                     child: const Text('家庭积分清零'),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
                   AppOutlinedButton(
                     onPressed: family.sunBalance == 0 ? null : () => _clearLedger(sun: true),
                     child: const Text('花园阳光清零'),
@@ -1882,22 +1894,18 @@ class _SettingsPageState extends State<SettingsPage> {
                   ],
                 )
               else if (entries.isEmpty)
-                Text(
-                  _adjustmentsError ?? '还没改过积分数',
-                  style: TextStyle(
-                    fontSize: AppFontSize.xs,
-                    color: _adjustmentsError == null ? palette.textTertiary : palette.danger,
-                  ),
-                )
+                _adjustmentsError == null
+                    ? Text(
+                        '还没改过积分数',
+                        style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                      )
+                    : _adjustmentsErrorRow(palette)
               else ...<Widget>[
                 // 列表非空时不挡住记录，只在上面补一行「刚才没拉到最新」
                 if (_adjustmentsError != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                    child: Text(
-                      _adjustmentsError!,
-                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger),
-                    ),
+                    child: _adjustmentsErrorRow(palette),
                   ),
                 for (final item in entries) _adjustmentRow(palette, item),
               ],
@@ -1947,6 +1955,26 @@ class _SettingsPageState extends State<SettingsPage> {
                     : const Text('改密码'),
               ),
             ],
+          ),
+        ),
+        // 排障 / 调界面这类东西收在这一段里，别和「改积分数」混在一起
+        const SectionHeader(title: '高级 · 排障', subtitle: '平时用不到，出问题或调界面时才进来'),
+        AppCard(
+          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+          onTap: () => setState(() => _selftestOpen = true),
+          child: const _EntryRow(
+            icon: AppIcons.checklist,
+            title: '全站自检',
+            description: '把后端整条链路逐项跑一遍 · 按组勾选、套预设、导出 JSON / Markdown',
+          ),
+        ),
+        AppCard(
+          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+          onTap: () => context.go('/ui-preview'),
+          child: const _EntryRow(
+            icon: AppIcons.settings,
+            title: 'FlClash 试样间',
+            description: 'UI 组件预览：卡片 / 列表 / 空态 / 底部面板（开发者用）',
           ),
         ),
       ],
@@ -2006,6 +2034,25 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  /// 拉调整记录失败：一句原因 + 一个真能点的「重试」（这页没有下拉刷新，别写「下拉」）
+  Widget _adjustmentsErrorRow(AppPalette palette) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            _adjustmentsError!,
+            style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger),
+          ),
+        ),
+        AppTextButton(
+          onPressed: _loadingAdjustments ? null : _refreshAdjustments,
+          style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+          child: Text(_loadingAdjustments ? '重试中…' : '重试'),
+        ),
+      ],
+    );
+  }
+
   // -------------------------------------------------------------- 小零件
 
   /// 子页统一的滚动内边距。
@@ -2056,16 +2103,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
 // -------------------------------------------------------------------- 通用件
 
+/// 积分 / 阳光的数字：整数走千分位（`1,095`），非整数留两位小数
 String _formatNum(num value) =>
-    value == value.roundToDouble() ? value.round().toString() : value.toString();
+    value == value.roundToDouble() ? formatCount(value) : formatYuan(value);
 
+/// 调整记录的时间：统一走 format.dart（今天 / 昨天 / MM-dd HH:mm）
 String _formatAdjustTime(DateTime? time) {
   if (time == null) return '时间未知';
-  final month = time.month.toString().padLeft(2, '0');
-  final day = time.day.toString().padLeft(2, '0');
-  final hour = time.hour.toString().padLeft(2, '0');
-  final minute = time.minute.toString().padLeft(2, '0');
-  return '$month-$day $hour:$minute';
+  return formatDateTime(time);
 }
 
 /// 管理员接口的报错文案：`e.message` 之外，把服务端给的锁定/剩余次数也说出来。
@@ -2122,6 +2167,9 @@ Widget _inputField(
   );
 }
 
+/// 二次确认：统一走 fl_ui 的浮动弹窗（和全站其它确认框同一套外观与动效）。
+///
+/// 以前这里自己拼 `showDialog + AlertDialog`，同一个 App 里两套弹窗。
 Future<bool> _confirmDialog(
   BuildContext context, {
   required String title,
@@ -2129,41 +2177,25 @@ Future<bool> _confirmDialog(
   required String okText,
   bool danger = false,
 }) async {
-  final result = await showDialog<bool>(
+  final result = await showFloatingDialog<bool>(
     context: context,
-    builder: (dialogContext) {
-      final palette = dialogContext.palette;
-      return AlertDialog(
-        backgroundColor: palette.surface,
-        title: Text(
-          title,
-          style: TextStyle(
-            fontSize: AppFontSize.md,
-            fontWeight: FontWeight.w600,
-            color: palette.text,
-          ),
-        ),
-        content: Text(
-          description,
-          style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
-        ),
+    child: Builder(
+      builder: (BuildContext dialogContext) => CommonDialog(
+        title: title,
+        destructive: danger,
         actions: <Widget>[
-          AppTextButton(
+          TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('取消'),
           ),
-          AppFilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: danger ? palette.danger : palette.primary,
-              // danger 底的按钮：字色按这层底取
-              foregroundColor: palette.onColor(danger ? palette.danger : palette.primary),
-            ),
+          TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(okText),
           ),
         ],
-      );
-    },
+        child: Text(description),
+      ),
+    ),
   );
   return result ?? false;
 }
@@ -2323,7 +2355,8 @@ class _ChoiceRow extends StatelessWidget {
                     onTap: () => onChanged(index),
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     child: SizedBox(
-                      height: 40,
+                      // 48dp：一行一个选项，够指头点
+                      height: 48,
                       child: Center(
                         child: Text(
                           options[index],
@@ -2433,17 +2466,26 @@ class _ParentPinDialogState extends State<_ParentPinDialog> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return AlertDialog(
-      backgroundColor: palette.surface,
-      title: Text(
-        '切换为家长',
-        style: TextStyle(
-          fontSize: AppFontSize.md,
-          fontWeight: FontWeight.w600,
-          color: palette.text,
+    return CommonDialog(
+      title: '切换为家长',
+      hasFields: true,
+      actions: <Widget>[
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+          child: const Text('取消'),
         ),
-      ),
-      content: Column(
+        TextButton(
+          onPressed: _busy ? null : _submit,
+          child: _busy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: AppLoading(size: 20),
+                )
+              : const Text('确认'),
+        ),
+      ],
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -2467,22 +2509,6 @@ class _ParentPinDialogState extends State<_ParentPinDialog> {
           ),
         ],
       ),
-      actions: <Widget>[
-        AppTextButton(
-          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
-          child: const Text('取消'),
-        ),
-        AppFilledButton(
-          onPressed: _busy ? null : _submit,
-          child: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: AppLoading(size: 20),
-                )
-              : const Text('确认'),
-        ),
-      ],
     );
   }
 }
@@ -2566,70 +2592,15 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return AlertDialog(
-      backgroundColor: palette.surface,
-      title: Text(
-        '修改家长口令',
-        style: TextStyle(
-          fontSize: AppFontSize.md,
-          fontWeight: FontWeight.w600,
-          color: palette.text,
-        ),
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            _LabeledField(
-              label: '原口令',
-              child: _inputField(
-                context,
-                controller: _oldCtrl,
-                hint: '当前口令',
-                obscure: true,
-                maxLength: _pinMaxLength,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _LabeledField(
-              label: '新口令',
-              child: _inputField(
-                context,
-                controller: _newCtrl,
-                hint: '$_pinMinLength-$_pinMaxLength 位新口令',
-                obscure: true,
-                maxLength: _pinMaxLength,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _LabeledField(
-              label: '确认新口令',
-              child: _inputField(
-                context,
-                controller: _confirmCtrl,
-                hint: '再次输入新口令',
-                obscure: true,
-                maxLength: _pinMaxLength,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              _error ?? '出厂口令为 1234，请尽快修改',
-              style: TextStyle(
-                fontSize: AppFontSize.xs,
-                color: _error == null ? palette.textTertiary : palette.danger,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return CommonDialog(
+      title: '修改家长口令',
+      hasFields: true,
       actions: <Widget>[
-        AppTextButton(
+        TextButton(
           onPressed: _busy ? null : () => Navigator.of(context).pop(false),
           child: const Text('取消'),
         ),
-        AppFilledButton(
+        TextButton(
           onPressed: _busy ? null : _submit,
           child: _busy
               ? const SizedBox(
@@ -2640,6 +2611,52 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
               : const Text('保存'),
         ),
       ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _LabeledField(
+            label: '原口令',
+            child: _inputField(
+              context,
+              controller: _oldCtrl,
+              hint: '当前口令',
+              obscure: true,
+              maxLength: _pinMaxLength,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _LabeledField(
+            label: '新口令',
+            child: _inputField(
+              context,
+              controller: _newCtrl,
+              hint: '$_pinMinLength-$_pinMaxLength 位新口令',
+              obscure: true,
+              maxLength: _pinMaxLength,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _LabeledField(
+            label: '确认新口令',
+            child: _inputField(
+              context,
+              controller: _confirmCtrl,
+              hint: '再次输入新口令',
+              obscure: true,
+              maxLength: _pinMaxLength,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            _error ?? '出厂口令为 1234，请尽快修改',
+            style: TextStyle(
+              fontSize: AppFontSize.xs,
+              color: _error == null ? palette.textTertiary : palette.danger,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2692,17 +2709,26 @@ class _AdminPasswordDialogState extends State<_AdminPasswordDialog> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return AlertDialog(
-      backgroundColor: palette.surface,
-      title: Text(
-        '管理员密码',
-        style: TextStyle(
-          fontSize: AppFontSize.md,
-          fontWeight: FontWeight.w600,
-          color: palette.text,
+    return CommonDialog(
+      title: '管理员密码',
+      hasFields: true,
+      actions: <Widget>[
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          child: const Text('取消'),
         ),
-      ),
-      content: Column(
+        TextButton(
+          onPressed: _busy ? null : _submit,
+          child: _busy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: AppLoading(size: 20),
+                )
+              : const Text('进入'),
+        ),
+      ],
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -2726,22 +2752,6 @@ class _AdminPasswordDialogState extends State<_AdminPasswordDialog> {
           ),
         ],
       ),
-      actions: <Widget>[
-        AppTextButton(
-          onPressed: _busy ? null : () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        AppFilledButton(
-          onPressed: _busy ? null : _submit,
-          child: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: AppLoading(size: 20),
-                )
-              : const Text('进入'),
-        ),
-      ],
     );
   }
 }

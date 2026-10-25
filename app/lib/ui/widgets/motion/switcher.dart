@@ -120,7 +120,9 @@ class SlidingHighlight extends StatelessWidget {
 
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: index.toDouble()),
-      duration: AppMotion.fast,
+      duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false)
+          ? Duration.zero
+          : AppMotion.fast,
       curve: AppMotion.spring,
       builder: (BuildContext context, double animated, Widget? _) => LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {

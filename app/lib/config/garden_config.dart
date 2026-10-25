@@ -24,7 +24,7 @@ abstract final class GardenConfig {
     Badge(id: 'streak3', name: '坚持 3 天', description: '连续学习 3 天', icon: 'calendar'),
     Badge(id: 'week_champ', name: '一周冠军', description: '连续学习 7 天', icon: 'trophy'),
     Badge(id: 'poet', name: '小诗人', description: '背诵 10 首古诗', icon: 'feather'),
-    Badge(id: 'plant_warrior', name: '植物战士', description: '照顾花园植物 7 天', icon: 'leaf'),
+    Badge(id: 'plant_warrior', name: '植物战士', description: '浇水或完成任务，累计 7 天', icon: 'leaf'),
     Badge(id: 'sun_rich', name: '阳光富翁', description: '累计获得 500 阳光', icon: 'coin'),
   ];
 

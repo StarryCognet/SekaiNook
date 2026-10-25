@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../config/app_constants.dart';
+import '../../../fl_ui/dialog.dart';
 import '../../../core/time_text.dart';
 import '../../../data/models/notification_record.dart';
 import '../../../state/family_state.dart';
@@ -47,10 +48,20 @@ class _NotificationsPageState extends State<NotificationsPage> {
   /// 已经发起过加载的信箱 —— 身份变了要换一格重新拉
   NotifyAudience? _loadedAudience;
 
+  /// 首屏骨架屏最多转 8 秒：再久就说明云端够不着，一直转会让人以为「马上就好」
+  Timer? _skeletonTimer;
+  bool _loadTimedOut = false;
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadRememberedFilter());
+  }
+
+  @override
+  void dispose() {
+    _skeletonTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadRememberedFilter() async {
@@ -77,22 +88,29 @@ class _NotificationsPageState extends State<NotificationsPage> {
     // 否则就是「build 期间 markNeedsBuild」。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(context.read<NotificationState>().load(audience));
+      _beginLoad(audience);
     });
   }
 
   // ---- 动作 ----
 
-  void _goBack() {
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go('/home');
-    }
+  /// 发起一次加载，并给骨架屏上 8 秒的表 —— 超时后 [_buildBody] 换成可重试的错误态。
+  void _beginLoad(NotifyAudience audience) {
+    _skeletonTimer?.cancel();
+    if (_loadTimedOut) setState(() => _loadTimedOut = false);
+    _skeletonTimer = Timer(const Duration(seconds: 8), () {
+      if (!mounted) return;
+      // 已经回来了就别再翻成错误态（静默刷新的失败不该打扰用户）
+      if (!context.read<NotificationState>().loading) return;
+      setState(() => _loadTimedOut = true);
+    });
+    unawaited(context.read<NotificationState>().load(audience));
   }
 
+  Future<void> _refresh() => context.read<NotificationState>().refresh();
+
   void _reload() {
-    unawaited(context.read<NotificationState>().load(audienceOf(context.read<FamilyState>().role)));
+    _beginLoad(audienceOf(context.read<FamilyState>().role));
   }
 
   Future<void> _handleOpen(NotificationRecord item) async {
@@ -107,8 +125,40 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
   }
 
+  /// 「全部已读」是一次不可逆的清空（服务端没有「标回未读」的接口，
+  /// 外壳还有 10 秒一轮的 refresh 会立刻拉回云端真相）—— 所以不做假的「撤销」，
+  /// 改成动手之前的二次确认：恢复路径就是这一步的「再想想」。
+  Future<bool> _confirmMarkAll(int unreadCount) async {
+    final bool? ok = await showFloatingDialog<bool>(
+      context: context,
+      child: AlertDialog(
+        // 窄屏（320dp）默认横向留白 40 会把标题列挤到溢出，这里收到 24
+        insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        title: const Text('把未读都标成已读？'),
+        content: Text(
+          '$unreadCount 条未读会被一次清掉，云端也一起标记，之后没法只撤回其中几条。',
+        ),
+        actions: <Widget>[
+          AppTextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('再想想'),
+          ),
+          AppTextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('全部已读'),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
   Future<void> _handleMarkAll() async {
     final notifications = context.read<NotificationState>();
+    final int unreadCount = notifications.unreadCount;
+    if (_markingAll || unreadCount == 0) return;
+    if (!await _confirmMarkAll(unreadCount)) return;
+    if (!mounted) return;
     setState(() => _markingAll = true);
     try {
       await notifications.markAllRead();
@@ -161,18 +211,20 @@ class _NotificationsPageState extends State<NotificationsPage> {
         ? '${settings.kidName}的打卡动态'
         : '${settings.momName}说的话';
 
-    // 返回键交给主壳统一处理：进通知页时外壳记下了「首页」这一步，按返回就回首页
+    // 返回键交给主壳统一处理：进通知页时外壳记下了「首页」这一步，按返回就回首页。
+    // 标题栏也不在这页画：全局顶栏已经显示「通知」，页面再画一个「← 通知」就是双层标题。
+    // 顶部只在这里让一次位（列表与骨架屏都不再让），否则顶部会白留 ~140dp。
     return Scaffold(
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            _buildHeader(palette, who, state.unreadCount),
+            Padding(
+              padding: EdgeInsets.only(top: AppTopBar.contentInset(context)),
+              child: _buildTopActions(palette, who, state.unreadCount),
+            ),
             if (!state.ready && !state.loading)
-              _buildNotice(
-                palette,
-                '通知功能还没就绪（服务端通知表尚未创建），等家长执行一次数据库迁移就会出现。',
-              ),
+              _buildNotice(palette, '通知暂时连不上云端，稍后会自动重试'),
             if (state.error != null && items.isNotEmpty) _buildRefreshFailedBar(palette),
             if (items.isNotEmpty) _buildFilter(palette, state.unreadCount, unreadOnly),
             Expanded(
@@ -188,66 +240,46 @@ class _NotificationsPageState extends State<NotificationsPage> {
     );
   }
 
-  Widget _buildHeader(AppPalette palette, String who, int unreadCount) {
-    final TextStyle subtitleStyle = TextStyle(
-      fontSize: AppFontSize.xs,
-      color: palette.textSecondary,
-      fontFeatures: kTabularNumbers,
-    );
+  /// 内容区第一行：左边「谁的信箱 · 几条未读」，右边「全部已读」。
+  ///
+  /// 原来这一行是页面自带的标题栏（返回键 + 「通知」+ 「全部已读」），
+  /// 与顶栏叠字、按钮又正好压在顶栏两颗芯片下面点不动 —— 现在标题交回顶栏，
+  /// 只留这一行动作，按钮本身撑到 44dp 高。
+  Widget _buildTopActions(AppPalette palette, String who, int unreadCount) {
+    final String summary = unreadCount > 0 ? '$who · $unreadCount 条未读' : '$who · 都看过了';
     return Padding(
       padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
         AppSpacing.xs,
-        AppSpacing.sm,
-        AppSpacing.sm,
-        AppSpacing.sm,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
-          AppIconButton(
-            onPressed: _goBack,
-            tooltip: '返回',
-            icon: GlyphIcon(AppIcons.arrowBack, color: palette.text),
-          ),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  '通知',
-                  style: TextStyle(
-                    fontSize: AppFontSize.lg,
-                    fontWeight: FontWeight.w700,
-                    color: palette.text,
-                  ),
-                ),
-                Text.rich(
-                  TextSpan(
-                    children: <InlineSpan>[
-                      TextSpan(text: who),
-                      if (unreadCount > 0) ...<InlineSpan>[
-                        const TextSpan(text: ' · '),
-                        WidgetSpan(
-                          alignment: PlaceholderAlignment.baseline,
-                          baseline: TextBaseline.alphabetic,
-                          child: AnimatedCount(value: unreadCount, style: subtitleStyle),
-                        ),
-                        const TextSpan(text: ' 条未读'),
-                      ] else
-                        const TextSpan(text: ' · 都看过了'),
-                    ],
-                  ),
-                  style: subtitleStyle,
-                ),
-              ],
+            child: Text(
+              summary,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppFontSize.xs,
+                color: palette.textSecondary,
+                fontFeatures: kTabularNumbers,
+              ),
             ),
           ),
+          const SizedBox(width: AppSpacing.sm),
           AppTextButton(
             onPressed: unreadCount == 0 || _markingAll ? null : _handleMarkAll,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 44),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            ),
             child: _markingAll
                 ? SizedBox(
-                    width: 14,
-                    height: 14,
+                    width: 20,
+                    height: 20,
                     child: AppLoading(size: 20, color: palette.primary),
                   )
                 : const Text('全部已读'),
@@ -330,9 +362,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
           AppTextButton(
             onPressed: _reload,
             style: TextButton.styleFrom(
+              // 之前是 minimumSize: Size.zero + shrinkWrap：可点区只有 ~24dp，手指常点空
+              minimumSize: const Size(0, 44),
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: const Text('重试'),
           ),
@@ -405,23 +437,30 @@ class _NotificationsPageState extends State<NotificationsPage> {
         child: PressInkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppRadius.full),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.xs,
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: AppFontSize.xs,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                // 选中态的底是实色的 palette.segmentedSelected（有色底），
-                // 字色按它算：午夜蓝 / 石墨黑下 primary 写在这个底上会发闷
-                color: selected
-                    ? palette.onColor(palette.segmentedSelected)
-                    : palette.textSecondary,
-                fontFeatures: kTabularNumbers,
-              ),
+          // 药丸之前只有 ~22dp 高（一行小字 + 上下 4dp），手指按不稳：
+          // 用固定 44dp 高 + Row(min) 横向收缩，可点区就等于看到的药丸
+          child: SizedBox(
+            height: 44,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                      // 选中态的底是实色的 palette.segmentedSelected（有色底），
+                      // 字色按它算：午夜蓝 / 石墨黑下 primary 写在这个底上会发闷
+                      color: selected
+                          ? palette.onColor(palette.segmentedSelected)
+                          : palette.textSecondary,
+                      fontFeatures: kTabularNumbers,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -435,32 +474,60 @@ class _NotificationsPageState extends State<NotificationsPage> {
     List<NotificationRecord> visible,
     bool unreadOnly,
   ) {
-    if (state.loading && state.items.isEmpty) {
+    if (state.loading && state.items.isEmpty && !_loadTimedOut) {
       // 首屏骨架屏：形状照着通知卡摆（图标块 + 标题 / 正文 / 时间三行）
-      return const _NotifySkeleton();
+      return RefreshIndicator(onRefresh: _refresh, child: const _NotifySkeleton());
     }
     if (state.error != null && state.items.isEmpty) {
-      return ErrorView(message: state.error!, onRetry: _reload);
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: _scrollable(
+          ErrorView(message: state.error!, onRetry: _reload),
+        ),
+      );
+    }
+    if (_loadTimedOut && state.loading && state.items.isEmpty) {
+      // 骨架屏转了 8 秒还在转 = 云端够不着，别再让它无限转下去
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: _scrollable(
+          ErrorView(message: '通知暂时连不上云端，稍后会自动重试', onRetry: _reload),
+        ),
+      );
     }
     if (visible.isEmpty) {
       return RefreshIndicator(
-        onRefresh: () => context.read<NotificationState>().refresh(),
+        onRefresh: _refresh,
         child: _scrollable(
-          EmptyView(
-            message: unreadOnly ? '没有未读通知' : '暂时没有通知',
-            hint: unreadOnly ? '下拉可以刷新' : null,
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              EmptyView(
+                message: unreadOnly ? '没有未读通知' : '暂时没有通知',
+                hint: unreadOnly ? '「全部」里能看到已经看过的通知' : '等家里有人打卡、记账，这里就会有消息',
+              ),
+              const SizedBox(height: AppSpacing.md),
+              // 空态给一条出路：这一页没有内容时，别让人只能按系统返回
+              AppOutlinedButton.icon(
+                onPressed: () => context.go('/home'),
+                icon: const GlyphIcon(AppIcons.home, size: 18),
+                label: const Text('回首页'),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+            ],
           ),
         ),
       );
     }
     return RefreshIndicator(
-      onRefresh: () => context.read<NotificationState>().refresh(),
+      onRefresh: _refresh,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
-        // 底部让出底栏胶囊（MainShell 开了 extendBody，它浮在内容之上）
+        // 底部让出底栏胶囊（MainShell 开了 extendBody，它浮在内容之上）；
+        // 顶部让位已经由页面顶那一次 AppTopBar.contentInset 做掉了，这里不再让
         padding: EdgeInsets.fromLTRB(
           AppSpacing.md,
-          AppTopBar.contentInset(context),
+          AppSpacing.xs,
           AppSpacing.md,
           AppSpacing.lg + AppNavBar.contentInset(context),
         ),
@@ -488,24 +555,27 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   Widget _buildItem(AppPalette palette, NotificationRecord item) {
     final color = _colorFor(palette, item.type);
-    // 未读卡的底是 AppCard.highlight 的填充色 palette.primarySoft —— 那是有色底：
-    // 正文 / 副文字必须走 onColor / onColorSoft，否则原始主题（深 navy 底写深 navy 字，
-    // primary 和 text 是同一个 #1A1A2E）与午夜蓝都会糊成一片。
-    // 已读卡是中性卡底，沿用 text / textSecondary / textTertiary。
-    final Color? unreadFill = item.isUnread ? palette.primarySoft : null;
-    final Color titleColor =
-        unreadFill == null ? palette.text : palette.onColor(unreadFill);
-    final Color bodyColor =
-        unreadFill == null ? palette.textSecondary : palette.onColorSoft(unreadFill);
-    final Color metaColor =
-        unreadFill == null ? palette.textTertiary : palette.onColorSoft(unreadFill);
-    return AppCard(
+    // 未读不再整卡铺粉底（76 条未读时整页一片粉、反而看不出重点），
+    // 改成「左侧 3dp 主色条 + 标题加粗」：卡片仍是中性卡底，
+    // 所以正文 / 时间沿用中性的 textSecondary / textTertiary，不用再算有色底上的字色。
+    final bool unread = item.isUnread;
+    final Widget card = AppCard(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      highlight: item.isUnread,
       onTap: () => _handleOpen(item),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          if (unread) ...<Widget>[
+            Container(
+              width: 3,
+              height: 34,
+              decoration: ShapeDecoration(
+                color: palette.primary,
+                shape: AppShape.all(AppRadius.full),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
           Container(
             width: 32,
             height: 32,
@@ -521,43 +591,60 @@ class _NotificationsPageState extends State<NotificationsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  item.title,
-                  style: TextStyle(
-                    fontSize: AppFontSize.sm,
-                    fontWeight: item.isUnread ? FontWeight.w600 : FontWeight.w400,
-                    color: titleColor,
-                  ),
+                // 标题走 Flexible + ellipsis：系统字号放到 2.0 时标题会换行撑高，
+                // 但不能去挤右边、也不能和时间叠在一起
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Flexible(
+                      child: Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppFontSize.sm,
+                          fontWeight: unread ? FontWeight.w600 : FontWeight.w400,
+                          color: palette.text,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 if (item.body != null && item.body!.isNotEmpty) ...<Widget>[
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     item.body!,
-                    style: TextStyle(fontSize: AppFontSize.xs, color: bodyColor),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
                   ),
                 ],
                 const SizedBox(height: AppSpacing.xs),
-                Text(
-                  relativeDayTime(item.createdAt),
-                  style: TextStyle(
-                    fontSize: AppFontSize.xs,
-                    color: metaColor,
-                    fontFeatures: kTabularNumbers,
-                  ),
+                Row(
+                  children: <Widget>[
+                    Flexible(
+                      child: Text(
+                        relativeDayTime(item.createdAt),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppFontSize.xs,
+                          color: palette.textTertiary,
+                          fontFeatures: kTabularNumbers,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          if (item.isUnread) ...<Widget>[
-            const SizedBox(width: AppSpacing.xs),
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xs),
-              child: PulseDot(color: palette.danger),
-            ),
-          ],
         ],
       ),
     );
+    if (!unread) return card;
+    // 未读状态现在只剩「左侧色条 + 加粗」两处视觉信号，读屏得单独补一条
+    return Semantics(label: '未读通知', container: true, child: card);
   }
 
   static Glyph _iconFor(NotifyType? type) {
@@ -605,10 +692,11 @@ class _NotifySkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     return ListView(
-      physics: const NeverScrollableScrollPhysics(),
+      // 骨架也要能下拉刷新（RefreshIndicator 需要可滚动 + AlwaysScrollable）
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(
         AppSpacing.md,
-        AppTopBar.contentInset(context),
+        AppSpacing.xs,
         AppSpacing.md,
         AppSpacing.lg + AppNavBar.contentInset(context),
       ),

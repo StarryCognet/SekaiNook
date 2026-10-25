@@ -104,6 +104,17 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
     });
   }
 
+  /// 「只提醒一次」的日期：存的是 `yyyy-MM-dd` 键，但人前别看着像乱码，
+  /// 显示成「10月25日」（不是今年就带上年份）。
+  static String _dayLabel(String? day) {
+    final DateTime? parsed = day == null ? null : DateTime.tryParse(day);
+    if (parsed == null) return '选日期';
+    final DateTime now = WeekUtil.beijingNow();
+    return parsed.year == now.year
+        ? '${parsed.month}月${parsed.day}日'
+        : '${parsed.year}年${parsed.month}月${parsed.day}日';
+  }
+
   /// 日期键固定成东八区口径的 `yyyy-MM-dd` —— 与 [LocalNotifyState.nextFireTimeFor]
   /// 解析 `onceDay` 的方式一致。这里**不能**用 [WeekUtil.beijingDayKey]：
   /// 那是拿「此刻」换算的，喂进一个选中的日期会被时区偏移推错一天。
@@ -290,7 +301,7 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
                   AppOutlinedButton.icon(
                     onPressed: _busy ? null : _pickDay,
                     icon: const GlyphIcon(AppIcons.calendar, size: AppFontSize.sm),
-                    label: Text(_onceDay ?? '选日期'),
+                    label: Text(_dayLabel(_onceDay)),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(

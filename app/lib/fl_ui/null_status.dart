@@ -150,12 +150,17 @@ class NullStatus extends StatefulWidget {
   final Widget? action;
   final NullStatusIllustration illustration;
 
+  /// 外层盒高。传了就和以前一样当滚动容器的定高用；不传就不定高，
+  /// 由外面（页面/卡片）决定占多高，也让文案不再被裁到折线以下。
+  final double? height;
+
   const NullStatus({
     super.key,
     this.label,
     this.description,
     this.action,
     this.illustration = NullStatusIllustration.data,
+    this.height,
   });
 
   @override
@@ -182,69 +187,83 @@ class _NullStatusState extends State<NullStatus> {
     final NullStatus(:label, :description, :action, :illustration) = widget;
     final colorScheme = context.colorScheme;
     final compact = MediaQuery.sizeOf(context).height < _compactHeight;
-    return Align(
-      alignment: const Alignment(0.0, -0.2),
-      child: SingleChildScrollView(
-        controller: _controller,
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 320),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _EnterItem(
-                child: EmptyIllustration(
-                  type: illustration,
-                  dimension: compact ? 120 : 160,
-                ),
-              ),
-              if (label != null) ...[
-                SizedBox(height: compact ? 12 : 16),
-                _EnterItem(
-                  delay: _staggerStep,
-                  child: Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    style: AppTextStyle.headline
-                        .of(context)
-                        .copyWith(color: colorScheme.onSurface),
-                  ),
-                ),
-              ],
-              if (description != null) ...[
-                const SizedBox(height: 8),
-                _EnterItem(
-                  delay: _staggerStep * 2,
-                  child: Text(
-                    description,
-                    textAlign: TextAlign.center,
-                    style: AppTextStyle.subheadline
-                        .of(context)
-                        .copyWith(color: colorScheme.onSurfaceVariant),
-                  ),
-                ),
-              ],
-              if (action != null) ...[
-                const SizedBox(height: 24),
-                _EnterItem(
-                  delay: _staggerStep * (description != null ? 3 : 2),
-                  child: Theme(
-                    data: Theme.of(
-                      context,
-                    ).copyWith(visualDensity: VisualDensity.standard),
-                    child: action,
-                  ),
-                ),
-              ],
-            ],
+    final content = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 320),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _EnterItem(
+            child: EmptyIllustration(
+              type: illustration,
+              dimension: compact ? 120 : 160,
+            ),
           ),
-        ),
+          if (label != null) ...[
+            SizedBox(height: compact ? 12 : 16),
+            _EnterItem(
+              delay: _staggerStep,
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: AppTextStyle.headline
+                    .of(context)
+                    .copyWith(color: colorScheme.onSurface),
+              ),
+            ),
+          ],
+          if (description != null) ...[
+            const SizedBox(height: 8),
+            _EnterItem(
+              delay: _staggerStep * 2,
+              child: Text(
+                description,
+                textAlign: TextAlign.center,
+                style: AppTextStyle.subheadline
+                    .of(context)
+                    .copyWith(color: colorScheme.onSurfaceVariant),
+              ),
+            ),
+          ],
+          if (action != null) ...[
+            const SizedBox(height: 24),
+            _EnterItem(
+              delay: _staggerStep * (description != null ? 3 : 2),
+              child: Theme(
+                data: Theme.of(
+                  context,
+                ).copyWith(visualDensity: VisualDensity.standard),
+                child: action,
+              ),
+            ),
+          ],
+        ],
       ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 高度被卡死（状态切换器、或调用方自己套了 SizedBox）时才需要内层滚动
+        // 兜底；页面流里高度一般是无限的，滚动交给外层 —— 别再套一个
+        // Scrollable 去抢外层列表的拖拽。
+        final height = widget.height;
+        final bounded = height != null || constraints.hasBoundedHeight;
+        final body = Align(
+          alignment: const Alignment(0.0, -0.2),
+          child: bounded
+              ? SingleChildScrollView(
+                  controller: _controller,
+                  padding: _contentPadding,
+                  child: content,
+                )
+              : Padding(padding: _contentPadding, child: content),
+        );
+        return height == null ? body : SizedBox(height: height, child: body);
+      },
     );
   }
 }
 
 const _compactHeight = 560.0;
+const _contentPadding = EdgeInsets.symmetric(horizontal: 32, vertical: 24);
 const _staggerStep = Duration(milliseconds: 60);
 const _enterRise = 12.0;
 

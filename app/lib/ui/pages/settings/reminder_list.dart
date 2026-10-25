@@ -1,3 +1,4 @@
+import 'package:sekainook_app/fl_ui/dialog.dart';
 import 'package:sekainook_app/ui/icons/icons.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,7 @@ import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/format.dart';
 import '../../widgets/motion_widgets.dart';
 import 'reminder_editor_sheet.dart';
 import '../../widgets/motion/app_buttons.dart';
@@ -57,10 +59,59 @@ class _ReminderListState extends State<ReminderList> {
     _flush(state);
   }
 
-  /// `10/18 21:30`（北京墙钟时间，不带时区后缀）
-  static String _fireText(DateTime when) =>
-      '${when.month.toString().padLeft(2, '0')}/${when.day.toString().padLeft(2, '0')} '
-      '${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')}';
+  /// 危险动作的二次确认：与设置页同一个浮动弹窗（别处不要再拼一套 AlertDialog）
+  Future<bool> _confirm({
+    required String title,
+    required String description,
+    required String okText,
+  }) async {
+    final bool? result = await showFloatingDialog<bool>(
+      context: context,
+      child: Builder(
+        builder: (BuildContext dialogContext) => CommonDialog(
+          title: title,
+          destructive: true,
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(okText),
+            ),
+          ],
+          child: Text(description),
+        ),
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// 删一条：先问一句（以前点了就没了）
+  Future<void> _remove(LocalReminder reminder) async {
+    final bool ok = await _confirm(
+      title: '删掉「${reminder.name}」？',
+      description: '删掉之后这条就不会再响了；想再要得重新加一条。',
+      okText: '删掉',
+    );
+    if (!ok || !mounted) return;
+    await _run((s) => s.removeReminder(reminder));
+  }
+
+  /// 恢复内置两条：说清楚会覆盖改过的内置项
+  Future<void> _restoreBuiltins() async {
+    final bool ok = await _confirm(
+      title: '恢复内置提醒？',
+      description: '内置的两条会变回默认的时间与文案，你改过的地方会被覆盖。自己加的那几条不受影响。',
+      okText: '恢复默认',
+    );
+    if (!ok || !mounted) return;
+    await _run((s) => s.restoreBuiltins());
+  }
+
+  /// 时间走全站统一的格式（今天 / 昨天 / MM-dd HH:mm）
+  static String _fireText(DateTime when) => formatDateTime(when);
 
   /// 这一条下次还响不响
   String _nextLabel(LocalNotifyState state, LocalReminder reminder) {
@@ -93,9 +144,7 @@ class _ReminderListState extends State<ReminderList> {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              state.supported
-                  ? '提醒交给系统闹钟排：划掉后台、锁屏、重启手机都会响。每条可以单独设时间、文案和弹法。'
-                  : '网页版不支持本地通知 —— 这里只存设置，装了安卓 App 之后才会响。',
+              '提醒交给系统闹钟排：划掉后台、锁屏、重启手机都会响。每条可以单独设时间、文案和弹法。',
               style: TextStyle(
                 fontSize: AppFontSize.xs,
                 color: palette.textSecondary,
@@ -132,7 +181,8 @@ class _ReminderListState extends State<ReminderList> {
             Align(
               alignment: Alignment.centerLeft,
               child: AppTextButton(
-                onPressed: state.busy ? null : () => _run((s) => s.restoreBuiltins()),
+                onPressed: state.busy ? null : _restoreBuiltins,
+                style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
                 child: const Text('恢复内置提醒'),
               ),
             ),
@@ -218,8 +268,11 @@ class _ReminderListState extends State<ReminderList> {
                 )
               else
                 AppTextButton(
-                  onPressed: canAct ? () => _run((s) => s.removeReminder(reminder)) : null,
-                  style: TextButton.styleFrom(foregroundColor: palette.dangerInk),
+                  onPressed: canAct ? () => _remove(reminder) : null,
+                  style: TextButton.styleFrom(
+                    foregroundColor: palette.dangerInk,
+                    minimumSize: const Size(0, 44),
+                  ),
                   child: const Text('删除'),
                 ),
             ],

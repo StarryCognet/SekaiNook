@@ -368,12 +368,12 @@ void main() {
       return state;
     }
 
-    test('不支持的平台：开关点不动，并说明去用浏览器推送', () async {
+    test('不支持的平台：开关点不动，并说明去装安卓 App', () async {
       final state = await build(supported: false);
       expect(state.supported, isFalse);
       expect(await state.enable(), isFalse);
       expect(state.enabled, isFalse);
-      expect(state.message, contains('网页版'));
+      expect(state.message, contains('安卓 App'));
     });
 
     test('没给权限：不开启，并提示去系统设置里开', () async {

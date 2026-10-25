@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../theme/motion.dart';
@@ -21,6 +23,14 @@ class AppBackgroundLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool disableAnimations = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
 
+    // 背景图铺满整屏，但**按屏幕逻辑尺寸 × DPR 解码**就够：原图常见 3000px 宽，
+    // 按原尺寸解码在低端安卓上要多花几十 MB 内存、首帧也慢（审查 U 项）。
+    // 上限压到 2048，4K 原图也不会把内存撑爆。
+    final Size screen = MediaQuery.sizeOf(context);
+    final double dpr = MediaQuery.devicePixelRatioOf(context);
+    final int decodeWidth = math.max(1, math.min(2048, (screen.width * dpr).round()));
+    final int decodeHeight = math.max(1, math.min(4096, (screen.height * dpr).round()));
+
     final Widget layer = url.isEmpty
         ? const SizedBox.expand(key: ValueKey<String>('app-bg-none'))
         : Stack(
@@ -30,6 +40,9 @@ class AppBackgroundLayer extends StatelessWidget {
               Image.network(
                 url,
                 fit: BoxFit.cover,
+                cacheWidth: decodeWidth,
+                cacheHeight: decodeHeight,
+                filterQuality: FilterQuality.medium,
                 // 官方推荐的淡入写法：解码完成前透明，完成后淡入
                 frameBuilder:
                     (

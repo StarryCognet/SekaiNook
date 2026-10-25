@@ -33,40 +33,20 @@ import '../../../state/notification_state.dart';
 import '../../../state/settings_state.dart';
 import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_sheet.dart';
+import '../../widgets/format.dart';
+import '../../widgets/garden_icon.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 import '../../widgets/motion/app_buttons.dart';
 
-/// 花园图标 key → Material 图标（与 `garden_page.dart` 的映射一致，
-/// 对应 Web 版 `components/garden/GardenIcon.tsx`，未知 key 回退星形）。
-Glyph _gardenIcon(String key) => switch (key) {
-      'book' => AppIcons.book,
-      'read' => AppIcons.book,
-      'book-open' => AppIcons.book,
-      'calc' => AppIcons.calculate,
-      'pen' => AppIcons.edit,
-      'feather' => AppIcons.edit,
-      'eye' => AppIcons.eye,
-      'sport' => AppIcons.bolt,
-      'home' => AppIcons.home,
-      'sun' => AppIcons.sun,
-      'flower' => AppIcons.flower,
-      'leaf' => AppIcons.leaf,
-      'calendar' => AppIcons.calendar,
-      'trophy' => AppIcons.trophy,
-      'coin' => AppIcons.savings,
-      'dashboard' => AppIcons.dashboard,
-      'check' => AppIcons.checkCircle,
-      'shop' => AppIcons.store,
-      'history' => AppIcons.history,
-      'star' => AppIcons.star,
-      _ => AppIcons.star,
-    };
+/// 花园图标 key → Material 图标：统一走 `ui/widgets/garden_icon.dart`
+/// （以前这里与花园页各写一份 20 case 的 switch，改一处漂一处）。
 
 /// 首页先摆这几个打卡按钮（顺序按妹妹最常用的排）
 const List<String> _quickTaskIds = <String>[
@@ -149,8 +129,8 @@ List<LedgerRecord> _todayRecords(List<LedgerRecord> records, DateTime now) {
   return (income: income, expense: expense, net: income + expense, count: count, checkins: checkins);
 }
 
-/// 带符号金额（与 `LedgerRecord.signedAmount` 同口径）
-String _signed(int amount) => amount > 0 ? '+$amount' : '$amount';
+/// 带符号金额（与 `LedgerRecord.signedAmount` 同口径，**带千分位**）
+String _signed(int amount) => amount > 0 ? '+${formatPoints(amount)}' : formatPoints(amount);
 
 /// 账本分页在路由里的查询参数名。
 ///
@@ -211,6 +191,9 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
 
   /// 刚解锁的勋章：有一个就弹一次（仪式感），点掉就没了
   garden_models.Badge? _newBadge;
+
+  /// 「退回 / 等待批」摘要卡是否展开：默认折成一行，把首屏让给主操作（打卡）
+  bool _attentionOpen = false;
 
   Timer? _timer;
   bool _refreshing = false;
@@ -404,6 +387,36 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
 
   // ---- 动作 ----
 
+  /// 花园待办「点一下即完成」太容易误触（整行可点、没有撤销），
+  /// 而同页打卡是走弹窗确认的 —— 这里对齐成一次轻确认。
+  Future<void> _confirmGardenTask(garden_models.GardenTask task) async {
+    final AppPalette palette = context.palette;
+    final bool? ok = await showFloatingDialog<bool>(
+      context: context,
+      child: Builder(
+        builder: (BuildContext dialogContext) => CommonDialog(
+          title: '完成「${task.name}」？',
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('还没'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('完成了'),
+            ),
+          ],
+          child: Text(
+            '完成后 +${formatPoints(task.reward)} 阳光，今天这项就不再做第二次了。',
+            style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+          ),
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    _completeGardenTask(task);
+  }
+
   /// 花园任务完成（阳光奖励，与家庭账本分开的两本账）
   void _completeGardenTask(garden_models.GardenTask task) {
     final GardenState garden = context.read<GardenState>();
@@ -417,7 +430,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     }
     // 真完成了才报喜：整页盖一次对勾光环
     showBurst(context);
-    _toast('+${task.reward} 积分，${task.name}完成啦', success: true);
+    _toast('+${formatPoints(task.reward)} 积分，${task.name}完成啦', success: true);
   }
 
   /// 「知道了」：这条退回不再提醒（下次退回的是新的一条，照样会提醒）
@@ -456,6 +469,8 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
       builder: (BuildContext sheetContext) => _CheckInSheet(
         task: task,
         isParent: isParent,
+        // 扣分原因写给谁看：用称呼，不写死「女儿」
+        parentName: context.read<SettingsState>().momName,
         upload: _uploadApi,
         onSubmitted: (TaskConfig submittedTask, {String? note, String? imageUrl}) =>
             context.read<FamilyState>().api.addLedgerRecord(
@@ -525,16 +540,26 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     final DateTime now = DateTime.now();
+    // watch 只留「真的会整页跟着变」的两个：账本与花园。
+    // 原来一次 watch 五个全局状态，20 秒轮询会把宫格 / 我的任务 / 通知卡一起重建；
+    // 称呼与未读只取需要的字段（select），别的字段变化不再牵动本页。
     final FamilyState family = context.watch<FamilyState>();
     final GardenState garden = context.watch<GardenState>();
     final CustomTasksState customTasks = context.watch<CustomTasksState>();
-    final NotificationState notices = context.watch<NotificationState>();
-    final SettingsState settings = context.watch<SettingsState>();
+    final String kidName = context.select<SettingsState, String>((SettingsState s) => s.kidName);
+    final String momName = context.select<SettingsState, String>((SettingsState s) => s.momName);
+    final int unreadCount =
+        context.select<NotificationState, int>((NotificationState s) => s.unreadCount);
+    final NotificationRecord? latestNotice = context.select<NotificationState, NotificationRecord?>(
+      (NotificationState s) => s.items.isEmpty ? null : s.items.first,
+    );
 
-    final String kidName = settings.kidName;
-    final String momName = settings.momName;
-    if (kidName.isEmpty && momName.isEmpty) {
-      // 首屏还没拿到称呼：铺骨架屏，不要整页转圈（LoadingView 留给局部）
+    // 称呼有出厂默认（`config/family_names.dart` 里 kidName/momName 永远不是空串），
+    // 原来那段「称呼还没到位 → 骨架屏」是死代码：新机反而先闪一下「女儿」再跳变。
+
+    // 首屏还没拉到账本：铺骨架屏。注意判据是「真的在加载 + 一条记录都没有」，
+    // 不是原来那个「称呼未到位」—— 称呼有出厂默认，永远不成立。
+    if (family.loading && family.records.isEmpty && !_loadFailed) {
       return const SafeArea(child: _HomeSkeleton());
     }
 
@@ -556,7 +581,6 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     final List<TaskConfig> quickTasks = _quickTasks();
     final LedgerRecord? rejected = _latestRejected(family);
     final TaskConfig? rejectedTask = rejected == null ? null : _taskForRecord(rejected);
-    final NotificationRecord? latestNotice = notices.items.isEmpty ? null : notices.items.first;
     final SleepTask? sleepTask = _sleepTask(family, now);
 
     // 新勋章：整屏庆祝一次（点掉即收下）
@@ -568,112 +592,84 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
       });
     }
 
+    // 卡片顺序：主操作（打卡 + 余额）紧跟 hero，「退回 / 待批」折成一行摘要排它后面 ——
+    // 22:00 后两条同时出现时，打卡入口仍在首屏（前 3 个块内）。
+    final List<Widget> blocks = <Widget>[];
+    int slot = 0;
+    void add(Widget child) {
+      if (blocks.isNotEmpty) blocks.add(_gapSm);
+      blocks.add(EnterBox(index: slot++, child: child));
+    }
+
+    add(_hero(palette, now, kidName, garden, earnedBadges));
+    add(_moneyCard(palette, momName, family.balance, week, todayCount, quickTasks,
+        family.records, now));
+    if (rejected != null || family.pendingCount > 0) {
+      // 展开才铺原来那两张卡；折叠时只占一行，把首屏让给下面的主操作（打卡）
+      if (_attentionOpen) {
+        if (rejected != null) add(_rejectCard(palette, momName, rejected, rejectedTask));
+        if (family.pendingCount > 0) add(_pendingCard(palette, now, momName, family));
+      }
+      add(_attentionSummary(palette, momName, family, rejected));
+    }
+    if (_settleNotice != null) {
+      // 画了右箭头就得点得动：点它去账本看这次结算的明细
+      add(_noticeBar(
+        palette,
+        _settleNotice!,
+        AppIcons.receipt,
+        onTap: () => context.go(_familyPath('history')),
+      ));
+    }
+    if (_loadFailed) {
+      add(AppCard(
+        highlight: true,
+        child: ErrorView(
+          message: '没拉到最新数据',
+          onRetry: () => unawaited(_refresh()),
+        ),
+      ));
+    }
+    if (showLateAlert) {
+      add(_noticeBar(
+        palette,
+        '已经 22:00 啦，还有 $learningLeft 个学习任务没完成',
+        AppIcons.moon,
+        pulseColor: palette.warning,
+        onTap: () => context.go(_gardenPath('tasks')),
+      ));
+    }
+    if (sleepTask != null) {
+      add(_noticeBar(
+        palette,
+        '「${sleepTask.task.name}」${sleepTask.windowText}，别忘啦',
+        AppIcons.moon,
+        onTap: () => _startCheckIn(sleepTask.task),
+      ));
+    }
+    add(_gardenTaskCard(palette, garden, gardenDone, gardenTotal, gardenPercent, todoTasks));
+    add(_myTasksCard(palette, momName, customTasks, family.records, now));
+    if (latestNotice != null) add(_noticeCard(palette, now, momName, latestNotice));
+    add(_grid(palette, momName, unreadCount));
+
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          // 底部让出底栏胶囊（MainShell 开了 extendBody，它浮在内容之上）
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.md + AppTopBar.contentInset(context),
-            AppSpacing.md,
-            AppSpacing.xl + AppNavBar.contentInset(context),
+        child: RefreshIndicator(
+          // 除失败卡之外再给一条「往下拽就重拉」的路（复用页面本来就有的 _refresh）
+          onRefresh: _refresh,
+          color: palette.primary,
+          child: ListView(
+            // 底部让出底栏胶囊（MainShell 开了 extendBody，它浮在内容之上）
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.md + AppTopBar.contentInset(context),
+              AppSpacing.md,
+              AppSpacing.xl + AppNavBar.contentInset(context),
+            ),
+            // 内容不满一屏时也要能下拉刷新
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: blocks,
           ),
-          children: <Widget>[
-            EnterBox(index: 0, child: _hero(palette, now, kidName, garden, earnedBadges)),
-            if (_settleNotice != null) ...<Widget>[
-              _gapSm,
-              EnterBox(
-                index: 1,
-                child: _noticeBar(palette, _settleNotice!, AppIcons.receipt),
-              ),
-            ],
-            if (rejected != null) ...<Widget>[
-              _gapSm,
-              EnterBox(index: 2, child: _rejectCard(palette, momName, rejected, rejectedTask)),
-            ],
-            if (family.pendingCount > 0) ...<Widget>[
-              _gapSm,
-              EnterBox(index: 3, child: _pendingCard(palette, now, momName, family)),
-            ],
-            if (_loadFailed) ...<Widget>[
-              _gapSm,
-              EnterBox(
-                index: 4,
-                child: AppCard(
-                  highlight: true,
-                  onTap: () => unawaited(_refresh()),
-                  child: Row(
-                    children: <Widget>[
-                      GlyphIcon(AppIcons.cloudOff, size: AppFontSize.md, color: palette.danger),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          '没拉到最新数据，点一下重试',
-                          style: TextStyle(fontSize: AppFontSize.sm, color: palette.text),
-                        ),
-                      ),
-                      Text(
-                        '重试',
-                        style: TextStyle(
-                          fontSize: AppFontSize.sm,
-                          fontWeight: FontWeight.w700,
-                          color: palette.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-            if (showLateAlert) ...<Widget>[
-              _gapSm,
-              EnterBox(
-                index: 5,
-                child: _noticeBar(
-                  palette,
-                  '已经 22:00 啦，还有 $learningLeft 个学习任务没完成',
-                  AppIcons.moon,
-                  pulseColor: palette.warning,
-                  onTap: () => context.go(_gardenPath('tasks')),
-                ),
-              ),
-            ],
-            if (sleepTask != null) ...<Widget>[
-              _gapSm,
-              EnterBox(
-                index: 6,
-                child: _noticeBar(
-                  palette,
-                  '「${sleepTask.task.name}」${sleepTask.windowText}，别忘啦',
-                  AppIcons.moon,
-                  onTap: () => _startCheckIn(sleepTask.task),
-                ),
-              ),
-            ],
-            _gapSm,
-            EnterBox(
-              index: 7,
-              child:
-                  _gardenTaskCard(palette, garden, gardenDone, gardenTotal, gardenPercent, todoTasks),
-            ),
-            _gapSm,
-            EnterBox(
-              index: 8,
-              child: _moneyCard(palette, momName, family.balance, week, todayCount,
-                  quickTasks, family.records, now),
-            ),
-            _gapSm,
-            EnterBox(
-              index: 9,
-              child: _myTasksCard(palette, momName, customTasks, family.records, now),
-            ),
-            if (latestNotice != null) ...<Widget>[
-              _gapSm,
-              EnterBox(index: 10, child: _noticeCard(palette, now, momName, latestNotice)),
-            ],
-            _gapSm,
-            EnterBox(index: 10, child: _grid(palette, momName, notices.unreadCount)),
-          ],
         ),
       ),
     );
@@ -777,40 +773,45 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              PressInkWell(
-                onTap: () => context.go(_gardenPath('rewards')),
-                borderRadius: BorderRadius.circular(AppRadius.full),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: <Widget>[
-                    Container(
-                      width: AppSpacing.xl + AppSpacing.md,
-                      height: AppSpacing.xl + AppSpacing.md,
-                      alignment: Alignment.center,
-                      decoration: ShapeDecoration(
-                        color: palette.cardColor(hasBackground: false),
-                        shape: AppShape.all(AppRadius.full, side: BorderSide(color: avatarItem == null ? palette.border : palette.primary, width: avatarItem == null ? 1 : 2)),
+              Semantics(
+                button: true,
+                label: '我的头像和装扮，点进去换',
+                excludeSemantics: true,
+                child: PressInkWell(
+                  onTap: () => context.go(_gardenPath('rewards')),
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: <Widget>[
+                      Container(
+                        width: AppSpacing.xl + AppSpacing.md,
+                        height: AppSpacing.xl + AppSpacing.md,
+                        alignment: Alignment.center,
+                        decoration: ShapeDecoration(
+                          color: palette.cardColor(hasBackground: false),
+                          shape: AppShape.all(AppRadius.full, side: BorderSide(color: avatarItem == null ? palette.border : palette.primary, width: avatarItem == null ? 1 : 2)),
+                        ),
+                        child: const Text('🏅', style: TextStyle(fontSize: AppFontSize.lg)),
                       ),
-                      child: const Text('🏅', style: TextStyle(fontSize: AppFontSize.lg)),
-                    ),
-                    if (avatarItem != null)
-                      Positioned(
-                        right: -AppSpacing.xs,
-                        bottom: -AppSpacing.xs,
-                        child: Container(
-                          padding: const EdgeInsets.all(AppSpacing.xs),
-                          decoration: ShapeDecoration(
-                            color: palette.cardColor(hasBackground: false),
-                            shape: AppShape.all(AppRadius.full, side: BorderSide(color: palette.primary)),
-                          ),
-                          child: GlyphIcon(
-                            _gardenIcon(avatarItem.icon),
-                            size: AppFontSize.sm,
-                            color: palette.primary,
+                      if (avatarItem != null)
+                        Positioned(
+                          right: -AppSpacing.xs,
+                          bottom: -AppSpacing.xs,
+                          child: Container(
+                            padding: const EdgeInsets.all(AppSpacing.xs),
+                            decoration: ShapeDecoration(
+                              color: palette.cardColor(hasBackground: false),
+                              shape: AppShape.all(AppRadius.full, side: BorderSide(color: palette.primary)),
+                            ),
+                            child: GlyphIcon(
+                              gardenGlyph(avatarItem.icon),
+                              size: AppFontSize.sm,
+                              color: palette.primary,
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -822,16 +823,27 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             children: <Widget>[
               GlyphIcon(AppIcons.sun, size: AppFontSize.lg, color: heroText),
               const SizedBox(width: AppSpacing.xs),
-              AnimatedCount(
-                value: garden.balance,
-                style: TextStyle(
-                  fontSize: AppFontSize.num,
-                  fontWeight: FontWeight.w800,
-                  color: heroText,
-                  fontFeatures: kTabularNumbers,
-                  shadows: <Shadow>[
-                    Shadow(color: palette.warning.withValues(alpha: 0.35), blurRadius: AppSpacing.md),
-                  ],
+              // 大字号下这行曾把数字压到「阳光」两个字上：数字可缩、单位不缩
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: AnimatedCount(
+                    value: garden.balance,
+                    formatter: formatPoints,
+                    style: TextStyle(
+                      fontSize: AppFontSize.num,
+                      fontWeight: FontWeight.w800,
+                      color: heroText,
+                      fontFeatures: kTabularNumbers,
+                      shadows: <Shadow>[
+                        Shadow(
+                          color: palette.warning.withValues(alpha: 0.35),
+                          blurRadius: AppSpacing.md,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
@@ -950,8 +962,60 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
               style: TextStyle(fontSize: AppFontSize.sm, color: palette.text),
             ),
           ),
+          // 只有真的能点走时才画箭头：画了箭头却点不动是最糟的暗示
+          if (onTap != null) ...<Widget>[
+            const SizedBox(width: AppSpacing.xs),
+            GlyphIcon(AppIcons.chevronForward, size: AppFontSize.md, color: palette.primary),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// 「退回 / 待批」压成一行摘要：默认折叠，点开才铺上面两张卡。
+  ///
+  /// 原来这两张是各占一块的条件卡（22:00 后「退回 + 待批」同时出现就有两张），
+  /// 把主操作（打卡按钮）挤到折叠线以下 —— 现在折叠时全局只多占一行。
+  Widget _attentionSummary(
+    AppPalette palette,
+    String momName,
+    FamilyState family,
+    LedgerRecord? rejected,
+  ) {
+    final int pendingCount = family.pendingCount;
+    final bool hasReject = rejected != null;
+    final String text = hasReject
+        ? (pendingCount > 0
+            ? '$momName退回 1 条 · 还有 $pendingCount 条等$momName看'
+            : '$momName退回了一条')
+        : '还有 $pendingCount 条等$momName看';
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+      onTap: () => setState(() => _attentionOpen = !_attentionOpen),
+      child: Row(
+        children: <Widget>[
+          PulseDot(color: hasReject ? palette.danger : palette.primary),
           const SizedBox(width: AppSpacing.xs),
-          GlyphIcon(AppIcons.chevronForward, size: AppFontSize.md, color: palette.primary),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: AppFontSize.sm,
+                fontWeight: FontWeight.w700,
+                color: palette.text,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            _attentionOpen ? '收起' : '展开',
+            style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+          ),
+          AnimatedRotation(
+            turns: _attentionOpen ? 0.25 : 0,
+            duration: AppMotion.fast,
+            child: GlyphIcon(AppIcons.chevronForward, size: AppFontSize.md, color: palette.primary),
+          ),
         ],
       ),
     );
@@ -1065,12 +1129,16 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                   ),
                 ),
               ),
-              Text(
-                '还有 ${family.pendingCount} 条没批',
-                style: TextStyle(
-                  fontSize: AppFontSize.xs,
-                  color: palette.textSecondary,
-                  fontFeatures: kTabularNumbers,
+              Flexible(
+                child: Text(
+                  '还有 ${family.pendingCount} 条没批',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppFontSize.xs,
+                    color: palette.textSecondary,
+                    fontFeatures: kTabularNumbers,
+                  ),
                 ),
               ),
             ],
@@ -1155,30 +1223,36 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                   ),
                 ),
               ),
-              // 已完成 / 总数：数字会滚，基线对齐保住排版
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: <Widget>[
-                  AnimatedCount(
-                    value: done,
-                    style: TextStyle(
-                      fontSize: AppFontSize.sm,
-                      fontWeight: FontWeight.w600,
-                      color: palette.primary,
-                      fontFeatures: kTabularNumbers,
-                    ),
+              // 已完成 / 总数：数字会滚，基线对齐保住排版；窄屏 + 大字号下等比缩小
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: <Widget>[
+                      AnimatedCount(
+                        value: done,
+                        style: TextStyle(
+                          fontSize: AppFontSize.sm,
+                          fontWeight: FontWeight.w600,
+                          color: palette.primary,
+                          fontFeatures: kTabularNumbers,
+                        ),
+                      ),
+                      Text(
+                        '/$total',
+                        style: TextStyle(
+                          fontSize: AppFontSize.sm,
+                          fontWeight: FontWeight.w600,
+                          color: palette.primary,
+                          fontFeatures: kTabularNumbers,
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    '/$total',
-                    style: TextStyle(
-                      fontSize: AppFontSize.sm,
-                      fontWeight: FontWeight.w600,
-                      color: palette.primary,
-                      fontFeatures: kTabularNumbers,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
@@ -1214,7 +1288,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: PressInkWell(
-        onTap: () => _completeGardenTask(task),
+        onTap: () => unawaited(_confirmGardenTask(task)),
         borderRadius: BorderRadius.circular(AppRadius.md),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xs),
@@ -1229,7 +1303,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                   shape: AppShape.all(AppRadius.md),
                 ),
                 child: GlyphIcon(
-                  _gardenIcon(task.icon),
+                  gardenGlyph(task.icon),
                   size: AppFontSize.md,
                   color: _onAccentTint(palette, palette.primary),
                 ),
@@ -1248,7 +1322,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                       ),
                     ),
                     Text(
-                      '${task.duration} 分钟 · +${task.reward} 积分',
+                      '${task.duration} 分钟 · +${formatPoints(task.reward)} 积分',
                       style: TextStyle(
                         fontSize: AppFontSize.xs,
                         color: palette.textTertiary,
@@ -1315,13 +1389,23 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              AnimatedCount(
-                value: balance,
-                style: TextStyle(
-                  fontSize: AppFontSize.num,
-                  fontWeight: FontWeight.w800,
-                  color: palette.primary,
-                  fontFeatures: kTabularNumbers,
+              // 大字号下这行会「数字压到积分上」：数字与右侧周统计各自可缩，
+              // 单位「积分」不缩（它最不该被吃掉）
+              Flexible(
+                flex: 3,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: AnimatedCount(
+                    value: balance,
+                    formatter: formatPoints,
+                    style: TextStyle(
+                      fontSize: AppFontSize.num,
+                      fontWeight: FontWeight.w800,
+                      color: palette.primary,
+                      fontFeatures: kTabularNumbers,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
@@ -1329,44 +1413,17 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                 '积分',
                 style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
               ),
-              const Spacer(),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  Text.rich(
-                    TextSpan(
-                      children: <InlineSpan>[
-                        const TextSpan(text: '这一周赚了 '),
-                        TextSpan(
-                          text: '+${week.income}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: palette.success,
-                            fontFeatures: kTabularNumbers,
-                          ),
-                        ),
-                      ],
-                    ),
-                    style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
-                  ),
-                  _gapXs,
-                  Text.rich(
-                    TextSpan(
-                      children: <InlineSpan>[
-                        const TextSpan(text: '花掉 '),
-                        TextSpan(
-                          text: '${week.expense}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: palette.danger,
-                            fontFeatures: kTabularNumbers,
-                          ),
-                        ),
-                      ],
-                    ),
-                    style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
-                  ),
-                ],
+              const SizedBox(width: AppSpacing.sm),
+              Flexible(
+                flex: 4,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    _weekStat(palette, '这一周赚了 ', '+${formatPoints(week.income)}', palette.success),
+                    _gapXs,
+                    _weekStat(palette, '花掉 ', formatPoints(week.expense), palette.danger),
+                  ],
+                ),
               ),
             ],
           ),
@@ -1407,6 +1464,29 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     );
   }
 
+  /// 余额行右侧的一行周统计（`这一周赚了 +12`）：大字号宽度不够时用省略号收尾，
+  /// 宁可截断也不画溢出条。
+  Widget _weekStat(AppPalette palette, String label, String value, Color valueColor) {
+    return Text.rich(
+      TextSpan(
+        children: <InlineSpan>[
+          TextSpan(text: label),
+          TextSpan(
+            text: value,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: valueColor,
+              fontFeatures: kTabularNumbers,
+            ),
+          ),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+    );
+  }
+
   Widget _checkInButton(
     AppPalette palette,
     TaskConfig task,
@@ -1414,44 +1494,54 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     DateTime now,
   ) {
     final bool done = isTaskDone(task, records, now: now);
-    return Material(
-      color: done ? palette.softColor(hasBackground: false) : _accentTint(palette.primary),
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: PressInkWell(
-        onTap: done ? null : () => _startCheckIn(task),
+    return Semantics(
+      button: !done,
+      enabled: !done,
+      label: done ? '${task.name}，今天已完成' : '${task.name}，打卡加 ${formatPoints(task.value)}',
+      excludeSemantics: true,
+      child: Material(
+        color: done ? palette.softColor(hasBackground: false) : _accentTint(palette.primary),
         borderRadius: BorderRadius.circular(AppRadius.md),
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: ShapeDecoration(
-              shape: AppShape.all(AppRadius.md, side: BorderSide(color: done ? palette.border : palette.primary)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                task.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppFontSize.xs,
-                  fontWeight: FontWeight.w600,
-                  color: done ? palette.textTertiary : _onAccentTint(palette, palette.primary),
+        child: PressInkWell(
+          onTap: done ? null : () => _startCheckIn(task),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.sm,
+            ),
+            decoration: ShapeDecoration(
+                shape: AppShape.all(AppRadius.md, side: BorderSide(color: done ? palette.border : palette.primary)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  task.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppFontSize.xs,
+                    fontWeight: FontWeight.w600,
+                    color: done ? palette.textTertiary : _onAccentTint(palette, palette.primary),
+                  ),
                 ),
-              ),
-              _gapXs,
-              Text(
-                done ? '✓' : '+${task.value}',
-                style: TextStyle(
-                  fontSize: AppFontSize.md,
-                  fontWeight: FontWeight.w700,
-                  color: done ? palette.success : _onAccentTint(palette, palette.primary),
-                  fontFeatures: kTabularNumbers,
+                _gapXs,
+                Text(
+                  // 完成态只剩一个「✓」，大字号下也不能跟上面的任务名叠在一起
+                  done ? '✓' : '+${formatPoints(task.value)}',
+                  semanticsLabel: done ? '已完成' : null,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppFontSize.md,
+                    fontWeight: FontWeight.w700,
+                    color: done ? palette.success : _onAccentTint(palette, palette.primary),
+                    fontFeatures: kTabularNumbers,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1484,9 +1574,14 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                   ),
                 ),
               ),
-              Text(
-                '完成一个打一次卡',
-                style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+              // 跟标题抢宽度时宁可省略，也不把标题压到换行外
+              Flexible(
+                child: Text(
+                  '完成一个打一次卡',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
+                ),
               ),
             ],
           ),
@@ -1579,6 +1674,8 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
               // 提交态在弹窗里（弹窗自带转圈 / 置灰），这一行只显示结果
               Text(
                 done ? '✓' : _signed(task.value),
+                // 完成态只剩一个「✓」，读屏得能说出「已完成」
+                semanticsLabel: done ? '今天已完成' : null,
                 style: TextStyle(
                   fontSize: AppFontSize.md,
                   fontWeight: FontWeight.w700,
@@ -1804,7 +1901,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
               SuccessBurst(
                 size: AppSpacing.xl * 3,
                 color: palette.warning,
-                icon: _gardenIcon(badge.icon),
+                icon: gardenGlyph(badge.icon),
               ),
               _gapMd,
               Text(
@@ -1982,12 +2079,16 @@ class _CheckInSheet extends StatefulWidget {
   const _CheckInSheet({
     required this.task,
     required this.isParent,
+    required this.parentName,
     required this.upload,
     required this.onSubmitted,
   });
 
   final TaskConfig task;
   final bool isParent;
+
+  /// 家长侧的称呼（扣分原因写清「谁在看」时用，不写死「女儿」）
+  final String parentName;
   final UploadApi upload;
   final Future<void> Function(TaskConfig task, {String? note, String? imageUrl}) onSubmitted;
 
@@ -2257,7 +2358,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                 decoration: InputDecoration(
                   isDense: true,
                   counterText: '',
-                  labelText: _isDeduct ? '为什么扣分（必填，女儿会看到）' : '备注',
+                  labelText: _isDeduct ? '为什么扣分（必填，${widget.parentName}会看到）' : '备注',
                   labelStyle: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
                   hintText: _isDeduct
                       ? '写清原因，例如：说好只看 30 分钟却看了一下午'

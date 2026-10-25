@@ -1,3 +1,4 @@
+import 'package:sekainook_app/fl_ui/dialog.dart';
 import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -22,6 +23,7 @@ import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/format.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 import '../../widgets/motion/app_buttons.dart';
@@ -90,6 +92,10 @@ class _SelftestPanelState extends State<SelftestPanel> {
 
   /// 展开了 data 的结果 id
   final Set<String> _expandedData = <String>{};
+
+  /// 接口地址 / 清单版本 / 生成时间 / 记录 id 这类只有开发者关心的东西：
+  /// 默认收起来，点「详情」才显示
+  bool _showDetails = false;
 
   @override
   void initState() {
@@ -750,46 +756,32 @@ class _SelftestPanelState extends State<SelftestPanel> {
     );
   }
 
+  /// 二次确认：走全站统一的浮动弹窗（以前这里自己拼 AlertDialog，同一个 App 两套弹窗）
   Future<bool> _confirm({
     required String title,
     required String description,
     required String okText,
     bool danger = false,
   }) async {
-    final bool? result = await showDialog<bool>(
+    final bool? result = await showFloatingDialog<bool>(
       context: context,
-      builder: (BuildContext dialogContext) {
-        final AppPalette palette = dialogContext.palette;
-        return AlertDialog(
-          backgroundColor: palette.surface,
-          title: Text(
-            title,
-            style: TextStyle(
-              fontSize: AppFontSize.md,
-              fontWeight: FontWeight.w600,
-              color: palette.text,
-            ),
-          ),
-          content: Text(
-            description,
-            style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
-          ),
+      child: Builder(
+        builder: (BuildContext dialogContext) => CommonDialog(
+          title: title,
+          destructive: danger,
           actions: <Widget>[
-            AppTextButton(
+            TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('取消'),
             ),
-            AppFilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: danger ? palette.danger : palette.primary,
-                foregroundColor: palette.onColor(danger ? palette.danger : palette.primary),
-              ),
+            TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: Text(okText),
             ),
           ],
-        );
-      },
+          child: Text(description),
+        ),
+      ),
     );
     return result ?? false;
   }
@@ -898,15 +890,23 @@ class _SelftestPanelState extends State<SelftestPanel> {
                 '参数留空的服务端按自己的口径算',
           ),
           const SizedBox(height: AppSpacing.sm),
-          _InfoRow(label: '接口', value: '${AppConstants.apiBase}${SelftestApi.path}'),
-          _InfoRow(label: '清单版本', value: manifest.version.isEmpty ? '未知' : manifest.version),
-          _InfoRow(
-            label: '生成于',
-            value: _formatStamp(DateTime.tryParse(manifest.generatedAt)),
-          ),
           _InfoRow(label: '检查项', value: '${manifest.groups.length} 组 / ${manifest.items.length} 项'),
           _InfoRow(label: '参数', value: '$paramCount 个'),
           _InfoRow(label: '管理员密码', value: widget.password.isEmpty ? '没拿到' : '已解锁'),
+          // 地址、版本号、生成时间只有排查时才有用：折在「详情」里，别一进门就摆出来
+          AppTextButton(
+            onPressed: () => setState(() => _showDetails = !_showDetails),
+            style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+            child: Text(_showDetails ? '收起详情' : '详情'),
+          ),
+          if (_showDetails) ...<Widget>[
+            _InfoRow(label: '接口', value: '${AppConstants.apiBase}${SelftestApi.path}'),
+            _InfoRow(label: '清单版本', value: manifest.version.isEmpty ? '未知' : manifest.version),
+            _InfoRow(
+              label: '生成于',
+              value: _formatStamp(DateTime.tryParse(manifest.generatedAt)),
+            ),
+          ],
         ],
       ),
     );
@@ -988,13 +988,18 @@ class _SelftestPanelState extends State<SelftestPanel> {
         );
       case SelftestParamType.integer:
       case SelftestParamType.text:
-        final TextEditingController? controller = _controllers[param.name];
+        // 清单是异步来的，_seed 里建过的直接用；万一漏了就地补一个并留在 map 里，
+        // 这样 dispose 才收得到（以前在 build 里 new，没人 dispose）
+        final TextEditingController controller = _controllers.putIfAbsent(
+          param.name,
+          () => TextEditingController(text: _values[param.name]?.toString() ?? ''),
+        );
         return _ParamLabeledField(
           label: label,
           desc: param.desc,
           child: _panelField(
             context,
-            controller: controller ?? TextEditingController(text: _values[param.name]?.toString() ?? ''),
+            controller: controller,
             hint: param.type == SelftestParamType.integer ? '整数' : '留空 = 不传',
             keyboardType: param.type == SelftestParamType.integer
                 ? const TextInputType.numberWithOptions(signed: true)
@@ -1031,7 +1036,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
               Checkbox(
                 value: picked == 0 ? false : (picked == total ? true : null),
                 tristate: true,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                // 不设 shrinkWrap：留默认的 48dp 可点区，别让人对着图标点
                 onChanged: _running ? null : (bool? value) => _toggleAll(value == true),
               ),
               const SizedBox(width: AppSpacing.xs),
@@ -1052,8 +1057,8 @@ class _SelftestPanelState extends State<SelftestPanel> {
             ],
           ),
           Text(
-            '写库项默认不勾（契约：危险项要手动勾，dryRun 关掉时还会再确认一次）；'
-            '「客户端自检」由本机跑完再把结果随请求发出去',
+            '写库的检查项默认不勾：它们会真的改线上数据，勾上之后运行前还会再问一次；'
+            '「客户端自检」在这台手机上跑完，结果随请求一起交给后端',
             style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary, height: 1.5),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -1091,7 +1096,6 @@ class _SelftestPanelState extends State<SelftestPanel> {
                   Checkbox(
                     value: value,
                     tristate: true,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     onChanged: _running
                         ? null
                         : (bool? checked) => _toggleGroupSelection(group),
@@ -1165,7 +1169,6 @@ class _SelftestPanelState extends State<SelftestPanel> {
           children: <Widget>[
             Checkbox(
               value: selected,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               onChanged: _running ? null : (bool? checked) => _toggleItem(item.id),
             ),
             const SizedBox(width: AppSpacing.xs),
@@ -1202,9 +1205,9 @@ class _SelftestPanelState extends State<SelftestPanel> {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     <String>[
-                      '${item.estMs}ms',
-                      'id ${item.id}',
-                      if (item.params.isNotEmpty) '参数 ${item.params.join('、')}',
+                      '≈${item.estMs}ms',
+                      if (_showDetails) 'id ${item.id}',
+                      if (_showDetails && item.params.isNotEmpty) '参数 ${item.params.join('、')}',
                     ].join(' · '),
                     style: TextStyle(
                       fontSize: AppFontSize.xs,
@@ -1354,10 +1357,11 @@ class _SelftestPanelState extends State<SelftestPanel> {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          _InfoRow(
-            label: '环境',
-            value: '${report.env.origin} · Worker ${report.env.worker}',
-          ),
+          if (_showDetails)
+            _InfoRow(
+              label: '环境',
+              value: '${report.env.origin} · Worker ${report.env.worker}',
+            ),
           if (report.notes.isNotEmpty) _InfoRow(label: '备注', value: report.notes.join('；')),
           if (report.clientMissing.isNotEmpty)
             _InfoRow(label: '客户端缺项', value: report.clientMissing.join('、')),
@@ -1449,24 +1453,28 @@ class _SelftestPanelState extends State<SelftestPanel> {
                 });
               },
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      expanded ? '收起 data' : '展开 data',
-                      style: TextStyle(
-                        fontSize: AppFontSize.xs,
-                        fontWeight: FontWeight.w600,
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                // 44dp 可点区：以前只有 2dp 上下边距，一手指头按不准
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44 - AppSpacing.xs * 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        expanded ? '收起 data' : '展开 data',
+                        style: TextStyle(
+                          fontSize: AppFontSize.xs,
+                          fontWeight: FontWeight.w600,
+                          color: palette.primaryInk,
+                        ),
+                      ),
+                      GlyphIcon(
+                        expanded ? AppIcons.chevronUp : AppIcons.chevronDown,
+                        size: 16,
                         color: palette.primaryInk,
                       ),
-                    ),
-                    GlyphIcon(
-                      expanded ? AppIcons.chevronUp : AppIcons.chevronDown,
-                      size: 16,
-                      color: palette.primaryInk,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1894,16 +1902,10 @@ String _prettyJson(Object? data) {
   }
 }
 
-/// `2026-10-17 18:00:01`（本地时间；解析不了就写「时间未知」）
+/// 时间统一走 format.dart（今天 / 昨天 / MM-dd HH:mm / 跨年带年份）
 String _formatStamp(DateTime? time) {
   if (time == null) return '时间未知';
-  final DateTime local = time.toLocal();
-  final String month = local.month.toString().padLeft(2, '0');
-  final String day = local.day.toString().padLeft(2, '0');
-  final String hour = local.hour.toString().padLeft(2, '0');
-  final String minute = local.minute.toString().padLeft(2, '0');
-  final String second = local.second.toString().padLeft(2, '0');
-  return '${local.year}-$month-$day $hour:$minute:$second';
+  return formatDateTime(time.toLocal());
 }
 
 /// [SelftestPanel._checkImage] 的 isolate 入口：造噪点图并编码 PNG。

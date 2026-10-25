@@ -6,6 +6,7 @@ import 'package:sekainook_app/fl_ui/shape.dart';
 import 'package:sekainook_app/fl_ui/surface.dart';
 import 'package:sekainook_app/fl_ui/typography.dart';
 import 'package:sekainook_app/theme/app_theme.dart';
+import '../../theme/motion.dart';
 
 /// 提示的语气：决定底色、图标和文字颜色。
 enum AppToastTone { neutral, success, warning, error }
@@ -30,6 +31,9 @@ abstract final class AppToast {
   static const double _topGap = 8;
   static const double _sideMargin = 16;
   static const double _maxWidth = 520;
+
+  /// 默认停留时长。原来只有 3 秒，带「撤销」的提示还没等手指跟上就没了。
+  static const Duration _defaultHold = Duration(seconds: 5);
 
   static void show(
     BuildContext context,
@@ -62,7 +66,8 @@ abstract final class AppToast {
       AppToastTone.warning => AppGlyphs.warning,
       AppToastTone.error => AppGlyphs.error,
     };
-    final hold = duration ?? Duration(seconds: tone == AppToastTone.warning ? 5 : 3);
+    // 5 秒：带撤销的提示得给人留够「反应过来 + 点中」的时间。
+    final hold = duration ?? _defaultHold;
     final top = MediaQuery.viewPaddingOf(context).top + 60 + _topGap;
 
     // 轻提示不排队：新的直接顶掉旧的，否则连点几下会攒一叠。
@@ -142,12 +147,12 @@ class _ToastCard extends StatefulWidget {
 class _ToastCardState extends State<_ToastCard> with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 240),
-    reverseDuration: const Duration(milliseconds: 160),
+    duration: AppMotion.normal,
+    reverseDuration: AppMotion.fast,
   );
   late final CurvedAnimation _curve = CurvedAnimation(
     parent: _controller,
-    curve: const Cubic(0.2, 0, 0, 1),
+    curve: AppMotion.standard,
     reverseCurve: Curves.easeIn,
   );
   late final Animation<Offset> _slide = Tween<Offset>(
@@ -191,46 +196,74 @@ class _ToastCardState extends State<_ToastCard> with SingleTickerProviderStateMi
       opacity: _curve,
       child: SlideTransition(
         position: _slide,
-        child: DecoratedBox(
-          decoration: ShapeDecoration(
-            color: widget.background,
-            shape: AppShape.lg,
-            shadows: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.18),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-            child: Row(
-              children: [
-                GlyphIcon(widget.glyph, size: 18, color: widget.foreground),
-                const SizedBox(width: 10),
-                Expanded(child: Text(widget.text, style: style)),
-                if (widget.actionLabel != null) ...[
-                  const SizedBox(width: 4),
-                  GestureDetector(
-                    onTap: () {
-                      _close();
-                      widget.onAction?.call();
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      child: Text(
-                        widget.actionLabel!,
-                        style: AppTextStyle.subheadline.of(context).copyWith(
-                          color: widget.scheme.primary,
-                          fontWeight: FontWeight.w600,
+        child: Semantics(
+          // 读屏：提示是自己冒出来的，不定成 liveRegion 就没人念。
+          liveRegion: true,
+          child: DecoratedBox(
+            decoration: ShapeDecoration(
+              color: widget.background,
+              shape: AppShape.lg,
+              shadows: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+              child: Row(
+                children: [
+                  GlyphIcon(widget.glyph, size: 18, color: widget.foreground),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(widget.text, style: style)),
+                  if (widget.actionLabel != null) ...<Widget>[
+                    const SizedBox(width: 4),
+                    Semantics(
+                      button: true,
+                      // 按钮上的「撤销」两个字单念没有上下文，补上半句话。
+                      // 不 exclude 整棵子树：点按动作来自里面的 InkWell，得留着。
+                      label: '${widget.actionLabel}：${widget.text}',
+                      child: ConstrainedBox(
+                        // 44×44 是手指的底线：以前 GestureDetector + 6/2 的内边距
+                        // 只有 ≈24dp 高，点十次中三次。
+                        constraints: const BoxConstraints(
+                          minWidth: 48,
+                          minHeight: 44,
+                        ),
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: InkWell(
+                            borderRadius: AppRadius.sm,
+                            onTap: () {
+                              _close();
+                              widget.onAction?.call();
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              child: Center(
+                                widthFactor: 1,
+                                child: ExcludeSemantics(
+                                  child: Text(
+                                    widget.actionLabel!,
+                                    style: AppTextStyle.subheadline.of(context)
+                                        .copyWith(
+                                          color: widget.scheme.primary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
+                  const SizedBox(width: 4),
                 ],
-                const SizedBox(width: 4),
-              ],
+              ),
             ),
           ),
         ),

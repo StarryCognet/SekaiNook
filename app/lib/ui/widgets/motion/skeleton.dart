@@ -124,7 +124,7 @@ class SkeletonCard extends StatelessWidget {
       decoration: ShapeDecoration(
         // 骨架屏只在加载的那一两秒出现，用实色底即可，不必依赖全局背景图状态
         color: palette.surface,
-        shape: AppShape.all(AppRadius.md, side: BorderSide(color: palette.border)),
+        shape: AppShape.all(AppRadius.lg, side: BorderSide(color: palette.border)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

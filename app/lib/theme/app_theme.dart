@@ -513,12 +513,13 @@ abstract final class AppTheme {
 
     return base.copyWith(
       extensions: <ThemeExtension<dynamic>>[p],
-      // 字号缩放走 textTheme 而不是 MediaQuery.textScaler：
-      // 后者会连同 Material 组件的固定高度一起放大，按钮和卡片会被撑破。
+      // 字号缩放走 MediaQuery.textScaler（见 app.dart 的 builder）：
+      // 只乘文字、不乘尺寸，全站所有 `fontSize: AppFontSize.*` 的裸文字也一起生效。
+      // 这里绝不能再用 `textTheme.apply(fontSizeFactor:)` —— 两套一起开会双倍放大，
+      // 且 textTheme 外的硬编码字号不受它影响（旧实现的实际问题）。
       textTheme: base.textTheme.apply(
         bodyColor: p.text,
         displayColor: p.text,
-        fontSizeFactor: textScale,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: p.cardColor(hasBackground: hasBackground),

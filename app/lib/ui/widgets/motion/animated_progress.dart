@@ -90,23 +90,32 @@ class PulseDot extends StatefulWidget {
   State<PulseDot> createState() => _PulseDotState();
 }
 
+/// 圆点呼吸一个来回的时长。
+///
+/// ⚠️ `AppMotion` 里还没有这一档（最接近的是 `skeleton` 的 1600ms，节奏偏快）。
+/// 待 Lead 加 `AppMotion.pulse` 后换掉这里的字面量，见交付说明的跨域待办。
+const Duration _pulsePeriod = Duration(milliseconds: 1800);
+
 class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1800),
+    duration: _pulsePeriod,
   );
-
-  bool _started = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_started) return;
-    _started = true;
-    // MediaQuery 只能在 didChangeDependencies 之后读
+    // MediaQuery 只能在 didChangeDependencies 之后读；每次变化都重判，
+    // 用户在设置里开关「移除动态效果」时不用重进页面。
+    _syncMotion();
+  }
+
+  void _syncMotion() {
     if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      // 静态停在「刚散开」的一帧：环还在，只是不动。
+      _controller.stop();
       _controller.value = 1;
-    } else {
+    } else if (!_controller.isAnimating) {
       _controller.repeat();
     }
   }

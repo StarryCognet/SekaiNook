@@ -10,6 +10,7 @@ import '../../state/theme_state.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
+import '../widgets/app_toast.dart';
 import '../widgets/motion/elastic_press.dart';
 
 /// 顶栏左侧那颗胶囊里的「当前页小图标 + 页面名」。
@@ -130,9 +131,13 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   /// 内容左右内壁 —— 与页面正文的 16dp 对齐，「任务」两个字不贴屏幕边。
   static const double barHorizontalPadding = AppSpacing.md;
 
-  /// 右边小件的点按区域
-  static const double chipHeight = 36;
-  static const double chipWidth = 36;
+  /// 右边小件的点按区域。
+  ///
+  /// 2.9.8 之前是 36×36 —— 低于 Material 的 48dp 触控下限，在 320dp 小屏 +
+  /// 走路/单手场景下很容易点空（审查 U 项）。通栏条内高 52，放得下 44；
+  /// 用 44 而不是 48，是为了两颗芯片之间和文字之间还留得下呼吸。
+  static const double chipHeight = 44;
+  static const double chipWidth = 44;
 
   /// 页面图标：不再垫 `primarySoft` 色块，图标直接用主色画，所以给到 19
   static const double pageIconGlyph = 19;
@@ -431,7 +436,16 @@ class AppTopBarHost extends StatelessWidget implements PreferredSizeWidget {
       elevated: elevated,
       brightness: brightness,
       onNotifications: () => context.go('/home/notifications'),
-      onToggleBrightness: () => unawaited(context.read<ThemeState>().cycleBrightness()),
+      onToggleBrightness: () => unawaited(_cycleBrightness(context)),
     );
+  }
+
+  /// 明暗单按钮是三档循环：只换图标容易被「刚才是哪个」绕晕，
+  /// 切完用顶部轻提示说一句「外观：深色」，比让用户去设置页对照快得多。
+  Future<void> _cycleBrightness(BuildContext context) async {
+    final ThemeState theme = context.read<ThemeState>();
+    await theme.cycleBrightness();
+    if (!context.mounted) return;
+    AppToast.show(context, '外观：${_BrightnessButton.hintOf(theme.brightness)}');
   }
 }

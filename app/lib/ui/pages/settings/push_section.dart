@@ -2,7 +2,6 @@ import 'package:sekainook_app/ui/icons/icons.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../config/app_constants.dart';
 import '../../../core/api_exception.dart';
 import '../../../data/api/push_api.dart';
 import '../../../data/models/local_reminder.dart';
@@ -13,6 +12,7 @@ import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/format.dart';
 import '../../widgets/motion_widgets.dart';
 import 'reminder_list.dart';
 import '../../widgets/motion/app_buttons.dart';
@@ -159,6 +159,51 @@ class _PushSectionState extends State<PushSection> {
         preview == null ? '' : (local.scheduledTextFor(preview) ?? '');
     final int previewCut = previewText.indexOf('\n');
 
+    // 网页版（和一切排不了本地通知的平台）：三张卡互相指来指去最让人糊涂，
+    // 干脆只留一张说清楚「去 App 里开」
+    if (!local.supported) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const SectionHeader(title: '手机提醒', subtitle: '任务没做完时，提前半小时提醒。'),
+          EnterBox(
+            index: 0,
+            child: AppCard(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const _PushHead(
+                    title: '网页版不支持本地提醒',
+                    description: '网页关掉就收不到通知，也没法让手机到点响 —— 这条得用安卓 App。',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    '在安卓手机上装好 App，进「设置 → 手机提醒」就能开启：每天 21:30 提醒今天还差几个任务，'
+                    '不用开着网页，也不用订阅。',
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.textSecondary,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '网页版这边记任务、看进度都照常，只是不会主动提醒你。',
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.textTertiary,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -200,52 +245,41 @@ class _PushSectionState extends State<PushSection> {
                   ),
                 ],
                 const SizedBox(height: AppSpacing.sm),
-                if (!local.supported)
-                  Text(
-                    '网页版不支持这个（网页请用下面那张卡的浏览器推送）。'
-                    '装安卓 App 之后，这里就能直接开。',
-                    style: TextStyle(
-                      fontSize: AppFontSize.xs,
-                      color: palette.textSecondary,
-                      height: 1.5,
-                    ),
-                  )
-                else ...<Widget>[
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.sm,
-                    children: <Widget>[
-                      if (!local.enabled)
-                        AppFilledButton(
-                          onPressed: local.busy ? null : _localEnable,
-                          child: const Text('开启本地提醒'),
-                        )
-                      else
-                        AppOutlinedButton(
-                          onPressed: local.busy ? null : _localDisable,
-                          child: const Text('关掉本地提醒'),
-                        ),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: <Widget>[
+                    if (!local.enabled)
+                      AppFilledButton(
+                        onPressed: local.busy ? null : _localEnable,
+                        child: const Text('开启本地提醒'),
+                      )
+                    else
                       AppOutlinedButton(
-                        onPressed: local.busy ? null : _localTest,
-                        child: const Text('发一条本地测试通知'),
+                        onPressed: local.busy ? null : _localDisable,
+                        child: const Text('关掉本地提醒'),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '文案按「最后一次打开 App 时」的完成数算；做完 5 个任务后这条提醒会自动撤掉。',
-                    style: TextStyle(
-                      fontSize: AppFontSize.xs,
-                      color: palette.textTertiary,
-                      height: 1.5,
+                    AppOutlinedButton(
+                      onPressed: local.busy ? null : _localTest,
+                      child: const Text('发一条本地测试通知'),
                     ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '文案按「最后一次打开 App 时」的完成数算；做完 5 个任务后这条提醒会自动撤掉。',
+                  style: TextStyle(
+                    fontSize: AppFontSize.xs,
+                    color: palette.textTertiary,
+                    height: 1.5,
                   ),
-                ],
+                ),
               ],
             ),
           ),
         ),
         ReminderList(onToast: widget.onToast, index: 1),
+        // 准时模式只在能排本地通知的平台上有意义；网页版在 build 开头就只剩一张说明卡了
         EnterBox(
           index: 2,
           child: AppCard(
@@ -326,11 +360,10 @@ class _PushSectionState extends State<PushSection> {
               children: <Widget>[
                 const _PushHead(
                   title: '在网站上订阅（浏览器推送）',
-                  description: '原来给手机浏览器留的推送通道：React 网页版下线后这边暂时用不了，'
-                      '下面的「本机提醒」才是现在能用的那条。',
+                  description: '给手机浏览器留的推送通道，现在是关着的；能用的还是上面那张「本机提醒」。',
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                _PushBullet(text: '在手机上打开 ${AppConstants.apiBase}，进「设置 → 手机提醒」，把开关打开。'),
+                const _PushBullet(text: '以后恢复了的话，用手机浏览器打开网页，进「设置 → 手机提醒」把开关打开就行。'),
                 const _PushBullet(
                   text: 'iPhone 要先在 Safari 里点「分享 → 添加到主屏幕」，再从主屏上那个图标进去开（Safari 标签页里开不了）。',
                 ),
@@ -378,14 +411,8 @@ class _PushSectionState extends State<PushSection> {
     return '已开启 · 每天 21:30';
   }
 
-  /// 「下次提醒」显示成 `10/17 21:30`（北京墙钟时间，不带时区后缀）
-  String _fireAtText(DateTime when) {
-    final String mm = when.month.toString().padLeft(2, '0');
-    final String dd = when.day.toString().padLeft(2, '0');
-    final String hh = when.hour.toString().padLeft(2, '0');
-    final String mi = when.minute.toString().padLeft(2, '0');
-    return '$mm/$dd $hh:$mi';
-  }
+  /// 「下次提醒」走全站统一的日期格式（今天 / 昨天 / MM-dd HH:mm）
+  String _fireAtText(DateTime when) => formatDateTime(when);
 }
 
 /// 状态行的语气：正常 / 已完成（绿）/ 中性

@@ -161,8 +161,21 @@ class SnapSheetRoute<T> extends PopupRoute<T> with SheetCoverRouteMixin<T> {
     super.dispose();
   }
 
+  // A route has to know whether it may move before its controller exists: the
+  // duration is read at install, where the only context to ask is the
+  // navigator's, and it still carries the MediaQuery that set the setting.
+  bool _skipsMotion = false;
+
   @override
-  Duration get transitionDuration => const Duration(milliseconds: 500);
+  void install() {
+    _skipsMotion = navigator?.context.disableAnimations ?? false;
+    super.install();
+  }
+
+  @override
+  Duration get transitionDuration => _skipsMotion
+      ? Duration.zero
+      : const Duration(milliseconds: 500);
 
   @override
   Duration get reverseTransitionDuration => transitionDuration;

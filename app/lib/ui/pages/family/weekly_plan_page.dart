@@ -161,6 +161,44 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
   int get _overallPercent =>
       _totalTarget > 0 ? (_totalCurrent / _totalTarget * 100).round() : 0;
 
+  /// 环和数字用同一个数：超过 100% 时环最多画满一圈，数字也就封顶到 100 ——
+  /// 原来环封顶、数字写 120%，同一个意思两套口径。真做了多少，下面
+  /// 「current / target」那行明细本来就如实写着。
+  int get _percentShown => _overallPercent.clamp(0, 100);
+
+  /// 超额完成（_totalCurrent 超过 _totalTarget）：用来补一句人话
+  bool get _overTarget => _totalTarget > 0 && _totalCurrent > _totalTarget;
+
+  /// 协议里的周标签是 `2026-W43`（请求参数要用它），界面上得说人话：
+  /// 「本周（10/19–10/25）」。ISO 周从周一起算，跨度到周日。
+  String _displayWeekLabel() {
+    final monday = _mondayOfIsoWeek(_weekLabel);
+    if (monday == null) return _weekLabel;
+    final sunday = monday.add(const Duration(days: 6));
+    final range = '${monday.month}/${monday.day}–${sunday.month}/${sunday.day}';
+    final now = DateTime.now();
+    final thisMonday = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    return switch (thisMonday.difference(monday).inDays) {
+      0 => '本周（$range）',
+      7 => '上周（$range）',
+      -7 => '下周（$range）',
+      _ => '${monday.year} 年 ${monday.month} 月 ${monday.day} 日那周',
+    };
+  }
+
+  /// `2026-W44` → 那一周的周一。ISO 8601：1 月 4 日必定落在第 1 周，
+  /// 于是「1 月 4 日所在周的周一」+ (week - 1) 周就是这一周的周一。
+  static DateTime? _mondayOfIsoWeek(String label) {
+    final match = RegExp(r'^(\d{4})-W(\d{1,2})$').firstMatch(label);
+    if (match == null) return null;
+    final year = int.parse(match.group(1)!);
+    final week = int.parse(match.group(2)!);
+    final jan4 = DateTime(year, 1, 4);
+    final firstMonday = jan4.subtract(Duration(days: jan4.weekday - 1));
+    return firstMonday.add(Duration(days: (week - 1) * 7));
+  }
+
   String _messageOf(Object e) {
     if (e is ApiException) return e.message;
     return '加载失败';
@@ -185,10 +223,11 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
       });
       _toast(applied == next ? '进度已更新' : '已记到上限 $applied');
       _burst();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _inputs[plan.id] = plan.current);
-      _toast('更新失败');
+      // 服务端说的话比「更新失败」有用（比如「这周的计划已经锁定」）
+      _toast(e is ApiException ? e.message : '更新失败');
     } finally {
       if (mounted) setState(() => _pending.remove(plan.id));
     }
@@ -257,6 +296,12 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
       );
     }
 
+    // 「有没有设背景图」只在父级订阅一次，往下传：卡片底色、行里淡色块的字色都靠它。
+    // 原来每一行都自己 `context.select` 一次 —— 一页几十行就是几十次订阅。
+    final bool hasBackground =
+        context.select<ThemeState, bool>((state) => state.background.isNotEmpty);
+    final Color cardBase = palette.cardColor(hasBackground: hasBackground);
+
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: _init,
@@ -272,15 +317,27 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
             // 顶部卡与四类计划卡按序号错峰进场
             EnterBox(index: 0, child: _buildHeader(palette)),
             if (_plans.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: AppSpacing.xl),
-                child: EmptyView(
-                  message: '本周暂无学习计划',
-                  icon: AppIcons.calendar,
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xl),
+                // 空态给下一步：这一周的模板没建成（或服务端刚清过），
+                // 重新拉一次就能把模板重新铺出来 —— 不用退出去再进来。
+                child: Column(
+                  children: <Widget>[
+                    const EmptyView(
+                      message: '本周暂无学习计划',
+                      icon: AppIcons.calendar,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    AppOutlinedButton.icon(
+                      onPressed: () => unawaited(_init()),
+                      icon: const GlyphIcon(AppIcons.undo, size: 16),
+                      label: const Text('重新加载'),
+                    ),
+                  ],
                 ),
               )
             else
-              for (final (i, card) in _buildGroups(palette).indexed)
+              for (final (i, card) in _buildGroups(palette, cardBase).indexed)
                 EnterBox(index: i + 1, child: card),
           ],
         ),
@@ -290,7 +347,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
 
   /// 顶部卡：周标签 + 总体完成度
   Widget _buildHeader(AppPalette palette) {
-    final percent = _overallPercent;
+    final percent = _percentShown;
     return AppCard(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -300,7 +357,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  _weekLabel,
+                  _displayWeekLabel(),
                   style: TextStyle(
                     fontSize: AppFontSize.lg,
                     fontWeight: FontWeight.w700,
@@ -310,7 +367,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  '本周学习计划',
+                  '学习计划',
                   style: TextStyle(
                     fontSize: AppFontSize.md,
                     fontWeight: FontWeight.w600,
@@ -319,7 +376,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  '总体完成度',
+                  _overTarget ? '总体完成度 · 已超额完成' : '总体完成度',
                   style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
                 ),
                 const SizedBox(height: AppSpacing.xs),
@@ -405,7 +462,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
   }
 
   /// 按科目分组铺开
-  List<Widget> _buildGroups(AppPalette palette) {
+  List<Widget> _buildGroups(AppPalette palette, Color cardBase) {
     final planByTask = _planByTask;
     final widgets = <Widget>[];
     for (final entry in _grouped) {
@@ -460,7 +517,7 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
                 for (var i = 0; i < rows.length; i++) ...<Widget>[
                   if (i > 0)
                     Divider(height: AppSpacing.md, color: palette.border, thickness: 0.5),
-                  _buildRow(palette, rows[i], planByTask[rows[i].taskName]),
+                  _buildRow(palette, cardBase, rows[i], planByTask[rows[i].taskName]),
                 ],
               ],
             ),
@@ -472,25 +529,26 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
     return widgets;
   }
 
-  /// AppCard 当前的实色卡底（「有没有设背景图」决定）—— 淡色块要合到它上面算字色
-  Color get _cardBase => context.palette.cardColor(
-        hasBackground: context.select<ThemeState, bool>(
-          (state) => state.background.isNotEmpty,
-        ),
-      );
-
   /// 把「语义色 + 透明度」的淡色块合到它铺着的那层底上 —— 得到的是眼睛看到的背景色，
   /// 再交给 [AppPalette.onColor] 取字色。淡色块 alpha 只有 12%，合成底基本等于卡片底。
+  ///
+  /// `base` 由父级算好传进来（卡底取决于「有没有设背景图」，那是一次订阅的事，
+  /// 不该让每一行各自订阅一遍）。
   static Color _tinted(Color color, Color base, [double alpha = 0.12]) =>
       Color.alphaBlend(color.withValues(alpha: alpha), base);
 
-  Widget _buildRow(AppPalette palette, WeeklyPlanTemplate tpl, WeeklyPlan? plan) {
+  Widget _buildRow(
+    AppPalette palette,
+    Color cardBase,
+    WeeklyPlanTemplate tpl,
+    WeeklyPlan? plan,
+  ) {
     final current = plan?.current ?? 0;
     final target = tpl.target;
     final done = plan != null && target > 0 && current >= target;
     // 「已完成」标签的底 = 12% 的 success 合到卡片底上（有色底），字色按这层实际颜色取：
     // 原来把 success 本色写在自己的淡底上，浅色主题下只有约 3:1，xs 号字偏糊
-    final Color doneChipFill = _tinted(palette.success, _cardBase);
+    final Color doneChipFill = _tinted(palette.success, cardBase);
     final percent =
         plan == null || target <= 0 ? 0 : math.min(100, (current / target * 100).round());
     final accent = done ? palette.success : palette.primary;
@@ -609,9 +667,9 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
                     backgroundColor: accent,
                     // 实色底上的字 / 图标：按这层底色取（原来写死 Colors.white）
                     foregroundColor: palette.onColor(accent),
-                    minimumSize: const Size(0, 34),
                     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    // 原来压到 34dp 高 + shrinkWrap：手指几乎点不准。
+                    // 交给 Material 的默认高度，触摸区自然回到 48dp。
                   ),
                   child: submitting
                       ? SizedBox(

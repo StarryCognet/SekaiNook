@@ -1,4 +1,5 @@
 import 'package:sekainook_app/fl_ui/dialog.dart';
+import 'package:sekainook_app/fl_ui/inherited.dart';
 import 'package:sekainook_app/fl_ui/null_status.dart';
 import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
@@ -33,6 +34,7 @@ import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_sheet.dart';
+import '../../widgets/format.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
 import '../../widgets/task_row.dart';
@@ -82,6 +84,28 @@ class _TaskEntry {
 
   /// 这一条正在提交
   final bool submitting;
+}
+
+/// 历史记录里的一行：要么是周标题（带本周合计），要么是一条流水。
+///
+/// 历史列表要虚拟化，行就必须是「能按下标取」的扁平数据，
+/// 而不是 build 出来的一串 Widget —— 所以周标题也当成一行。
+class _RecordEntry {
+  /// 周标题行。`weekTotal` 由分组那一趟循环累加进来。
+  _RecordEntry.week(this.week)
+      : weekTotal = 0,
+        record = null,
+        recordIndex = null;
+
+  /// 流水行。`recordIndex` 是这条在「已显示列表」里的下标（错峰入场的相位）。
+  _RecordEntry.record({required LedgerRecord this.record, required int this.recordIndex})
+      : week = null,
+        weekTotal = 0;
+
+  final DateTime? week;
+  int weekTotal;
+  final LedgerRecord? record;
+  final int? recordIndex;
 }
 
 /// 核心仪表盘：积分银行 + 任务区 / 待审批区 / 历史记录区
@@ -180,6 +204,13 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed || !mounted) return;
+    // 后台可能待了很久（隔夜再打开）：_now 先补上，否则「今天」「本周」全是旧的
+    final now = DateTime.now();
+    if (now.minute != _now.minute ||
+        now.hour != _now.hour ||
+        now.day != _now.day) {
+      setState(() => _now = now);
+    }
     _pollOnce();
   }
 
@@ -267,12 +298,19 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   // ---- 提示 ----
 
-  void _toast(String text, {bool warning = false}) {
+  void _toast(
+    String text, {
+    bool warning = false,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
     if (!mounted) return;
     AppToast.show(
       context,
       text,
       tone: warning ? AppToastTone.warning : AppToastTone.neutral,
+      actionLabel: actionLabel,
+      onAction: onAction,
     );
   }
 
@@ -305,8 +343,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     try {
       await context.read<FamilyState>().removeRecord(recordId);
       _toast('已撤销刚才的打卡');
-    } catch (_) {
-      _toast('撤销失败，请到「历史记录」里删除', warning: true);
+    } catch (e) {
+      _handleWriteError(e, '撤销失败，请到「历史记录」里删除');
     }
   }
 
@@ -452,17 +490,38 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   // ---- 审批 ----
 
   /// 审批通过：按条记 loading，连点不会重复提交（审批写操作不可重入）
-  Future<void> _approve(String id) async {
-    if (_approvingIds.contains(id)) return;
-    setState(() => _approvingIds.add(id));
+  ///
+  /// 通过即入账，误触一次孩子就白干了 —— 给一条带「撤销」的 toast 兜底
+  /// （服务端允许把 approved 改回 pending，积分也跟着退回去）。
+  Future<void> _approve(LedgerRecord record) async {
+    if (_approvingIds.contains(record.id)) return;
+    setState(() => _approvingIds.add(record.id));
     try {
-      await context.read<FamilyState>().approve(id);
-      _toast('已审批通过，积分已入账');
+      await context.read<FamilyState>().approve(record.id);
+      if (!mounted) return;
+      _toast(
+        '已通过「${record.taskName}」，积分已入账',
+        actionLabel: '撤销',
+        onAction: () => unawaited(_undoApprove(record.id)),
+      );
       _burst();
-    } catch (_) {
-      _toast('操作失败，请重试', warning: true);
+    } catch (e) {
+      _handleWriteError(e, '操作失败，请重试');
     } finally {
-      if (mounted) setState(() => _approvingIds.remove(id));
+      if (mounted) setState(() => _approvingIds.remove(record.id));
+    }
+  }
+
+  /// 撤销「通过」：把这条打回待审批，积分随之从余额上退回去
+  Future<void> _undoApprove(String id) async {
+    final state = context.read<FamilyState>();
+    try {
+      await state.api.updateStatus(id, LedgerStatus.pending);
+      await state.loadLedger();
+      if (!mounted) return;
+      _toast('已打回待审批，积分也退回去了');
+    } catch (e) {
+      _handleWriteError(e, '打回失败，请到「历史记录」里删除这条');
     }
   }
 
@@ -476,7 +535,13 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       _toast('已通过 ${pending.length} 条');
       _burst();
     } catch (e) {
-      _toast(e is StateError ? e.message : '操作失败，请重试', warning: true);
+      // approveMany 把「有几条没通过」写在 StateError 里；接口错误则用服务端文案
+      _toast(
+        e is StateError
+            ? e.message
+            : (e is ApiException ? e.message : '操作失败，请重试'),
+        warning: true,
+      );
     } finally {
       if (mounted) setState(() => _approvingAll = false);
     }
@@ -490,8 +555,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           .read<FamilyState>()
           .reject(target.id, reason: reason.isEmpty ? null : reason);
       _toast('已驳回，孩子会看到你的话');
-    } catch (_) {
-      _toast('操作失败，请重试', warning: true);
+    } catch (e) {
+      _handleWriteError(e, '操作失败，请重试');
     } finally {
       if (mounted) setState(() => _rejecting = false);
     }
@@ -502,8 +567,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     try {
       await context.read<FamilyState>().resubmit(id);
       _toast('已重新提交，等待家长审批');
-    } catch (_) {
-      _toast('操作失败，请重试', warning: true);
+    } catch (e) {
+      _handleWriteError(e, '操作失败，请重试');
     }
   }
 
@@ -512,8 +577,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     try {
       await context.read<FamilyState>().removeRecord(id);
       _toast('已撤回该申请');
-    } catch (_) {
-      _toast('撤回失败，请重试', warning: true);
+    } catch (e) {
+      _handleWriteError(e, '撤回失败，请重试');
     }
   }
 
@@ -522,8 +587,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     try {
       await context.read<FamilyState>().removeRecord(id);
       _toast('已删除该记录');
-    } catch (_) {
-      _toast('删除失败，请重试', warning: true);
+    } catch (e) {
+      _handleWriteError(e, '删除失败，请重试');
     }
   }
 
@@ -541,21 +606,26 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       _toast(ledgerExportToastText(records.length, result));
     } catch (e) {
       if (!mounted) return;
-      _toast('导出失败：$e', warning: true);
+      // 不把异常对象拼进文案：`$e` 是 `Exception: ...` 的调试串，用户看不懂
+      _toast(
+        e is ApiException ? '导出失败：${e.message}' : '导出失败，请重试',
+        warning: true,
+      );
     }
   }
 
   // ---- 展示辅助 ----
 
-  /// 格式化流水时间：今天显示「今天 HH:mm」，更早显示「M/d HH:mm」
-  String _formatTime(DateTime date) {
-    final local = date.toLocal();
-    final now = _now;
-    final sameDay =
-        local.year == now.year && local.month == now.month && local.day == now.day;
-    final hh = local.hour.toString().padLeft(2, '0');
-    final mm = local.minute.toString().padLeft(2, '0');
-    return sameDay ? '今天 $hh:$mm' : '${local.month}/${local.day} $hh:$mm';
+  /// 格式化流水时间：今天「今天 HH:mm」，昨天「昨天 HH:mm」，再往前带日期
+  ///
+  /// 统一走 `format.dart`（与账本页、通知页同一套口径），`_now` 由 20 秒定时器
+  /// 和回前台刷新维持 —— 跨天之后「今天」不会停在昨天。
+  String _formatTime(DateTime date) => formatDateTime(date.toLocal(), now: _now);
+
+  /// 流水金额：正数带 `+`，过千加千分位（`+1,050` / `-30` / `0`）
+  String _formatAmount(int value) {
+    if (value == 0) return '0';
+    return value > 0 ? '+${formatPoints(value)}' : formatPoints(value);
   }
 
   @override
@@ -619,15 +689,14 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       AppSpacing.md,
       AppSpacing.xl + AppNavBar.contentInset(context),
     );
+    // 历史记录要虚拟化，整页自己就是一条 CustomScrollView（连返回条一起），
+    // 不能再套这层 ListView —— 否则就是两个可滚区域。
+    if (area == 'records') return _buildRecordsScroller(state, isParent, padding);
     final Widget body = switch (area) {
       'pending' => _buildLedgerSubPage(
           title: '待审批',
           count: state.pendingCount,
           child: _buildPendingArea(state),
-        ),
-      'records' => _buildLedgerSubPage(
-          title: '历史记录',
-          child: _buildRecordsArea(state, isParent),
         ),
       _ => _buildTasksArea(state, isParent),
     };
@@ -637,76 +706,80 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     );
   }
 
-  /// 「待审批 / 历史记录」现在是独立页（入口在任务页细条右侧那两颗图标），
+  /// 「待审批 / 历史记录」现在是独立页（入口在任务页的待审批卡 / 细条右侧），
   /// 顶部给一条返回，避免进来之后找不到回头路。
   Widget _buildLedgerSubPage({
     required String title,
     required Widget child,
     int count = 0,
   }) {
-    final palette = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        PressInkWell(
-          onTap: () => context.go('/family'),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              vertical: AppSpacing.sm,
-              horizontal: AppSpacing.xs,
-            ),
-            child: Row(
-              children: <Widget>[
-                GlyphIcon(AppIcons.chevronBack, size: 18, color: palette.textSecondary),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: AppFontSize.md,
-                    fontWeight: FontWeight.w700,
-                    color: palette.text,
-                  ),
-                ),
-                if (count > 0) ...<Widget>[
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    '$count',
-                    style: TextStyle(fontSize: AppFontSize.sm, color: palette.textTertiary),
-                  ),
-                ],
-                const Spacer(),
-                Text(
-                  '返回任务',
-                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
-                ),
-              ],
-            ),
-          ),
-        ),
+        _buildSubPageHeader(title, count: count),
         const SizedBox(height: AppSpacing.sm),
         child,
       ],
     );
   }
 
+  /// 子页顶部那条返回 + 标题（历史记录页把它单独塞进 SliverToBoxAdapter）
+  Widget _buildSubPageHeader(String title, {int count = 0}) {
+    final palette = context.palette;
+    return PressInkWell(
+      onTap: () => context.go('/family'),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          vertical: AppSpacing.sm,
+          horizontal: AppSpacing.xs,
+        ),
+        child: Row(
+          children: <Widget>[
+            GlyphIcon(AppIcons.chevronBack, size: 18, color: palette.textSecondary),
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: AppFontSize.md,
+                fontWeight: FontWeight.w700,
+                color: palette.text,
+              ),
+            ),
+            if (count > 0) ...<Widget>[
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                '$count',
+                style: TextStyle(fontSize: AppFontSize.sm, color: palette.textTertiary),
+              ),
+            ],
+            const Spacer(),
+            Text(
+              '返回任务',
+              style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   // ---- ④ 分页：任务区 / 待审批 / 历史记录 ----
 
-  /// 跳到「待审批 / 历史记录」子页（入口在任务页细条右侧的两颗图标）。
+  /// 跳到「待审批 / 历史记录」子页（入口是任务页的待审批卡与细条右侧的历史图标）。
   ///
   /// `context.go` 是 replace 语义，不堆历史；页面内容由 URL 派生，不再 setState。
   void _goTab(String area) => context.go('/family?tab=${_tabParamFor(area)}');
 
   // ---- ④-0 必须任务细条（任务页顶部，约 28dp）----
 
-  /// 任务页顶部那条细条：必须任务进度 + 倒计时 + 待审批/历史两个入口。
+  /// 任务页顶部那条细条：必须任务进度 + 倒计时 + 历史记录入口。
   ///
   /// 原「状态条」200dp 里每天真正要看的只有这一行 —— 积分和兑换搬去首页后，
   /// 这里只剩「今天还剩几件必须任务」和「没做要扣多少」。
+  /// 待审批入口不再挤在这里（原来只有一颗 32×32 图标），见 [_pendingEntryCard]。
   Widget _mustStrip({
     required TaskProgress progress,
-    required int pendingCount,
   }) {
     final palette = context.palette;
     final int total = progress.total;
@@ -749,18 +822,75 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           ),
         ),
         _ledgerEntryIcon(
-          glyph: AppIcons.inbox,
-          count: pendingCount,
-          tooltip: '待审批',
-          onTap: () => _goTab('pending'),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        _ledgerEntryIcon(
           glyph: AppIcons.history,
           tooltip: '历史记录',
           onTap: () => _goTab('history'),
         ),
       ],
+    );
+  }
+
+  /// 待审批入口：整条可点的卡片。
+  ///
+  /// 原来只有细条右侧一颗 32×32 图标 —— 比 44dp 的触控下限还小，家长常常点空。
+  /// 现在仍**只此一个入口**，但把「有几条、点开是什么」写在卡上，
+  /// 整条约 56dp 高，拇指一按就中。
+  Widget _pendingEntryCard(int count) {
+    final palette = context.palette;
+    final bool urgent = count > 0;
+    final Color accent = urgent ? palette.warningInk : palette.textSecondary;
+    final Color fill = urgent
+        ? Color.alphaBlend(palette.warning.withValues(alpha: 0.12), palette.surfaceSoft)
+        : palette.surfaceSoft;
+    final BorderSide side = BorderSide(
+      color: urgent ? palette.warning.withValues(alpha: 0.5) : palette.border,
+    );
+    return PressInkWell(
+      onTap: () => _goTab('pending'),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 56),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: ShapeDecoration(
+          color: fill,
+          shape: AppShape.all(AppRadius.md, side: side),
+        ),
+        child: Row(
+          children: <Widget>[
+            GlyphIcon(AppIcons.inbox, size: 20, color: accent),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    urgent ? '$count 条待审批' : '待审批',
+                    style: TextStyle(
+                      fontSize: AppFontSize.md,
+                      fontWeight: FontWeight.w600,
+                      color: palette.text,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    urgent ? '孩子交的打卡在等你确认' : '暂时没有要审的',
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            GlyphIcon(AppIcons.chevronForward, size: 18, color: palette.textTertiary),
+          ],
+        ),
+      ),
     );
   }
 
@@ -903,23 +1033,50 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
+        // 家长首屏第一件事是「有没有要审的」：给它一条独立的大入口卡
+        if (isParent) ...<Widget>[
+          _pendingEntryCard(state.pendingCount),
+          const SizedBox(height: AppSpacing.md),
+        ],
         AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              _mustStrip(progress: progress, pendingCount: state.pendingCount),
+              _mustStrip(progress: progress),
               const SizedBox(height: AppSpacing.md),
               _taskTypeSegment(),
               const SizedBox(height: AppSpacing.md),
               if (ready.isEmpty && later.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  child: Text(
-                    earning ? '今天要赚的积分都拿到了 🎉' : '今天没有要记的账 🎉',
-                    style: TextStyle(
-                      fontSize: AppFontSize.sm,
-                      color: palette.textSecondary,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        earning ? '今天要赚的积分都拿到了 🎉' : '今天没有要记的账 🎉',
+                        style: TextStyle(
+                          fontSize: AppFontSize.sm,
+                          color: palette.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        // 空态不是终点：告诉用户「那接下来能做什么」
+                        earning
+                            ? '消费、罚款照常记；想加新任务点下面的「自定义任务」'
+                            : '赚钱任务都做完了，剩下的时间留给自选加分',
+                        style: TextStyle(
+                          fontSize: AppFontSize.xs,
+                          color: palette.textTertiary,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppOutlinedButton.icon(
+                        onPressed: () => _goTab('history'),
+                        icon: const GlyphIcon(AppIcons.history, size: 16),
+                        label: const Text('看看今天记了什么'),
+                      ),
+                    ],
                   ),
                 )
               else if (earning) ...<Widget>[
@@ -1214,7 +1371,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           icon: taskIconFor(task.id, earning: earning),
           earning: earning,
           state: rowState,
-          value: task.value > 0 ? '+${task.value}' : '${task.value}',
+          value: _formatAmount(task.value),
           meta: _taskEntryMeta(entry, records),
           // 「必须」红标只给没做会扣钱的任务；纯加分的参赛/获奖不挂，否则标就没有分量了
           mustBadge: task.mandatory,
@@ -1256,38 +1413,40 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     ];
     await showFloatingDialog<void>(
       context: context,
-      child: AlertDialog(
-        title: Row(
-          children: <Widget>[
-            GlyphIcon(taskIconFor(task.id), size: 20, color: task.value >= 0 ? palette.success : palette.danger),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(child: Text(task.name)),
+      child: Builder(
+        builder: (BuildContext dialogContext) => CommonDialog(
+          title: task.name,
+          // 图标放 trailing，别自己拼一个 Row 当标题（房屋的弹窗标题只有一处写法）
+          trailing: GlyphIcon(
+            taskIconFor(task.id),
+            size: 20,
+            color: task.value >= 0 ? palette.success : palette.danger,
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('知道了'),
+            ),
           ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            for (final line in lines)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  '· $line',
-                  style: TextStyle(
-                    fontSize: AppFontSize.sm,
-                    height: 1.4,
-                    color: palette.textSecondary,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              for (final line in lines)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    '· $line',
+                    style: TextStyle(
+                      fontSize: AppFontSize.sm,
+                      height: 1.4,
+                      color: palette.textSecondary,
+                    ),
                   ),
                 ),
-              ),
-          ],
-        ),
-        actions: <Widget>[
-          AppTextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('知道了'),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1484,7 +1643,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                       ],
                       const SizedBox(width: AppSpacing.sm),
                       Text(
-                        task.value > 0 ? '+${task.value}' : '${task.value}',
+                        // 金额统一走 format.dart 的口径（正数带 +、过千带千分位）
+                        _formatAmount(task.value),
                         style: TextStyle(
                           fontSize: AppFontSize.sm,
                           fontWeight: FontWeight.w600,
@@ -1496,7 +1656,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                         tooltip: '删除任务',
                         iconSize: 18,
                         color: palette.danger,
-                        onPressed: () => _confirmRemoveTask(task),
+                        onPressed: () => unawaited(_confirmRemoveTask(task)),
                         icon: const GlyphIcon(AppIcons.delete),
                       ),
                     ],
@@ -1510,28 +1670,47 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     );
   }
 
-  void _confirmRemoveTask(CustomTask task) {
-    final store = context.read<CustomTasksState>();
-    showFloatingDialog<void>(
+  /// 危险动作的二次确认（删任务 / 撤回 / 删流水）。
+  ///
+  /// 与设置页（reminder_list.dart 的 `_confirm`）同一只浮动弹窗：CommonDialog +
+  /// destructive，最后那颗按钮由 fl_ui 自己染成警示红。别处不要再拼一套 AlertDialog。
+  Future<bool> _confirmDestructive({
+    required String title,
+    required String description,
+    required String okText,
+  }) async {
+    final bool? result = await showFloatingDialog<bool>(
       context: context,
-      child: AlertDialog(
-        title: const Text('删掉这个任务？'),
-        content: Text('「${task.name}」会从快捷任务里移除，已有的流水不受影响。'),
-        actions: <Widget>[
-          AppTextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          AppTextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              store.removeTask(task.id);
-            },
-            child: const Text('删掉'),
-          ),
-        ],
+      child: Builder(
+        builder: (BuildContext dialogContext) => CommonDialog(
+          title: title,
+          destructive: true,
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(okText),
+            ),
+          ],
+          child: Text(description),
+        ),
       ),
     );
+    return result ?? false;
+  }
+
+  Future<void> _confirmRemoveTask(CustomTask task) async {
+    final store = context.read<CustomTasksState>();
+    final bool ok = await _confirmDestructive(
+      title: '删掉这个任务？',
+      description: '「${task.name}」会从快捷任务里移除，已有的流水不受影响。',
+      okText: '删掉',
+    );
+    if (!ok || !mounted) return;
+    store.removeTask(task.id);
   }
 
   // ---- ④-b 待审批区（仅家长） ----
@@ -1542,14 +1721,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     if (pending.isEmpty) {
       return AppCard(
         // FlClash 空态：带插画与入场动画，比一行灰字有存在感。
-        // NullStatus 自带滚动容器，塞进卡片里要给个确定高度。
-        child: const SizedBox(
-          height: 280,
-          child: NullStatus(
-            label: '暂无待审批申请',
-            description: '孩子提交打卡后，会在这里等你确认',
-            illustration: NullStatusIllustration.logs,
-          ),
+        // NullStatus 现在不传 height 就不定高、也不套内部滚动，卡片按内容长。
+        child: const NullStatus(
+          label: '暂无待审批申请',
+          description: '孩子提交打卡后，会在这里等你确认',
+          illustration: NullStatusIllustration.logs,
         ),
       );
     }
@@ -1557,7 +1733,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
+          // 320dp + 大字号下这一行放不下：Wrap 让按钮自己掉到下一行
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: <Widget>[
               Text(
                 '共 ${pending.length} 条待审批',
@@ -1567,7 +1747,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   fontFeatures: kTabularNumbers,
                 ),
               ),
-              const Spacer(),
               AppFilledButton.icon(
                 onPressed: _approvingAll ? null : () => _confirmApproveAll(pending),
                 icon: const GlyphIcon(AppIcons.checkCircle, size: 18),
@@ -1586,22 +1765,25 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   void _confirmApproveAll(List<LedgerRecord> pending) {
     showFloatingDialog<void>(
       context: context,
-      child: AlertDialog(
-        title: Text('一次通过全部 ${pending.length} 条？'),
-        content: const Text('确认后才入账；要驳回的请单独处理'),
-        actions: <Widget>[
-          AppTextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('再想想'),
-          ),
-          AppFilledButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              unawaited(_approveAll(pending));
-            },
-            child: const Text('全部通过'),
-          ),
-        ],
+      child: Builder(
+        // Builder 拿到弹窗自己的 context：pop 的一定是这只弹窗，不是页面
+        builder: (BuildContext dialogContext) => CommonDialog(
+          title: '一次通过全部 ${pending.length} 条？',
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('再想想'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                unawaited(_approveAll(pending));
+              },
+              child: const Text('全部通过'),
+            ),
+          ],
+          child: Text('确认后才入账；要驳回的请单独处理'),
+        ),
       ),
     );
   }
@@ -1662,7 +1844,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                     child: _RecordThumb(url: record.imageUrl!),
                   ),
                 const SizedBox(height: AppSpacing.sm),
-                Row(
+                // 320dp + 大字号：「通过」「驳回」两颗按钮并排会溢出，交给 Wrap
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: <Widget>[
                     AppFilledButton.icon(
                       style: FilledButton.styleFrom(
@@ -1671,7 +1857,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                           positive ? palette.success : palette.danger,
                         ),
                       ),
-                      onPressed: approving ? null : () => _approve(record.id),
+                      onPressed: approving ? null : () => _approve(record),
                       icon: approving
                           ? SizedBox(
                               width: 14,
@@ -1688,7 +1874,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                           : const GlyphIcon(AppIcons.checkCircle, size: 16),
                       label: const Text('通过'),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
                     AppOutlinedButton.icon(
                       onPressed: () => unawaited(_startReject(record)),
                       icon: const GlyphIcon(AppIcons.close, size: 16),
@@ -1701,7 +1886,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           ),
           const SizedBox(width: AppSpacing.sm),
           Text(
-            '${positive ? '+' : ''}${record.amount}',
+            _formatAmount(record.amount),
             style: TextStyle(
               fontSize: AppFontSize.md,
               fontWeight: FontWeight.w700,
@@ -1739,79 +1924,164 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     return filtered;
   }
 
-  Widget _buildRecordsArea(FamilyState state, bool isParent) {
+  /// 历史记录页的滚动结构：整页只有**一条** CustomScrollView。
+  ///
+  /// 2.9.8 之前这里是「一个 Column 塞进外层 ListView」：500 条流水全部一次性
+  /// build，每加一页就重排整张表。现在行交给 [SliverList.builder]，
+  /// 屏幕外的行不建；周合计也在分组那一趟循环里累加，不再按周重扫全表。
+  ///
+  /// 卡片用 [DecoratedSliver] 而不是 [AppCard]：AppCard 是 box 组件，
+  /// 无法包住一个 sliver 列表（硬套就得多一层可滚区域）。底色 / 圆角 / 描边
+  /// 与 AppCard 完全同源（`palette.cardColor` + `AppShape.all(AppRadius.lg)`）。
+  Widget _buildRecordsScroller(
+    FamilyState state,
+    bool isParent,
+    EdgeInsets padding,
+  ) {
     final palette = context.palette;
+    final bool hasBackground =
+        context.select<ThemeState, bool>((theme) => theme.background.isNotEmpty);
     final filtered = _filteredRecords(state.records);
     final visible = filtered.take(_visibleCount).toList(growable: false);
     final remaining = filtered.length - visible.length;
+    final entries = _groupedRecordEntries(visible);
 
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          // 状态筛选 + 导出（导出仅家长）
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: <Widget>[
-              for (final filter in _RecordFilter.values)
-                ChoiceChip(
-                  label: Text(filter.label),
-                  selected: _recordFilter == filter,
-                  onSelected: (_) => _onFilterChanged(filter),
+    return CustomScrollView(
+      // 内容不满一屏也要能下拉刷新
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: <Widget>[
+        SliverPadding(
+          padding: padding.copyWith(bottom: 0),
+          sliver: SliverMainAxisGroup(
+            slivers: <Widget>[
+              SliverToBoxAdapter(child: _buildSubPageHeader('历史记录')),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+              DecoratedSliver(
+                decoration: ShapeDecoration(
+                  color: palette.cardColor(hasBackground: hasBackground),
+                  shape: AppShape.all(
+                    AppRadius.lg,
+                    side: BorderSide(color: palette.border),
+                  ),
                 ),
-              if (isParent && filtered.isNotEmpty)
-                AppOutlinedButton.icon(
-                  onPressed: () => unawaited(_exportCsv(filtered)),
-                  icon: const GlyphIcon(AppIcons.download, size: 16),
-                  label: const Text('导出 CSV'),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          // 筛选切换：整块内容横向滑入淡出（childKey 就是筛选的口径）
-          SlideFadeSwitcher(
-            childKey: ValueKey<String>(_recordFilter.wire),
-            axis: Axis.horizontal,
-            child: filtered.isEmpty
-                ? SizedBox(
-                    height: 300,
-                    child: NullStatus(
-                      label: _recordFilter == _RecordFilter.all
-                          ? '暂无流水记录'
-                          : '该状态下暂无记录',
-                      description: _recordFilter == _RecordFilter.all
-                          ? '打卡、加餐、罚款这些都会记在这里'
-                          : '换个筛选条件看看',
-                      illustration: NullStatusIllustration.logs,
-                    ),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      // 按周分组：同周记录归到一个标题下，翻历史时先看「这周花了多少」
-                      ..._groupedRecordRows(visible, isParent),
-                      if (remaining > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(top: AppSpacing.sm),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: AppOutlinedButton(
-                              onPressed: () => setState(() => _visibleCount += _recordsPageSize),
-                              child: Text(
-                                '加载更多（还有 $remaining 条）',
-                                style: TextStyle(
-                                  fontFeatures: kTabularNumbers,
-                                  color: palette.textSecondary,
+                // 卡内边距对齐 AppCard 的 EdgeInsets.all(AppSpacing.md)
+                sliver: SliverPadding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  sliver: SliverMainAxisGroup(
+                    slivers: <Widget>[
+                      SliverToBoxAdapter(
+                        child: _buildRecordsToolbar(filtered, isParent),
+                      ),
+                      if (filtered.isEmpty)
+                        SliverToBoxAdapter(child: _buildRecordsEmpty())
+                      else ...<Widget>[
+                        const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+                        SliverList.builder(
+                          itemCount: entries.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            final entry = entries[index];
+                            final week = entry.week;
+                            if (week != null) {
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  top: index == 0 ? 0 : AppSpacing.md,
+                                  bottom: AppSpacing.xs,
+                                ),
+                                child: _weekHeader(week, entry.weekTotal),
+                              );
+                            }
+                            // index 取模：首屏 0..19 错峰，之后「加载更多」追加的条目也从头错峰
+                            return EnterBox(
+                              index: entry.recordIndex! % _recordsPageSize,
+                              child: _recordRow(entry.record!, isParent),
+                            );
+                          },
+                        ),
+                        if (remaining > 0)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: AppSpacing.sm),
+                              child: SizedBox(
+                                width: double.infinity,
+                                child: AppOutlinedButton(
+                                  onPressed: () => setState(
+                                    () => _visibleCount += _recordsPageSize,
+                                  ),
+                                  child: Text(
+                                    '加载更多（还有 $remaining 条）',
+                                    style: TextStyle(
+                                      fontFeatures: kTabularNumbers,
+                                      color: palette.textSecondary,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
+                      ],
                     ],
                   ),
+                ),
+              ),
+            ],
           ),
+        ),
+        SliverToBoxAdapter(
+          child: SizedBox(height: AppSpacing.xl + AppNavBar.contentInset(context)),
+        ),
+      ],
+    );
+  }
+
+  /// 筛选条 + 导出（导出仅家长）
+  Widget _buildRecordsToolbar(List<LedgerRecord> filtered, bool isParent) {
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[
+        for (final filter in _RecordFilter.values)
+          ChoiceChip(
+            label: Text(filter.label),
+            selected: _recordFilter == filter,
+            onSelected: (_) => _onFilterChanged(filter),
+          ),
+        if (isParent && filtered.isNotEmpty)
+          AppOutlinedButton.icon(
+            onPressed: () => unawaited(_exportCsv(filtered)),
+            icon: const GlyphIcon(AppIcons.download, size: 16),
+            // 文案带上条数：导出前就知道会拿到多少行
+            label: Text('导出 CSV（${filtered.length} 条）'),
+          ),
+      ],
+    );
+  }
+
+  /// 筛选后的空态：非「全部」时给一键回到全部，别让用户自己去点筛选条
+  Widget _buildRecordsEmpty() {
+    final palette = context.palette;
+    final bool filtered = _recordFilter != _RecordFilter.all;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Column(
+        children: <Widget>[
+          SizedBox(
+            // 这里在可滚页面里，给个定高让插画有呼吸；待审批区那处已改成按内容长
+            height: 260,
+            child: NullStatus(
+              label: filtered ? '该状态下暂无记录' : '暂无流水记录',
+              description: filtered
+                  ? '换个筛选条件看看'
+                  : '打卡、加餐、罚款这些都会记在这里',
+              illustration: NullStatusIllustration.logs,
+            ),
+          ),
+          if (filtered)
+            AppOutlinedButton.icon(
+              onPressed: () => _onFilterChanged(_RecordFilter.all),
+              icon: GlyphIcon(AppIcons.history, size: 16, color: palette.textSecondary),
+              label: const Text('看全部'),
+            ),
         ],
       ),
     );
@@ -1819,42 +2089,34 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   // ---- 历史记录：按周分组 ----
 
-  /// 把流水按「自然周（周一 00:00 起）」切成若干段，每段前面插一行周标题 + 本周合计。
+  /// 把流水按「自然周（周一 00:00 起）」切成「周标题 + 行」的扁平序列。
   ///
   /// 流水本身按时间倒序返回，所以同一周的记录一定连续，只需比较上一周即可；
   /// 万一后端换了排序口径，最坏情况也只是同一个周标题出现两次（不会串周）。
-  List<Widget> _groupedRecordRows(List<LedgerRecord> records, bool isParent) {
-    final rows = <Widget>[];
-    DateTime? lastWeek;
+  ///
+  /// 周合计在这一次循环里累加：原来每个周标题都把整份 records 传进去重扫一遍
+  /// （40 周 × 500 条 ≈ 2 万次迭代，还顺带造 4 万个临时 DateTime）。
+  List<_RecordEntry> _groupedRecordEntries(List<LedgerRecord> records) {
+    final entries = <_RecordEntry>[];
+    _RecordEntry? header;
     for (final (i, record) in records.indexed) {
       final week = _weekStartOf(record.createdAt);
-      if (lastWeek == null || week != lastWeek) {
-        rows.add(
-          Padding(
-            padding: EdgeInsets.only(
-              top: i == 0 ? 0 : AppSpacing.md,
-              bottom: AppSpacing.xs,
-            ),
-            child: _weekHeader(week, records),
-          ),
-        );
-        lastWeek = week;
+      if (header == null || header.week != week) {
+        header = _RecordEntry.week(week);
+        entries.add(header);
       }
-      // index 取模：首屏 0..19 错峰，之后「加载更多」追加的条目也从头错峰
-      rows.add(EnterBox(index: i % _recordsPageSize, child: _recordRow(record, isParent)));
+      // 被驳回的不算进本周净变化（那笔钱从没入过账）
+      if (record.status != LedgerStatus.rejected) {
+        header.weekTotal += record.amount;
+      }
+      entries.add(_RecordEntry.record(record: record, recordIndex: i));
     }
-    return rows;
+    return entries;
   }
 
   /// 周标题：左边「本周 / 上周 / M月d日那周」，右边本周净变化。
-  Widget _weekHeader(DateTime week, List<LedgerRecord> records) {
+  Widget _weekHeader(DateTime week, int total) {
     final palette = context.palette;
-    var total = 0;
-    for (final record in records) {
-      if (_weekStartOf(record.createdAt) == week && record.status != LedgerStatus.rejected) {
-        total += record.amount;
-      }
-    }
     return Row(
       children: <Widget>[
         Text(
@@ -1867,7 +2129,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         ),
         const Spacer(),
         Text(
-          '${total >= 0 ? '+' : ''}$total',
+          _formatAmount(total),
           style: TextStyle(
             fontSize: AppFontSize.xs,
             fontWeight: FontWeight.w600,
@@ -1906,6 +2168,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final palette = context.palette;
     final positive = record.amount >= 0;
     final status = record.status;
+    // 被驳回的钱从没入过账：金额走灰，别再用绿色 +30 假装它到账了
+    final bool rejected = status == LedgerStatus.rejected;
+    final Color amountColor = rejected
+        ? palette.textTertiary
+        : (positive ? palette.success : palette.danger);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Row(
@@ -1964,7 +2231,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                     // 小孩撤回自己待审批的申请
                     if (!isParent && status == LedgerStatus.pending)
                       AppOutlinedButton.icon(
-                        onPressed: () => _confirmWithdraw(record),
+                        onPressed: () => unawaited(_confirmWithdraw(record)),
                         icon: const GlyphIcon(AppIcons.undo, size: 16),
                         label: const Text('撤回'),
                       ),
@@ -1983,7 +2250,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                     // 删除（仅家长）：含图片时后端一并删除 R2 图片
                     if (isParent)
                       AppOutlinedButton.icon(
-                        onPressed: () => _confirmDelete(record),
+                        onPressed: () => unawaited(_confirmDelete(record)),
                         style: OutlinedButton.styleFrom(foregroundColor: palette.danger),
                         icon: const GlyphIcon(AppIcons.delete, size: 16),
                         label: const Text('删除'),
@@ -2000,12 +2267,14 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
               _statusPill(record),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                '${positive ? '+' : ''}${record.amount}',
+                _formatAmount(record.amount),
                 style: TextStyle(
                   fontSize: AppFontSize.md,
                   fontWeight: FontWeight.w700,
-                  color: positive ? palette.success : palette.danger,
+                  color: amountColor,
                   fontFeatures: kTabularNumbers,
+                  // 驳回后金额划掉，一眼看出「这笔不算」
+                  decoration: rejected ? TextDecoration.lineThrough : null,
                 ),
               ),
             ],
@@ -2025,58 +2294,26 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     };
   }
 
-  void _confirmWithdraw(LedgerRecord record) {
-    showFloatingDialog<void>(
-      context: context,
-      child: AlertDialog(
-        title: const Text('撤回这条申请？'),
-        content: const Text('撤回后记录会被删除，可以重新打卡'),
-        actions: <Widget>[
-          AppTextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          AppFilledButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              unawaited(_withdraw(record.id));
-            },
-            child: const Text('撤回'),
-          ),
-        ],
-      ),
+  Future<void> _confirmWithdraw(LedgerRecord record) async {
+    final bool ok = await _confirmDestructive(
+      title: '撤回这条申请？',
+      description: '撤回后记录会被删除，可以重新打卡',
+      okText: '撤回',
     );
+    if (!ok || !mounted) return;
+    await _withdraw(record.id);
   }
 
-  void _confirmDelete(LedgerRecord record) {
-    final hasImage = record.imageUrl != null && record.imageUrl!.isNotEmpty;
-    showFloatingDialog<void>(
-      context: context,
-      child: AlertDialog(
-        title: const Text('确认删除该记录？'),
-        content: Text(hasImage ? '关联图片也会一并删除，且不可恢复' : '删除后不可恢复'),
-        actions: <Widget>[
-          AppTextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          AppFilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              // 实色红底上的字按这层底色取，而不是主题给主色配的 onPrimary
-              foregroundColor: context.palette.onColor(
-                Theme.of(context).colorScheme.error,
-              ),
-            ),
-            onPressed: () {
-              Navigator.of(context).pop();
-              unawaited(_delete(record.id));
-            },
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+  Future<void> _confirmDelete(LedgerRecord record) async {
+    final bool hasImage = record.imageUrl != null && record.imageUrl!.isNotEmpty;
+    final bool ok = await _confirmDestructive(
+      title: '确认删除该记录？',
+      // 不可逆的动作把「图也一起没」说在前面
+      description: hasImage ? '关联图片也会一并删除，且不可恢复' : '删除后不可恢复',
+      okText: '删除',
     );
+    if (!ok || !mounted) return;
+    await _delete(record.id);
   }
 
   /// 小圆角标签（状态 / 身份）
@@ -2216,23 +2453,38 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       builder: (BuildContext sheetContext) => StatefulBuilder(
         builder: (builderContext, setDialogState) {
           final palette = builderContext.palette;
+          // 上传中不许被关掉：点遮罩、往下拉都会走 sheet 的 dismiss handler，
+          // 返回键由下面按钮区的 PopScope 拦 —— 传到一半丢了照片，只能重拍一次。
+          SheetDismissScope.of(builderContext)?.value = () async {
+            if (uploading) {
+              setDialogState(() => photoError = '照片还在上传，稍等一下');
+              return;
+            }
+            Navigator.of(builderContext).pop();
+          };
           Future<void> pick(ImageSource source) async {
             if (picking) return;
             setDialogState(() => picking = true);
+            // 选图会跳到系统的相册 / 相机，回来时这个弹层可能已经被关掉了
+            void update(VoidCallback change) {
+              if (!builderContext.mounted) return;
+              setDialogState(change);
+            }
+
             try {
               final compressed =
                   await pickCompressedImage(ImagePicker(), source: source);
               if (compressed == null) return;
-              setDialogState(() {
+              update(() {
                 photo = compressed;
                 photoError = null;
               });
             } on ImageUnreadableException {
-              setDialogState(() => photoError = '这张图读不出来，换一张试试');
+              update(() => photoError = '这张图读不出来，换一张试试');
             } catch (_) {
-              setDialogState(() => photoError = '选图失败，请重试');
+              update(() => photoError = '选图失败，请重试');
             } finally {
-              setDialogState(() => picking = false);
+              update(() => picking = false);
             }
           }
 
@@ -2259,152 +2511,164 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                  Row(
-                    children: <Widget>[
-                      Text(
-                        task.value > 0 ? '+${task.value}' : '${task.value}',
-                        style: TextStyle(
-                          fontSize: AppFontSize.lg,
-                          fontWeight: FontWeight.w700,
-                          color: positive ? palette.success : palette.danger,
-                          fontFeatures: kTabularNumbers,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        task.unit,
-                        style: TextStyle(fontSize: AppFontSize.sm, color: palette.textTertiary),
-                      ),
-                    ],
-                  ),
-                  if (!isParent)
-                    Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.xs),
-                      child: Text(
-                        '提交后要等家长审批，通过了积分才会入账',
-                        style: TextStyle(fontSize: AppFontSize.xs, color: palette.warning),
+                Row(
+                  children: <Widget>[
+                    Text(
+                      _formatAmount(task.value),
+                      style: TextStyle(
+                        fontSize: AppFontSize.lg,
+                        fontWeight: FontWeight.w700,
+                        color: positive ? palette.success : palette.danger,
+                        fontFeatures: kTabularNumbers,
                       ),
                     ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    needPhoto ? '照片（必填）' : '照片（可选）',
-                    style: TextStyle(
-                      fontSize: AppFontSize.sm,
-                      color: needPhoto ? palette.danger : palette.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  if (photo != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      child: Image.memory(
-                        photo!,
-                        width: double.infinity,
-                        height: 160,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: AppOutlinedButton.icon(
-                          onPressed: picking ? null : () => pick(ImageSource.camera),
-                          icon: const GlyphIcon(AppIcons.camera, size: 18),
-                          label: const Text('拍照'),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: AppOutlinedButton.icon(
-                          onPressed: picking ? null : () => pick(ImageSource.gallery),
-                          icon: const GlyphIcon(AppIcons.photos, size: 18),
-                          label: const Text('从相册选'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (photoError != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.xs),
-                      child: Text(
-                        photoError!,
-                        style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger),
-                      ),
-                    )
-                  // 必填照片还没选：把「为什么按钮点不动」写在这儿
-                  else if (needPhoto && photo == null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.xs),
-                      child: Text(
-                        '这项任务要拍一张照片，或者从相册选一张，才能提交',
-                        style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger),
-                      ),
-                    ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    '备注（可选）',
-                    style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  TextField(
-                    controller: noteController,
-                    maxLines: 3,
-                    maxLength: 60,
-                    decoration: const InputDecoration(hintText: '写点什么，例如：客厅和书桌都收拾好了'),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Row(
-              children: <Widget>[
-                const Spacer(),
-                AppTextButton(
-                  onPressed: uploading ? null : () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                AppFilledButton(
-                  // 必填照片没选时按钮直接置灰：先选照片，再谈提交
-                  onPressed: uploading || (needPhoto && photo == null)
-                      ? null
-                      : () async {
-                          setDialogState(() => uploading = true);
-                          String? imageUrl;
-                          try {
-                            if (photo != null) {
-                              final uploaded =
-                                  await UploadApi(ApiClient.shared).upload(photo!);
-                              imageUrl = uploaded.url;
-                            }
-                          } catch (_) {
-                            setDialogState(() {
-                              uploading = false;
-                              photoError = '图片上传失败，请重试';
-                            });
-                            return;
-                          }
-                          final note = noteController.text.trim();
-                          if (mounted) {
-                            Navigator.of(context).pop(
-                              _CheckInResult(
-                                note: note.isEmpty ? null : note,
-                                imageUrl: imageUrl,
-                              ),
-                            );
-                          }
-                        },
-                  child: uploading
-                      ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          // 主色实心按钮上的转圈：默认也是 primary，会跟底撞成一片
-                          child: AppLoading(
-                            size: 18,
-                            color: palette.onPrimary,
-                          ),
-                        )
-                      : Text(isParent ? '确认记账' : '提交申请'),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      task.unit,
+                      style: TextStyle(fontSize: AppFontSize.sm, color: palette.textTertiary),
                     ),
                   ],
+                ),
+                if (!isParent)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Text(
+                      '提交后要等家长审批，通过了积分才会入账',
+                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.warning),
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  needPhoto ? '照片（必填）' : '照片（可选）',
+                  style: TextStyle(
+                    fontSize: AppFontSize.sm,
+                    color: needPhoto ? palette.danger : palette.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                if (photo != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Image.memory(
+                      photo!,
+                      width: double.infinity,
+                      height: 160,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: AppOutlinedButton.icon(
+                        onPressed: picking ? null : () => pick(ImageSource.camera),
+                        icon: const GlyphIcon(AppIcons.camera, size: 18),
+                        label: const Text('拍照'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: AppOutlinedButton.icon(
+                        onPressed: picking ? null : () => pick(ImageSource.gallery),
+                        icon: const GlyphIcon(AppIcons.photos, size: 18),
+                        label: const Text('从相册选'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (photoError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Text(
+                      photoError!,
+                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger),
+                    ),
+                  )
+                // 必填照片还没选：把「为什么按钮点不动」写在这儿
+                else if (needPhoto && photo == null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Text(
+                      '这项任务要拍一张照片，或者从相册选一张，才能提交',
+                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger),
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  '备注（可选）',
+                  style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                TextField(
+                  controller: noteController,
+                  maxLines: 3,
+                  maxLength: 60,
+                  decoration: const InputDecoration(hintText: '写点什么，例如：客厅和书桌都收拾好了'),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                PopScope(
+                  // 上传中按返回键也别关：PopScope 拦的是 sheet 这一层路由
+                  canPop: !uploading,
+                  child: Row(
+                    children: <Widget>[
+                      const Spacer(),
+                      AppTextButton(
+                        onPressed: uploading
+                            ? null
+                            : () => Navigator.of(builderContext).pop(),
+                        child: const Text('取消'),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      AppFilledButton(
+                        // 必填照片没选时按钮直接置灰：先选照片，再谈提交
+                        onPressed: uploading || (needPhoto && photo == null)
+                            ? null
+                            : () async {
+                                setDialogState(() => uploading = true);
+                                String? imageUrl;
+                                try {
+                                  if (photo != null) {
+                                    final uploaded =
+                                        await UploadApi(ApiClient.shared).upload(photo!);
+                                    imageUrl = uploaded.url;
+                                  }
+                                } catch (e) {
+                                  // 弹层可能已经被关掉（下拉 / 返回）：先认一下它还在不在
+                                  if (!builderContext.mounted) return;
+                                  setDialogState(() {
+                                    uploading = false;
+                                    photoError = e is ApiException
+                                        ? e.message
+                                        : '图片上传失败，请重试';
+                                  });
+                                  return;
+                                }
+                                // 上传回来时弹层已经被关掉：什么都不做。
+                                // 这里必须用 builderContext —— 用页面的 context
+                                // 会把 /family 整页一起 pop 掉。
+                                if (!builderContext.mounted) return;
+                                final note = noteController.text.trim();
+                                Navigator.of(builderContext).pop(
+                                  _CheckInResult(
+                                    note: note.isEmpty ? null : note,
+                                    imageUrl: imageUrl,
+                                  ),
+                                );
+                              },
+                        child: uploading
+                            ? SizedBox(
+                                width: 18,
+                                height: 18,
+                                // 主色实心按钮上的转圈：默认也是 primary，会跟底撞成一片
+                                child: AppLoading(
+                                  size: 18,
+                                  color: palette.onPrimary,
+                                ),
+                              )
+                            : Text(isParent ? '确认记账' : '提交申请'),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -2482,16 +2746,17 @@ class _CustomTaskFormState extends State<_CustomTaskForm> {
       children: <Widget>[
         Text('类型', style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary)),
         const SizedBox(height: AppSpacing.xs),
-        Row(
+        // 320dp + 大字号下两颗胶囊并排会溢出：Wrap 让第二颗自己换行
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
           children: <Widget>[
-            for (final type in TaskType.values) ...<Widget>[
+            for (final type in TaskType.values)
               ChoiceChip(
                 label: Text(type == TaskType.earning ? '赚钱' : '消费 / 罚款'),
                 selected: _type == type,
                 onSelected: (_) => setState(() => _type = type),
               ),
-              const SizedBox(width: AppSpacing.sm),
-            ],
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -2610,16 +2875,32 @@ class _RecordThumb extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.sm),
       onTap: () => showFloatingDialog<void>(
         context: context,
-        child: Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(AppSpacing.md),
-          child: InteractiveViewer(
-            child: Image.network(
-              url,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stack) => GlyphIcon(
-                AppIcons.imageBroken,
-                color: palette.textTertiary,
+        // 不要再自己套一层 Dialog：showFloatingDialog 已经给了浮层与遮罩，
+        // 嵌套 Dialog 会得到两层背景、两次点击遮罩才关得掉。
+        // 这里只把「能放大看」的内容交出去 —— 图片限在这一圈内，
+        // 四周留白点一下就落在遮罩上，所以关得掉。
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560, maxHeight: 720),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                child: InteractiveViewer(
+                  maxScale: 4,
+                  child: Image.network(
+                    url,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stack) => Padding(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: GlyphIcon(
+                        AppIcons.imageBroken,
+                        size: 32,
+                        color: palette.textTertiary,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),

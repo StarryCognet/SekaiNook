@@ -200,10 +200,12 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     final UpdateState update = widget.update;
-    return PopScope(
-      canPop: false,
-      child: AlertDialog(
-        title: const Text('正在下载更新'),
+    // 以前这里是 PopScope(canPop:false) 且没有任何按钮：下载期间返回键、点遮罩
+    // 都出不去，慢网下等于把人锁在弹窗里（审查 U 项）。现在留一个「后台下载」，
+    // 关掉弹窗下载照样继续，装完系统安装器会照常拉起；关闭时 pop(null)，
+    // 调用点 update_dialog.dart:51 已按「用户主动关掉」静默处理。
+    return AlertDialog(
+      title: const Text('正在下载更新'),
         content: AnimatedBuilder(
           animation: update,
           builder: (BuildContext context, Widget? child) {
@@ -236,8 +238,13 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
             );
           },
         ),
-      ),
-    );
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('后台下载'),
+          ),
+        ],
+      );
   }
 }
 

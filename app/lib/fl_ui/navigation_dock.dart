@@ -338,6 +338,15 @@ class NavigationDock extends StatelessWidget {
   static double insetOf(BuildContext context) =>
       heightOf(context) + _bottomMarginOf(context);
 
+  /// 页面内部（body 语境）让位用的高度。
+  ///
+  /// 与 [insetOf] 的区别只在底边距：MainShell 把 body 的 `MediaQuery.padding.bottom`
+  /// 抹成了 0（见 `main_shell.dart` 的注释），所以在页面里读到的手势条高度是 0，
+  /// 直接用 [insetOf] 会比真实栏位少让一条手势条（3~10dp，最后一行会被胶囊压住）。
+  /// `viewPadding` 不受影响，始终是屏幕自己的安全区原值。
+  static double contentInsetOf(BuildContext context) =>
+      heightOf(context) + math.max(_edgeMargin, MediaQuery.viewPaddingOf(context).bottom);
+
   @override
   Widget build(BuildContext context) {
     final height = heightOf(context);

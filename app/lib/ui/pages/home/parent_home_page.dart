@@ -16,7 +16,6 @@ import '../../../core/time_text.dart';
 import '../../../data/models/ledger_record.dart';
 import '../../../data/models/task_config.dart';
 import '../../../state/family_state.dart';
-import '../../../state/garden_state.dart';
 import '../../../state/notification_state.dart';
 import '../../../state/settings_state.dart';
 import '../../../theme/app_shape.dart';
@@ -26,6 +25,7 @@ import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/format.dart';
 import '../../widgets/live_clock.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
@@ -103,8 +103,8 @@ List<LedgerRecord> _todayRecords(List<LedgerRecord> records, DateTime now) {
   return (income: income, expense: expense, net: income + expense, count: count, checkins: checkins);
 }
 
-/// 带符号金额（与 `LedgerRecord.signedAmount` 同口径）
-String _signed(int amount) => amount > 0 ? '+$amount' : '$amount';
+/// 带符号金额（与 `LedgerRecord.signedAmount` 同口径，**带千分位**）
+String _signed(int amount) => amount > 0 ? '+${formatPoints(amount)}' : formatPoints(amount);
 
 /// 「14% 有色浅底」上该用的图标 / 文字色。
 ///
@@ -126,8 +126,8 @@ const String _familyTabParam = 'tab';
 /// 对应 Web 版 `goLedger(tab)`：Web 内部第三个 Tab 叫 `records`，URL 契约里统一叫 `history`。
 String _familyPath(String tab) => '/family?$_familyTabParam=$tab';
 
-/// 金额文案（保留两位小数）
-String _yuanText(double value) => value.toStringAsFixed(2);
+/// 金额文案（千分位 + 两位小数，统一走 `widgets/format.dart`）
+String _yuanText(double value) => formatYuan(value);
 
 /// 按天净额（对应 Web 版 `BalanceTrend.buildTrend`：**单柱按天净额**，不是收入/支出双柱）
 List<int> _buildTrend(List<LedgerRecord> records, DateTime now) {
@@ -149,8 +149,8 @@ List<int> _buildTrend(List<LedgerRecord> records, DateTime now) {
 
 /// 妈妈版首页：一眼看到「谁在等我批、家里还剩多少、这周怎么样」。
 ///
-/// 对应 Web 版 `src/views/home/ParentHome.tsx`。数据来自 [FamilyState]（家庭账本）、
-/// [GardenState]（花园阳光）、[NotificationState]（未读通知）与 [SettingsState]（称呼）。
+/// 对应 Web 版 `src/views/home/ParentHome.tsx`。账本走 [FamilyState] 的 watch，
+/// 未读数与称呼只 select 单个字段（花园阳光已不在本页读取）。
 class ParentHomePage extends StatefulWidget {
   const ParentHomePage({super.key});
 
@@ -297,7 +297,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
     final bool? confirmed = await showFloatingDialog<bool>(
       context: context,
       child: _ConfirmDialog(
-        title: '兑换 $balance 积分 = ${_yuanText(yuan)} 元？',
+        title: '兑换 ${formatPoints(balance)} 积分 = ${_yuanText(yuan)} 元？',
         message: '会记一条「现金兑现」支出，积分全部扣掉；想只兑换一部分请去账本页',
         okText: '确认兑换',
       ),
@@ -313,20 +313,20 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
           type: TaskType.spending,
           value: -balance.round(),
         ),
-        note: '积分兑换现金：$balance 积分 = ${_yuanText(yuan)} 元',
+        note: '积分兑换现金：${formatPoints(balance)} 积分 = ${_yuanText(yuan)} 元',
         autoApprove: true,
       );
       await _refresh();
       if (mounted) {
         // 到账那一下同样放一个光环
         showBurst(context);
-        _toast('已兑换 ${_yuanText(yuan)} 元，扣掉 $balance 积分', success: true);
+        _toast('已兑换 ${_yuanText(yuan)} 元，扣掉 ${formatPoints(balance)} 积分', success: true);
       }
     } on LedgerApprovalException {
       await _refresh();
       if (mounted) {
         _toast(
-          '已记账，但审批没成功 —— $balance 积分还没扣掉，记录在待审批里，去点一下通过',
+          '已记账，但审批没成功 —— ${formatPoints(balance)} 积分还没扣掉，记录在待审批里，去点一下通过',
           warning: true,
         );
       }
@@ -362,17 +362,16 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
+    // watch 只留账本（20 秒轮询的主角）；称呼 / 未读只取字段 —— 原来一次 watch
+    // 四个全局状态，任何一个变都会把整页（含宫格、14 天趋势）带着重建。
     final FamilyState family = context.watch<FamilyState>();
-    final GardenState garden = context.watch<GardenState>();
-    final NotificationState notices = context.watch<NotificationState>();
-    final SettingsState settings = context.watch<SettingsState>();
+    final String momName = context.select<SettingsState, String>((SettingsState s) => s.momName);
+    final String kidName = context.select<SettingsState, String>((SettingsState s) => s.kidName);
+    final int unreadCount =
+        context.select<NotificationState, int>((NotificationState s) => s.unreadCount);
 
-    final String momName = settings.momName;
-    final String kidName = settings.kidName;
-    // 称呼还没到位时用骨架屏占住首屏（判定逻辑不变，只换「加载中」的样子）
-    if (momName.isEmpty && kidName.isEmpty) {
-      return const SafeArea(child: _HomeSkeleton());
-    }
+    // 称呼有出厂默认（`config/family_names.dart` 里 momName/kidName 永远不是空串），
+    // 原来那段「称呼还没到位 → 骨架屏」是死代码：新机反而先闪一下默认称呼再跳变。
 
     final DateTime now = _now;
     final ({int income, int expense, int net, int count, int checkins}) week =
@@ -384,11 +383,11 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
     // 已经在场的卡片不会重播。
     final List<({String key, Widget card})> cards = <({String key, Widget card})>[
       (key: 'hero', card: _hero(palette, now, momName, family)),
-      (key: 'todo', card: _todoCard(palette, momName, kidName, family, notices.unreadCount)),
+      (key: 'todo', card: _todoCard(palette, momName, kidName, family, unreadCount)),
       if (family.pendingRecords.isNotEmpty) (key: 'pending', card: _pendingCard(palette, family)),
       (key: 'overview', card: _overviewCard(palette, week, family.records, now)),
       (key: 'today', card: _todayCard(palette, now, kidName, today)),
-      (key: 'grid', card: _grid(palette, family, garden, notices.unreadCount)),
+      (key: 'grid', card: _grid(palette, family, unreadCount)),
     ];
     // 顶上先插了一张「重试」卡时，后面的卡片整体顺延一位
     final int leadIndex = _loadFailed ? 1 : 0;
@@ -397,54 +396,44 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
       body: SafeArea(
         child: family.loading && family.records.isEmpty && !_loadFailed
             ? const _HomeSkeleton()
-            : ListView(
-                // 底部让出底栏胶囊（MainShell 开了 extendBody，它浮在内容之上）
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.md,
-                  AppSpacing.md + AppTopBar.contentInset(context),
-                  AppSpacing.md,
-                  AppSpacing.xl + AppNavBar.contentInset(context),
-                ),
-                children: <Widget>[
-                  if (_loadFailed) ...<Widget>[
-                    EnterBox(
-                      index: 0,
-                      child: AppCard(
-                        highlight: true,
-                        onTap: () => unawaited(_refresh()),
-                        child: Row(
-                          children: <Widget>[
-                            GlyphIcon(AppIcons.cloudOff, size: AppFontSize.md, color: palette.danger),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: Text(
-                                '没拉到最新数据，点一下重试',
-                                style: TextStyle(fontSize: AppFontSize.sm, color: palette.text),
-                              ),
-                            ),
-                            Text(
-                              '重试',
-                              style: TextStyle(
-                                fontSize: AppFontSize.sm,
-                                fontWeight: FontWeight.w700,
-                                color: palette.primary,
-                              ),
-                            ),
-                          ],
+            : RefreshIndicator(
+                // 与孩子端一致：往下拽就重拉（复用页面本来就有的 _refresh）
+                onRefresh: _refresh,
+                color: palette.primary,
+                child: ListView(
+                  // 底部让出底栏胶囊（MainShell 开了 extendBody，它浮在内容之上）
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    AppSpacing.md + AppTopBar.contentInset(context),
+                    AppSpacing.md,
+                    AppSpacing.xl + AppNavBar.contentInset(context),
+                  ),
+                  // 内容不满一屏时也要能下拉
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: <Widget>[
+                    if (_loadFailed) ...<Widget>[
+                      EnterBox(
+                        index: 0,
+                        child: AppCard(
+                          highlight: true,
+                          child: ErrorView(
+                            message: '没拉到最新数据',
+                            onRetry: () => unawaited(_refresh()),
+                          ),
                         ),
                       ),
-                    ),
-                    _gapSm,
+                      _gapSm,
+                    ],
+                    for (int i = 0; i < cards.length; i++) ...<Widget>[
+                      if (i > 0) _gapSm,
+                      EnterBox(
+                        key: ValueKey<String>(cards[i].key),
+                        index: i + leadIndex,
+                        child: cards[i].card,
+                      ),
+                    ],
                   ],
-                  for (int i = 0; i < cards.length; i++) ...<Widget>[
-                    if (i > 0) _gapSm,
-                    EnterBox(
-                      key: ValueKey<String>(cards[i].key),
-                      index: i + leadIndex,
-                      child: cards[i].card,
-                    ),
-                  ],
-                ],
+                ),
               ),
       ),
     );
@@ -525,31 +514,37 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                           style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
                         ),
                         _gapXs,
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: <Widget>[
-                            AnimatedCount(
-                              value: family.pendingCount,
-                              // 基线对齐的行里不要「脉冲」那层 Transform，
-                              // 否则会和右边的「条」错开半行；滚动数字本身已经够看
-                              pulse: false,
-                              style: TextStyle(
-                                fontSize: AppFontSize.xl,
-                                fontWeight: FontWeight.w800,
-                                color: family.pendingCount > 0 ? palette.warningInk : palette.text,
-                                fontFeatures: kTabularNumbers,
+                        // 大字号下别让数字压到「条」上：整组等比缩小（正常字号不缩）
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: <Widget>[
+                              AnimatedCount(
+                                value: family.pendingCount,
+                                // 基线对齐的行里不要「脉冲」那层 Transform，
+                                // 否则会和右边的「条」错开半行；滚动数字本身已经够看
+                                pulse: false,
+                                style: TextStyle(
+                                  fontSize: AppFontSize.xl,
+                                  fontWeight: FontWeight.w800,
+                                  color: family.pendingCount > 0 ? palette.warningInk : palette.text,
+                                  fontFeatures: kTabularNumbers,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: AppSpacing.xs),
-                            Text(
-                              '条',
-                              style: TextStyle(
-                                fontSize: AppFontSize.xs,
-                                color: palette.textTertiary,
+                              const SizedBox(width: AppSpacing.xs),
+                              Text(
+                                '条',
+                                style: TextStyle(
+                                  fontSize: AppFontSize.xs,
+                                  color: palette.textTertiary,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -571,30 +566,36 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                           style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
                         ),
                         _gapXs,
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: <Widget>[
-                            AnimatedCount(
-                              value: FamilyRules.pointsToYuan(family.balance),
-                              formatter: (num value) => _yuanText(value.toDouble()),
-                              pulse: false,
-                              style: TextStyle(
-                                fontSize: AppFontSize.xl,
-                                fontWeight: FontWeight.w800,
-                                color: palette.success,
-                                fontFeatures: kTabularNumbers,
+                        // 余额这一格只有半屏宽（360dp 上约 148dp），大字号最容易叠字
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: <Widget>[
+                              AnimatedCount(
+                                value: FamilyRules.pointsToYuan(family.balance),
+                                formatter: (num value) => _yuanText(value.toDouble()),
+                                pulse: false,
+                                style: TextStyle(
+                                  fontSize: AppFontSize.xl,
+                                  fontWeight: FontWeight.w800,
+                                  color: palette.success,
+                                  fontFeatures: kTabularNumbers,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: AppSpacing.xs),
-                            Text(
-                              '元',
-                              style: TextStyle(
-                                fontSize: AppFontSize.xs,
-                                color: palette.textTertiary,
+                              const SizedBox(width: AppSpacing.xs),
+                              Text(
+                                '元',
+                                style: TextStyle(
+                                  fontSize: AppFontSize.xs,
+                                  color: palette.textTertiary,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -625,7 +626,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
       todos.add(_todoRow(
         palette,
         AppIcons.checklist,
-        '有 ${family.pendingCount} 条打卡等你审批',
+        '有 ${formatPoints(family.pendingCount)} 条打卡等你审批',
         hint,
         onTap: () => context.go(_familyPath('pending')),
         trailing: const Text('去审批'),
@@ -635,7 +636,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
       todos.add(_todoRow(
         palette,
         AppIcons.savings,
-        '$kidName攒了 ${family.balance} 积分，可以兑换成钱了',
+        '$kidName攒了 ${formatPoints(family.balance)} 积分，可以兑换成钱了',
         '全部兑换可得 ${_yuanText(FamilyRules.pointsToYuan(family.balance))} 元'
         '（${FamilyRules.exchangeRateText}）',
         onTap: () => unawaited(_settle()),
@@ -921,13 +922,13 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                 '收入',
                 week.income,
                 palette.successInk,
-                formatter: (num value) => '+${value.round()}',
+                formatter: (num value) => '+${formatPoints(value)}',
               ),
               // 这几格是「中性卡片底上的彩色数字」：得用 ink 家族（保住涨红跌绿的含义，
               // 同时压到 4.5:1）。直接拿 warning #F5A623 当字色在白卡上只有 1.7:1。
               _statCell(palette, '支出', week.expense, palette.dangerInk),
               _statCell(palette, '净额', week.net, palette.primaryInk),
-              _statCell(palette, '打卡次数', week.checkins, palette.warningInk),
+              _statCell(palette, '打卡次数', week.checkins, palette.warningInk, formatter: formatPoints),
             ],
           ),
           _gapMd,
@@ -953,23 +954,33 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
     Color color, {
     String Function(num value)? formatter,
   }) {
+    // 没给 formatter 的格子也走千分位（负数保留符号）
+    final String Function(num value) fmt = formatter ?? formatPoints;
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
           ),
           _gapXs,
-          AnimatedCount(
-            value: value,
-            formatter: formatter,
-            style: TextStyle(
-              fontSize: AppFontSize.md,
-              fontWeight: FontWeight.w700,
-              color: color,
-              fontFeatures: kTabularNumbers,
+          // 四格平分一行，大字号下最容易在「净额 -1,234」这种位置叠字：
+          // 数值等比缩小，正常字号不缩
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: AnimatedCount(
+              value: value,
+              formatter: fmt,
+              style: TextStyle(
+                fontSize: AppFontSize.md,
+                fontWeight: FontWeight.w700,
+                color: color,
+                fontFeatures: kTabularNumbers,
+              ),
             ),
           ),
         ],
@@ -1092,7 +1103,6 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
   Widget _grid(
     AppPalette palette,
     FamilyState family,
-    GardenState garden,
     int unreadCount,
   ) {
     final List<_GridEntry> entries = <_GridEntry>[
@@ -1180,7 +1190,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
                       ),
                       Text(
                         family.balance > 0
-                            ? '${family.balance} 积分 = '
+                            ? '${formatPoints(family.balance)} 积分 = '
                                 '${_yuanText(FamilyRules.pointsToYuan(family.balance))} 元'
                             : '现在还没有可兑换的积分',
                         style: TextStyle(
@@ -1204,7 +1214,7 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
           ),
           _gapXs,
           Text(
-            '花园阳光 ${family.sunBalance}',
+            '花园阳光 ${formatPoints(family.sunBalance)}',
             style: TextStyle(
               fontSize: AppFontSize.xs,
               color: palette.textTertiary,
@@ -1317,90 +1327,106 @@ class _BalanceTrend extends StatelessWidget {
       );
     }
 
-    return SizedBox(
-      height: _chartHeight,
-      child: BarChart(
-        // fl_chart 自带的 swap 动画：数据一变就重新「长」一次柱子
-        duration: AppMotion.slower,
-        curve: AppMotion.emphasized,
-        BarChartData(
-          alignment: BarChartAlignment.spaceAround,
-          maxY: _maxY(values),
-          minY: _minY(values),
-          barTouchData: BarTouchData(
-            enabled: true,
-            touchTooltipData: BarTouchTooltipData(
-              getTooltipColor: (BarChartGroupData group) => palette.text.withValues(alpha: 0.85),
-              getTooltipItem: (
-                BarChartGroupData group,
-                int groupIndex,
-                BarChartRodData rod,
-                int rodIndex,
-              ) =>
-                  BarTooltipItem(
-                '${_label(group.x)}  ${_signed(rod.toY.round())}',
-                TextStyle(
-                  color: palette.onColor(palette.text),
-                  fontSize: AppFontSize.xs,
-                  fontFeatures: kTabularNumbers,
+    // 柱图没有文字层：给读屏一句摘要，盲用也能知道这 14 天什么走势
+    return Semantics(
+      container: true,
+      label: '近 14 天积分趋势',
+      value: _trendSummary(values),
+      child: SizedBox(
+        height: _chartHeight,
+        child: BarChart(
+          // fl_chart 自带的 swap 动画：数据一变就重新「长」一次柱子
+          duration: AppMotion.slower,
+          curve: AppMotion.emphasized,
+          BarChartData(
+            alignment: BarChartAlignment.spaceAround,
+            maxY: _maxY(values),
+            minY: _minY(values),
+            barTouchData: BarTouchData(
+              enabled: true,
+              touchTooltipData: BarTouchTooltipData(
+                getTooltipColor: (BarChartGroupData group) => palette.text.withValues(alpha: 0.85),
+                getTooltipItem: (
+                  BarChartGroupData group,
+                  int groupIndex,
+                  BarChartRodData rod,
+                  int rodIndex,
+                ) =>
+                    BarTooltipItem(
+                  '${_label(group.x)}  ${_signed(rod.toY.round())}',
+                  TextStyle(
+                    color: palette.onColor(palette.text),
+                    fontSize: AppFontSize.xs,
+                    fontFeatures: kTabularNumbers,
+                  ),
                 ),
               ),
             ),
-          ),
-          titlesData: FlTitlesData(
-            topTitles: const AxisTitles(),
-            rightTitles: const AxisTitles(),
-            leftTitles: const AxisTitles(),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                // 14 根柱子全画标签会糊成一片：每 3 天留一个（0/3/6/9/12 共 5 个），
-                // 写法与 `family_dashboard_page.dart` 里的同类图一致。
-                reservedSize: AppSpacing.lg,
-                interval: 1,
-                getTitlesWidget: (double value, TitleMeta meta) {
-                  final int index = value.round();
-                  if (index < 0 || index >= _trendDays) return const SizedBox.shrink();
-                  if (index % 3 != 0) return const SizedBox.shrink();
-                  return SideTitleWidget(
-                    meta: meta,
-                    child: Text(
-                      _label(index),
-                      style: TextStyle(
-                        fontSize: AppFontSize.xs,
-                        color: palette.textSecondary,
-                        fontFeatures: kTabularNumbers,
+            titlesData: FlTitlesData(
+              topTitles: const AxisTitles(),
+              rightTitles: const AxisTitles(),
+              leftTitles: const AxisTitles(),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  // 14 根柱子全画标签会糊成一片：每 3 天留一个（0/3/6/9/12 共 5 个），
+                  // 写法与 `family_dashboard_page.dart` 里的同类图一致。
+                  reservedSize: AppSpacing.lg,
+                  interval: 1,
+                  getTitlesWidget: (double value, TitleMeta meta) {
+                    final int index = value.round();
+                    if (index < 0 || index >= _trendDays) return const SizedBox.shrink();
+                    if (index % 3 != 0) return const SizedBox.shrink();
+                    return SideTitleWidget(
+                      meta: meta,
+                      child: Text(
+                        _label(index),
+                        style: TextStyle(
+                          fontSize: AppFontSize.xs,
+                          color: palette.textSecondary,
+                          fontFeatures: kTabularNumbers,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
+            gridData: const FlGridData(show: false),
+            borderData: FlBorderData(
+              show: true,
+              border: Border(bottom: BorderSide(color: palette.border)),
+            ),
+            barGroups: <BarChartGroupData>[
+              for (int index = 0; index < values.length; index++)
+                BarChartGroupData(
+                  x: index,
+                  barRods: <BarChartRodData>[
+                    BarChartRodData(
+                      toY: values[index].toDouble(),
+                      color: values[index] >= 0 ? palette.success : palette.danger,
+                      width: AppSpacing.sm + AppSpacing.xs,
+                      borderRadius: values[index] >= 0
+                          ? const BorderRadius.vertical(top: Radius.circular(AppRadius.sm))
+                          : const BorderRadius.vertical(bottom: Radius.circular(AppRadius.sm)),
+                    ),
+                  ],
+                ),
+            ],
           ),
-          gridData: const FlGridData(show: false),
-          borderData: FlBorderData(
-            show: true,
-            border: Border(bottom: BorderSide(color: palette.border)),
-          ),
-          barGroups: <BarChartGroupData>[
-            for (int index = 0; index < values.length; index++)
-              BarChartGroupData(
-                x: index,
-                barRods: <BarChartRodData>[
-                  BarChartRodData(
-                    toY: values[index].toDouble(),
-                    color: values[index] >= 0 ? palette.success : palette.danger,
-                    width: AppSpacing.sm + AppSpacing.xs,
-                    borderRadius: values[index] >= 0
-                        ? const BorderRadius.vertical(top: Radius.circular(AppRadius.sm))
-                        : const BorderRadius.vertical(bottom: Radius.circular(AppRadius.sm)),
-                  ),
-                ],
-              ),
-          ],
         ),
       ),
     );
+  }
+
+  /// 给读屏的一句摘要：柱图本身没有文字层，读屏至少要知道「这 14 天什么走势」。
+  String _trendSummary(List<int> values) {
+    final int days = values.where((int value) => value != 0).length;
+    final int net = values.fold<int>(0, (int sum, int value) => sum + value);
+    final int best = values.fold<int>(0, (int max, int value) => value > max ? value : max);
+    final int worst = values.fold<int>(0, (int min, int value) => value < min ? value : min);
+    return '近 14 天有 $days 天有记录，合计 ${_signed(net)}，'
+        '单日最高 ${_signed(best)}，最低 ${_signed(worst)}';
   }
 
   double _maxY(List<int> values) {

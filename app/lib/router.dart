@@ -34,8 +34,10 @@ GoRouter createRouter(
     observers: <NavigatorObserver>[routeCover.observer],
     redirect: (BuildContext context, GoRouterState state) {
       final path = state.uri.path;
-      // 试样间不依赖身份，也不该被踢去 /role —— 没选身份也能进去看看。
-      if (path == '/ui-preview') return null;
+      // 试样间以前对身份门豁免（`if (path == '/ui-preview') return null`）：
+      // 任何人手敲这个 URL 就能绕开「先选身份」，且它是开发期页面。
+      // 现在收进身份门之内 —— 入口只在设置页「管理员 → 高级·排障」里，
+      // 正常用户不会碰到，敲 URL 也不再能跳过身份选择。
       if (family.role == null) {
         return path == '/role' ? null : '/role';
       }

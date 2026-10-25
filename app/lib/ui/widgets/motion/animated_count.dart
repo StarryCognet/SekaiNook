@@ -71,7 +71,13 @@ class _AnimatedCountState extends State<AnimatedCount> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
-      return Text(_format(widget.value), style: widget.style);
+      return Text(
+        _format(widget.value),
+        style: widget.style,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.clip,
+      );
     }
 
     return TweenAnimationBuilder<double>(
@@ -84,7 +90,9 @@ class _AnimatedCountState extends State<AnimatedCount> with SingleTickerProvider
           style: widget.style,
           maxLines: 1,
           softWrap: false,
-          overflow: TextOverflow.visible,
+          // 超宽由调用方的 FittedBox(scaleDown) 兜住；这里 `visible` 会让数字
+          // 直接压到左边的格子/文字上（大字号下最明显），改成 `clip` 只裁自己
+          overflow: TextOverflow.clip,
         );
         if (!widget.pulse) return text;
         return AnimatedBuilder(
