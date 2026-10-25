@@ -75,6 +75,10 @@ class PinGuard {
     return left > 0 ? left : 0;
   }
 
+  /// verify 是否正在跑（M-3）：快速连点会让多次 verify 读到同一份失败计数，
+  /// 「读 → 加 1 → 写」被并发绕过，5 次锁定形同虚设。串行化即可。
+  bool _verifying = false;
+
   /// 校验家长口令：异步比对 + 失败锁定。
   ///
   /// - 锁定期内直接 false（不校验、不计失败，也不透露任何关于正确口令的信息）
@@ -83,35 +87,40 @@ class PinGuard {
   Future<bool> verify(String pin) async {
     // 锁定期内连正确口令也返回 false —— 这是「锁」的意义所在
     if (lockRemaining > Duration.zero) return false;
+    if (_verifying) return false;
+    _verifying = true;
+    try {
+      await migrateLegacyPin();
+      final stored = _readStoredPin();
 
-    await migrateLegacyPin();
-    final stored = _readStoredPin();
+      // 还没设过口令：出厂口令生效（这条路径本地不存任何东西）
+      if (stored == null) {
+        if (pin != defaultParentPin) {
+          _registerFailure();
+          return false;
+        }
+        clearGuards();
+        return true;
+      }
 
-    // 还没设过口令：出厂口令生效（这条路径本地不存任何东西）
-    if (stored == null) {
-      if (pin != defaultParentPin) {
+      if (stored.mode == _PinMode.hash) {
+        if (hashPin(pin) == stored.value) {
+          clearGuards();
+          return true;
+        }
         _registerFailure();
         return false;
       }
-      clearGuards();
-      return true;
-    }
 
-    if (stored.mode == _PinMode.hash) {
-      if (hashPin(pin) == stored.value) {
+      if (pin == stored.value) {
         clearGuards();
         return true;
       }
       _registerFailure();
       return false;
+    } finally {
+      _verifying = false;
     }
-
-    if (pin == stored.value) {
-      clearGuards();
-      return true;
-    }
-    _registerFailure();
-    return false;
   }
 
   /// 写入新口令（一律存 `sha256:<hex>`，localStorage 里再也看不到明文）

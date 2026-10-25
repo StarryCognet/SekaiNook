@@ -19,17 +19,13 @@ import 'ui/shell/main_shell.dart';
 /// `/` 落到 `/home`；未选身份先去 `/role`（**不能缺省为家长**）。
 /// 六个页面全部挂在 [MainShell] 下（对应 Web 版 `MainLayout` 包住所有页面），
 /// 所以通知页与周计划页也带底部导航。
-GoRouter createRouter(FamilyState family) {
-  // 只把「身份变化」喂给 GoRouter：FamilyState 还会因为账本刷新 notify，
-  // 那些不该让路由重跑 redirect（每次都要重建整张路由表，还会连带重建当前页）。
-  // 身份与 router 同生命周期，这里的 listener 不用拆。
-  final role = ValueNotifier<FamilyRole?>(family.role);
-  family.addListener(() {
-    if (role.value != family.role) role.value = family.role;
-  });
+///
+/// [roleRefresh] 由调用方（`app.dart`）持有并负责 dispose：只有「身份变化」才 notify，
+/// 账本刷新不重跑 redirect、不重建整张路由表。
+GoRouter createRouter(FamilyState family, ValueNotifier<FamilyRole?> roleRefresh) {
   return GoRouter(
     initialLocation: '/home',
-    refreshListenable: role,
+    refreshListenable: roleRefresh,
     redirect: (BuildContext context, GoRouterState state) {
       final path = state.uri.path;
       // 试样间不依赖身份，也不该被踢去 /role —— 没选身份也能进去看看。

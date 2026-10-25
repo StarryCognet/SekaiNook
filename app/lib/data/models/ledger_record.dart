@@ -62,17 +62,43 @@ class LedgerRecord {
   final String? member;
 
   factory LedgerRecord.fromJson(Map<String, dynamic> json) => LedgerRecord(
-        id: (json['id'] ?? '') as String,
-        taskId: (json['task_id'] ?? '') as String,
-        taskName: (json['task_name'] ?? json['task_id'] ?? '') as String,
+        id: _asString(json['id']),
+        taskId: _asString(json['task_id']),
+        taskName: _asString(json['task_name'], or: _asString(json['task_id'])),
         type: TaskTypeX.parse(json['type']),
-        amount: (json['amount'] as num?)?.toInt() ?? 0,
-        createdAt: parseTime(json['created_at']) ?? DateTime.now(),
-        note: json['note'] as String?,
-        imageUrl: json['image_url'] as String?,
+        amount: _asInt(json['amount']),
+        // 时间解析失败绝不回退成「现在」：那会把脏记录算进今天、把当天任务误置灰（D-2）。
+        // 用纪元时间代替，它不会落进「今天」，页面也能一眼看出是坏数据。
+        createdAt: parseTime(json['created_at']) ?? _epoch,
+        note: _asNullableString(json['note']),
+        imageUrl: _asNullableString(json['image_url']),
         status: LedgerStatusX.parse(json['status']),
-        member: json['member'] as String?,
+        member: _asNullableString(json['member']),
       );
+
+  /// 时间解析失败时的兜底
+  static final DateTime _epoch = DateTime.fromMillisecondsSinceEpoch(0).toLocal();
+
+  // 宽松转换：SQLite 的列类型可能和声明不一致（脏数据 / 手改库），
+  // 硬 cast 会抛 TypeError 让整批解析失败，不如就地把类型掰回来。
+  static String _asString(Object? value, {String or = ''}) {
+    if (value is String) return value;
+    if (value == null) return or;
+    return value.toString();
+  }
+
+  static int _asInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  static String? _asNullableString(Object? value) {
+    if (value == null) return null;
+    if (value is String) return value.isEmpty ? null : value;
+    return value.toString();
+  }
 
   /// 解析后端时间戳。后端给的是 UTC ISO 串，这里转本地，页面就不用再操心。
   static DateTime? parseTime(Object? value) {

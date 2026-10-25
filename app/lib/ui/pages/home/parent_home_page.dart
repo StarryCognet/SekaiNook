@@ -1457,7 +1457,7 @@ class _RejectDialogState extends State<_RejectDialog> {
         decoration: InputDecoration(
           isDense: true,
           counterText: '',
-          hintText: '写一句给女儿的话（可选）',
+          hintText: '写一句给孩子的话（可选）',
           hintStyle: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
         ),
       ),

@@ -163,6 +163,8 @@ class ThemeState extends ChangeNotifier {
   bool get followWallpaper => _prefs.getBool(AppTheme.followWallpaperKey) ?? false;
 
   Future<void> setFollowWallpaper(bool value) async {
+    // 值没变就别写盘、别 notify（L-1）：拖动/连点会触发整树重建
+    if (followWallpaper == value) return;
     try {
       await _prefs.setBool(AppTheme.followWallpaperKey, value);
     } catch (_) {}
@@ -175,6 +177,7 @@ class ThemeState extends ChangeNotifier {
   bool get pureBlack => _prefs.getBool(AppTheme.pureBlackKey) ?? false;
 
   Future<void> setPureBlack(bool value) async {
+    if (pureBlack == value) return; // L-1 等值早退
     try {
       await _prefs.setBool(AppTheme.pureBlackKey, value);
     } catch (_) {}
@@ -183,11 +186,38 @@ class ThemeState extends ChangeNotifier {
 
   /// 正文字号缩放 0.8 ~ 1.4（1.0 是默认）。
   double get textScale =>
-      (_prefs.getDouble(AppTheme.textScaleKey) ?? 1.0).clamp(0.8, 1.4).toDouble();
+      (_textScalePreview ??
+              (_prefs.getDouble(AppTheme.textScaleKey) ?? 1.0))
+          .clamp(0.8, 1.4)
+          .toDouble();
+
+  /// 拖动字号滑杆时的内存预览值（null = 没有预览，读持久值）。
+  ///
+  /// P-8：滑杆 onChanged 每帧回调，以前每帧 `await _prefs.setDouble` 一次；
+  /// 拖动期间只改内存，松手（onChangeEnd）才走 [setTextScale] 落盘。
+  double? _textScalePreview;
+
+  /// 拖动字号滑杆的即时预览：只改内存、不落盘。
+  void previewTextScale(double value) {
+    final next = value.clamp(0.8, 1.4).toDouble();
+    if (textScale == next) return;
+    _textScalePreview = next;
+    notifyListeners();
+  }
 
   Future<void> setTextScale(double value) async {
+    final next = value.clamp(0.8, 1.4).toDouble();
+    final current =
+        (_prefs.getDouble(AppTheme.textScaleKey) ?? 1.0).clamp(0.8, 1.4).toDouble();
+    final hadPreview = _textScalePreview != null;
+    _textScalePreview = null;
+    if (current == next) {
+      // 值没变：可能只是把预览态收回成持久值，也要刷一次
+      if (hadPreview) notifyListeners();
+      return;
+    }
     try {
-      await _prefs.setDouble(AppTheme.textScaleKey, value.clamp(0.8, 1.4).toDouble());
+      await _prefs.setDouble(AppTheme.textScaleKey, next);
     } catch (_) {}
     notifyListeners();
   }
@@ -198,6 +228,16 @@ class ThemeState extends ChangeNotifier {
   ///
   /// 失败就当没设，不打扰用户 —— 但**不会把 background 清空**，保留旧值。
   Future<void> loadBackground() async {
+    // 首帧先把本机缓存的地址挂上（M-11）：以前只写不读，
+    // 注释承诺的「刷新时首帧就有背景」其实没实现，得等一次网络往返。
+    if (!_backgroundReady && _background.isEmpty) {
+      final cached = _prefs.getString(AppConstants.keyBackgroundCache);
+      if (cached != null && cached.isNotEmpty) {
+        _background = cached;
+        _backgroundReady = true;
+        notifyListeners();
+      }
+    }
     try {
       final payload = await _api.fetchSettings();
       _background = payload.background;

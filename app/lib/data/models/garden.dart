@@ -1,6 +1,14 @@
 /// 花园数据模型（对应 Web 版 `src/types/garden.ts`）。
 library;
 
+/// 宽松取值（L-4）：本地存档是历史版本写下的，字段类型不对时硬转会直接
+/// TypeError，把整个启动链带崩（S-4 的根因之一）。宁可丢一个字段也别崩。
+String _asString(dynamic value) => value is String ? value : (value?.toString() ?? '');
+
+int _asInt(dynamic value) => value is num
+    ? value.toInt()
+    : (value is String ? (int.tryParse(value) ?? 0) : 0);
+
 /// 花园今日任务（对应 `GardenTask`）
 class GardenTask {
   const GardenTask({
@@ -54,12 +62,12 @@ class GardenTask {
       };
 
   static GardenTask fromJson(Map<String, dynamic> json) => GardenTask(
-        id: (json['id'] ?? '') as String,
-        name: (json['name'] ?? '') as String,
-        duration: (json['duration'] as num?)?.toInt() ?? 0,
-        description: (json['description'] ?? '') as String,
-        reward: (json['reward'] as num?)?.toInt() ?? 0,
-        icon: (json['icon'] ?? '') as String,
+        id: _asString(json['id']),
+        name: _asString(json['name']),
+        duration: _asInt(json['duration']),
+        description: _asString(json['description']),
+        reward: _asInt(json['reward']),
+        icon: _asString(json['icon']),
         done: json['done'] == true,
         completedAt: json['completedAt'] is String
             ? DateTime.tryParse(json['completedAt'] as String)?.toLocal()
@@ -100,10 +108,10 @@ class Badge {
       };
 
   static Badge fromJson(Map<String, dynamic> json) => Badge(
-        id: (json['id'] ?? '') as String,
-        name: (json['name'] ?? '') as String,
-        description: (json['description'] ?? '') as String,
-        icon: (json['icon'] ?? '') as String,
+        id: _asString(json['id']),
+        name: _asString(json['name']),
+        description: _asString(json['description']),
+        icon: _asString(json['icon']),
         earned: json['earned'] == true,
       );
 }

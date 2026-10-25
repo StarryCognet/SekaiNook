@@ -127,13 +127,16 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
   Future<void> _test() async {
     final LocalNotifyState state = context.read<LocalNotifyState>();
     setState(() => _busy = true);
-    await state.sendTest(reminder: _draft());
-    if (!mounted) return;
-    setState(() {
-      _note = state.message;
-      _busy = false;
-    });
-    state.clearMessage();
+    try {
+      await state.sendTest(reminder: _draft());
+      if (!mounted) return;
+      setState(() => _note = state.message);
+      state.clearMessage();
+    } finally {
+      // try/finally 复位（P-3）：以前这里是「await 之后才置 false」，
+      // 发送抛异常或页面先卸载就会永久卡在忙碌态，按钮再也点不动。
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _save() async {
@@ -144,7 +147,8 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
     final LocalReminder? initial = widget.initial;
 
     setState(() => _busy = true);
-    if (initial == null) {
+    try {
+      if (initial == null) {
       await state.addReminder(
         name: name.isEmpty ? null : name,
         kind: _kind,
@@ -170,9 +174,13 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
         // 从「只提醒一次」改成别的：把上一次选的日期清掉
         clearOnceDay: onceDay == null,
       ));
+      }
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } finally {
+      // 保存失败也要把按钮放开（P-3）
+      if (mounted) setState(() => _busy = false);
     }
-    if (!mounted) return;
-    Navigator.of(context).pop();
   }
 
   @override

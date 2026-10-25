@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import '../../core/api_client.dart';
 import '../../core/api_exception.dart';
 import '../../core/ledger_ids.dart';
@@ -230,11 +232,23 @@ class LedgerApi {
 
   // ---- 解析 ----
 
+  /// 逐条解析：一条坏记录只跳过它自己，不能让整批失败（D-1）。
+  /// 以前单条字段类型不对就抛 TypeError → 整批解析失败 → 账本页一直停在旧数据。
   static List<LedgerRecord> _parseRecords(List<dynamic>? raw) {
     if (raw == null) return const <LedgerRecord>[];
     final result = <LedgerRecord>[];
     for (final item in raw) {
-      if (item is Map<String, dynamic>) result.add(LedgerRecord.fromJson(item));
+      if (item is! Map) continue;
+      try {
+        final record = LedgerRecord.fromJson(
+          item.map((key, value) => MapEntry(key.toString(), value)),
+        );
+        // 没有 id 的记录既审不了也删不掉，留着只会让页面显示残行
+        if (record.id.isEmpty) continue;
+        result.add(record);
+      } catch (error) {
+        debugPrint('[SekaiNook] 跳过一条解析失败的流水：$error');
+      }
     }
     return result;
   }

@@ -520,7 +520,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       await context
           .read<FamilyState>()
           .reject(target.id, reason: reason.isEmpty ? null : reason);
-      _toast('已驳回，女儿会看到你的话');
+      _toast('已驳回，孩子会看到你的话');
     } catch (_) {
       _toast('操作失败，请重试', warning: true);
     } finally {
@@ -2486,7 +2486,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                           try {
                             if (photo != null) {
                               final uploaded =
-                                  await UploadApi(ApiClient()).upload(photo!);
+                                  await UploadApi(ApiClient.shared).upload(photo!);
                               imageUrl = uploaded.url;
                             }
                           } catch (_) {

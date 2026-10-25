@@ -2,6 +2,7 @@ import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:sekainook_app/ui/widgets/app_toast.dart';
 import 'package:sekainook_app/ui/widgets/app_loading.dart';
@@ -437,7 +438,7 @@ class _SelftestPanelState extends State<SelftestPanel> {
       case 'flutter.storage':
         return _checkStorage(item.id);
       case 'flutter.image':
-        return _checkImage(item.id);
+        return await _checkImage(item.id);
       case 'flutter.notify.permission':
       case 'flutter.notify.schedule':
       case 'flutter.notify.cancel':
@@ -671,22 +672,20 @@ class _SelftestPanelState extends State<SelftestPanel> {
     }
   }
 
-  /// 图片压缩：造一张 1800×1200 的噪点图（纯色图 PNG 比 JPEG 还小，测不出来），
-  /// 走一遍 [compressImage]，断言长边 ≤ [maxImageSide] 且体积变小。
-  SelftestClientResult _checkImage(String id) {
-    const int width = 1800;
-    const int height = 1200;
+  /// 图片压缩：造一张 900×600 的噪点图（纯色图 PNG 比 JPEG 还小，测不出来），
+  /// 走一遍压缩，断言长边 ≤ [maxImageSide] 且体积变小。
+  ///
+  /// P-1：造图 + PNG 编码原来跑在主线程上（1800×1200 要两百多万次 setPixelRgb），
+  /// 点「运行」时面板会冻结数百毫秒到数秒。现在造图丢进 isolate，尺寸也降了一档
+  /// —— Web 上 compute 退化成同步执行，图太大照样冻 UI。
+  Future<SelftestClientResult> _checkImage(String id) async {
+    const int width = 900;
+    const int height = 600;
     final Stopwatch watch = Stopwatch()..start();
     try {
-      final img.Image source = img.Image(width: width, height: height);
-      for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-          final int noise = (x * 73856093) ^ (y * 19349663);
-          source.setPixelRgb(x, y, noise & 0xFF, (noise >> 8) & 0xFF, (noise >> 16) & 0xFF);
-        }
-      }
-      final List<int> png = img.encodePng(source);
-      final Uint8List? compressed = compressImage(png);
+      final List<int> png =
+          await compute<List<int>, List<int>>(_noisePngTopLevel, <int>[width, height]);
+      final Uint8List? compressed = await compressImageAsync(Uint8List.fromList(png));
       if (compressed == null) {
         return SelftestClientResult(
           id: id,
@@ -1905,4 +1904,21 @@ String _formatStamp(DateTime? time) {
   final String minute = local.minute.toString().padLeft(2, '0');
   final String second = local.second.toString().padLeft(2, '0');
   return '${local.year}-$month-$day $hour:$minute:$second';
+}
+
+/// [SelftestPanel._checkImage] 的 isolate 入口：造噪点图并编码 PNG。
+///
+/// 必须放顶层 —— `compute` 只能收顶层或静态函数。噪点（而不是纯色）是刻意的：
+/// 纯色 PNG 编码后比 JPEG 还小，压缩率那项断言就没意义了。
+List<int> _noisePngTopLevel(List<int> size) {
+  final int width = size[0];
+  final int height = size[1];
+  final img.Image source = img.Image(width: width, height: height);
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      final int noise = (x * 73856093) ^ (y * 19349663);
+      source.setPixelRgb(x, y, noise & 0xFF, (noise >> 8) & 0xFF, (noise >> 16) & 0xFF);
+    }
+  }
+  return img.encodePng(source);
 }

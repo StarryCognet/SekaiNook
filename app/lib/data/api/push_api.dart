@@ -13,7 +13,7 @@ import '../models/notification_record.dart';
 /// `remainingSeconds`、400 / 502 / 503 的 `error` + `detail` 都在 `error.body` 里，
 /// 所以这里既不重写一份请求逻辑，也不去改 `ApiClient`。
 class PushApi {
-  PushApi({ApiClient? api}) : _api = api ?? ApiClient();
+  PushApi({ApiClient? api}) : _api = api ?? ApiClient.shared;
 
   final ApiClient _api;
 

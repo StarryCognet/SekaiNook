@@ -279,16 +279,13 @@ int countDoneToday(List<LedgerRecord> records, {DateTime? now}) {
 ///
 /// ⚠️ 这只是省一次白跑的请求，**正确性在服务端**（同名当日第二次会 409）。
 ///
-/// 口径注意：这里用的是**本机时区**的日历天，与 [countDoneToday] 的东八区天
-/// 不一致 —— 这是现有实现里的真实细节，移植时照抄以便行为一致。
+/// 口径注意：按**东八区天**过滤，与 [countDoneToday] 和服务端一致（L-9）。
+/// 以前这里用本机时区的日历天 —— 非东八区设备上「今天」会和统计/日结算打架。
 bool isRecordedToday(CustomTask task, List<LedgerRecord> records, {DateTime? now}) {
-  final at = now ?? DateTime.now();
+  final day = WeekUtil.beijingDayKey(now);
   for (final record in records) {
     if (record.status == LedgerStatus.rejected) continue;
-    final created = record.createdAt.toLocal();
-    if (created.year != at.year || created.month != at.month || created.day != at.day) {
-      continue;
-    }
+    if (WeekUtil.beijingDayKey(record.createdAt) != day) continue;
     if (task.kind == CustomTaskKind.preset) {
       if (record.taskId == task.id) return true;
     } else {

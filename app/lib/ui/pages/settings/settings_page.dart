@@ -86,7 +86,7 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 「最近改过什么」最多列多少条
   static const int _adjustmentLogLimit = 20;
 
-  final ApiClient _client = ApiClient();
+  final ApiClient _client = ApiClient.shared;
   late final AdminApi _adminApi = AdminApi(_client);
   late final ChangelogApi _changelogApi = ChangelogApi(_client);
   late final MaintenanceApi _maintenanceApi = MaintenanceApi(_client);
@@ -129,6 +129,10 @@ class _SettingsPageState extends State<SettingsPage> {
   final TextEditingController _confirmAdminPasswordCtrl = TextEditingController();
   bool _changingAdminPassword = false;
   List<AdminAdjustment> _adjustments = const <AdminAdjustment>[];
+
+  /// 拉「最近改过什么」失败时的提示：**不清空已有列表**（P-4）。
+  /// 以前一失败就把列表清成空，紧接着显示「还没改过积分数」—— 看着像记录被删了。
+  String? _adjustmentsError;
   bool _loadingAdjustments = false;
   String? _revokingId;
 
@@ -538,6 +542,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _cleanOrphans() async {
+    final password = _adminPassword;
+    if (password == null) {
+      _toast('请先从「管理员」入口输一次口令，再回来清理', error: true);
+      return;
+    }
     final ok = await _confirmDialog(
       context,
       title: '确认清理这 $_orphanCount 张闲置照片？',
@@ -548,7 +557,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!ok || !mounted) return;
     setState(() => _cleaning = true);
     try {
-      final result = await _maintenanceApi.clean();
+      final result = await _maintenanceApi.clean(password: password);
       if (!mounted) return;
       setState(() {
         _cleaning = false;
@@ -613,12 +622,14 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       setState(() {
         _adjustments = list.adjustments;
+        _adjustmentsError = null;
         _loadingAdjustments = false;
       });
     } catch (_) {
       if (!mounted) return;
+      // 失败保留上一次的列表（P-4）：清空 + 显示「还没改过」会被误读成记录没了
       setState(() {
-        _adjustments = const <AdminAdjustment>[];
+        _adjustmentsError = '最近调整没拉到，下拉或用下面的按钮再试一次';
         _loadingAdjustments = false;
       });
     }
@@ -1267,7 +1278,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       min: 0.8,
                       max: 1.4,
                       divisions: 12,
-                      onChanged: (double value) => theme.setTextScale(value),
+                      onChanged: (double value) => theme.previewTextScale(value),
+                      onChangeEnd: theme.setTextScale,
                     ),
                   ),
                   SizedBox(
@@ -1871,11 +1883,24 @@ class _SettingsPageState extends State<SettingsPage> {
                 )
               else if (entries.isEmpty)
                 Text(
-                  '还没改过积分数',
-                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                  _adjustmentsError ?? '还没改过积分数',
+                  style: TextStyle(
+                    fontSize: AppFontSize.xs,
+                    color: _adjustmentsError == null ? palette.textTertiary : palette.danger,
+                  ),
                 )
-              else
+              else ...<Widget>[
+                // 列表非空时不挡住记录，只在上面补一行「刚才没拉到最新」
+                if (_adjustmentsError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                    child: Text(
+                      _adjustmentsError!,
+                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger),
+                    ),
+                  ),
                 for (final item in entries) _adjustmentRow(palette, item),
+              ],
             ],
           ),
         ),

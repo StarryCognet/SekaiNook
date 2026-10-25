@@ -1,6 +1,9 @@
 import '../../core/api_client.dart';
 import '../../core/api_exception.dart';
 
+/// 宽松读字符串（L-8）：字段缺失/类型不对时给空串，不抛。
+String _readString(dynamic value) => value is String ? value : (value?.toString() ?? '');
+
 /// 管理员接口的余额快照（每次成功调用都会带回最新余额）
 class AdminBalances {
   const AdminBalances({required this.family, required this.sun});
@@ -50,11 +53,12 @@ class AdminAdjustment {
   bool get isSun => ledger == 'sun';
 
   factory AdminAdjustment.fromJson(Map<String, dynamic> json) => AdminAdjustment(
-        id: (json['id'] ?? '') as String,
-        ledger: (json['ledger'] ?? 'family') as String,
-        amount: (json['amount'] as num?) ?? 0,
-        note: (json['note'] ?? '') as String,
-        createdAt: DateTime.tryParse((json['createdAt'] as String?) ?? '')?.toLocal(),
+        // 宽松取值（L-8）：后端字段类型变一次就整页白屏不值得
+        id: _readString(json['id']),
+        ledger: _readString(json['ledger']).isEmpty ? 'family' : _readString(json['ledger']),
+        amount: json['amount'] is num ? json['amount'] as num : 0,
+        note: _readString(json['note']),
+        createdAt: DateTime.tryParse(_readString(json['createdAt']))?.toLocal(),
       );
 }
 

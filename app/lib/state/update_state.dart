@@ -56,7 +56,7 @@ class UpdateState extends ChangeNotifier {
     Future<int> Function()? currentVersionCode,
   })  : _prefs = prefs,
         _api = api ?? AppUpdateApi(),
-        _changelogApi = changelogApi ?? ChangelogApi(ApiClient()),
+        _changelogApi = changelogApi ?? ChangelogApi(ApiClient.shared),
         _readVersionCode = currentVersionCode ?? _readPackageVersionCode;
 
   final SharedPreferences _prefs;
@@ -171,6 +171,11 @@ class UpdateState extends ChangeNotifier {
   Future<UpdateInstallResult> downloadAndInstall() async {
     final AppUpdateInfo? info = _pending;
     if (info == null) return UpdateInstallResult.failed;
+    // 连点保护（M-1）：同时在跑两趟下载会互相覆盖进度、抢删临时目录
+    if (_downloading) {
+      _lastError = '正在下载，等这一趟走完再点';
+      return UpdateInstallResult.failed;
+    }
 
     _lastError = null;
     _downloading = true;

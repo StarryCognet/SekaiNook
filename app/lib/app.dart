@@ -64,7 +64,12 @@ class SekaiNookApp extends StatefulWidget {
 }
 
 class _SekaiNookAppState extends State<SekaiNookApp> {
-  late final GoRouter _router = createRouter(widget.family);
+  /// 只把「身份变化」喂给 GoRouter：FamilyState 还会因为账本刷新 notify，
+  /// 那些不该让路由重跑 redirect（每次都要重建整张路由表，还会连带重建当前页）。
+  /// 由 State 持有，dispose 时连同 GoRouter 一起释放（L-4）。
+  late final ValueNotifier<FamilyRole?> _roleRefresh = ValueNotifier<FamilyRole?>(widget.family.role);
+
+  late final GoRouter _router = createRouter(widget.family, _roleRefresh);
 
   /// 出错兜底卡片的「重新加载」：递增即重建整棵树，
   /// 对应 Web 版 `ErrorBoundary` 里的 `window.location.reload()`。
@@ -84,6 +89,8 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
   @override
   void dispose() {
     widget.family.removeListener(_onFamilyChanged);
+    _roleRefresh.dispose();
+    _router.dispose();
     super.dispose();
   }
 
@@ -92,6 +99,10 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
   /// 监听放在这里而不是 [LocalNotifyState] 里，是为了让状态层不认识 FamilyState ——
   /// 通知只关心「一串流水」，谁给的都一样。
   void _onFamilyChanged() {
+    // 身份变了才触发路由重算；账本/余额变化一律不碰 GoRouter
+    if (_roleRefresh.value != widget.family.role) {
+      _roleRefresh.value = widget.family.role;
+    }
     final records = widget.family.records;
     if (identical(records, _syncedRecords)) return;
     _syncedRecords = records;
@@ -110,8 +121,17 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
   Future<void> _bootstrap() async {
     unawaited(widget.theme.loadBackground());
     unawaited(widget.settings.load());
-    widget.customTasks.ensurePresets();
-    widget.garden.init();
+    // 这两步会读本地存档并立刻落盘：一条坏数据不能让整个 App 起不来（S-4）
+    try {
+      widget.customTasks.ensurePresets();
+    } catch (error, stack) {
+      debugPrint('[SekaiNook] 自定义任务预设读取失败：$error\n$stack');
+    }
+    try {
+      widget.garden.init();
+    } catch (error, stack) {
+      debugPrint('[SekaiNook] 花园存档读取失败（按空存档继续）：$error\n$stack');
+    }
 
     // 本地通知：初始化插件、恢复开关状态；点通知跳到首页。
     widget.localNotify.bindTapHandler((payload) => _router.go(payload));

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_constants.dart';
+import '../core/api_exception.dart';
 import '../core/pin_guard.dart';
 import '../data/api/ledger_api.dart';
 import '../data/models/ledger_record.dart';
@@ -213,9 +214,11 @@ class FamilyState extends ChangeNotifier {
         _sunBalance != nextSun;
     if (!changed) return false;
 
-    _records = nextRecords;
-    _gardenRecords = nextGarden;
-    _pendingRecords = pending;
+    // 每次替换都包一层不可变视图（M-7）：getter 仍然返回同一个实例
+    // （app.dart 靠 identical 判断「流水没变」），但外部拿不到可改的 List。
+    _records = List<LedgerRecord>.unmodifiable(nextRecords);
+    _gardenRecords = List<LedgerRecord>.unmodifiable(nextGarden);
+    _pendingRecords = List<LedgerRecord>.unmodifiable(pending);
     _pendingCount = pending.length;
     _balance = nextBalance;
     _sunBalance = nextSun;
@@ -248,53 +251,63 @@ class FamilyState extends ChangeNotifier {
     final pending = await api.fetchPendingRequests();
     if (seq != _pendingSeq) return; // 同理：过期响应不落库
     if (_sameRecordList(_pendingRecords, pending)) return; // 没变化就别惊动整棵树
-    _pendingRecords = pending;
+    _pendingRecords = List<LedgerRecord>.unmodifiable(pending);
     _pendingCount = pending.length;
     notifyListeners();
   }
 
-  /// 审批通过
-  Future<void> approve(String id) async {
-    await api.approveRequest(id);
-    await loadLedger();
+  /// 在途写操作（L-12）：reject / 删除在服务端不是幂等的，
+  /// 快速双击会发两次请求（第二次 404，界面还会闪一下错误）。
+  final Set<String> _writesInFlight = <String>{};
+
+  Future<void> _guardWrite(String id, Future<void> Function() action) async {
+    if (!_writesInFlight.add(id)) return;
+    try {
+      await action();
+      await loadLedger();
+    } finally {
+      _writesInFlight.remove(id);
+    }
   }
+
+  /// 审批通过
+  Future<void> approve(String id) => _guardWrite(id, () => api.approveRequest(id));
+
+  /// 审批驳回（reason 会原样带给孩子看）
+  Future<void> reject(String id, {String? reason}) =>
+      _guardWrite(id, () => api.rejectRequest(id, reason: reason));
+
+  /// 驳回后重新提交（孩子端用）
+  Future<void> resubmit(String id) => _guardWrite(id, () => api.resubmitRequest(id));
+
+  /// 删除一条流水（仅家长），后端会一并删除关联图片
+  Future<void> removeRecord(String id) => _guardWrite(id, () => api.deleteLedgerRecord(id));
 
   /// 批量审批通过（逐条提交，最后统一刷新一次）
   ///
   /// 一条失败不拖累其余：整批先跑完，再统一刷新一次账本，
   /// 最后失败数大于 0 时抛错让界面提示「有 N 条没通过，请重试」。
+  /// 失败项会带上 id 与第一条错误原因（M-2）—— 只报个数家长没法排查。
   Future<void> approveMany(List<String> ids) async {
-    final results = await Future.wait(
-      ids.map(
-        (id) => api
-            .approveRequest(id)
-            .then((_) => true)
-            .catchError((Object _) => false),
-      ),
+    final List<String> failedIds = <String>[];
+    String? firstReason;
+    await Future.wait(
+      ids.map((id) async {
+        try {
+          await api.approveRequest(id);
+        } catch (error) {
+          failedIds.add(id);
+          firstReason ??= error is ApiException ? error.message : '$error';
+        }
+      }),
     );
     await loadLedger();
-    final failed = results.where((ok) => !ok).length;
-    if (failed > 0) {
-      throw StateError('有 $failed 条没通过，请重试');
+    if (failedIds.isNotEmpty) {
+      final String detail = firstReason == null ? '' : '：$firstReason';
+      throw StateError(
+        '有 ${failedIds.length} 条没通过$detail（${failedIds.join('、')}）',
+      );
     }
-  }
-
-  /// 审批驳回（reason 会原样带给孩子看）
-  Future<void> reject(String id, {String? reason}) async {
-    await api.rejectRequest(id, reason: reason);
-    await loadLedger();
-  }
-
-  /// 驳回后重新提交（孩子端用）
-  Future<void> resubmit(String id) async {
-    await api.resubmitRequest(id);
-    await loadLedger();
-  }
-
-  /// 删除一条流水（仅家长），后端会一并删除关联图片
-  Future<void> removeRecord(String id) async {
-    await api.deleteLedgerRecord(id);
-    await loadLedger();
   }
 
   // ---- 日结算 ----

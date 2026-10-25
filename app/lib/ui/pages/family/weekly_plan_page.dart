@@ -49,7 +49,7 @@ class WeeklyPlanPage extends StatefulWidget {
 }
 
 class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObserver {
-  final PlansApi _api = PlansApi(ApiClient());
+  final PlansApi _api = PlansApi(ApiClient.shared);
 
   List<WeeklyPlan> _plans = const <WeeklyPlan>[];
   bool _loading = true;
@@ -194,12 +194,28 @@ class _WeeklyPlanPageState extends State<WeeklyPlanPage> with WidgetsBindingObse
     }
   }
 
+  /// 同一个计划的写请求串行化（P-2）。
+  ///
+  /// 服务端 `updateCurrent` 是「把 current 设成这个值」而不是「加一」，
+  /// 连点两下会同时发两个 PATCH，后到的旧值把先到的新值覆盖回去。
+  /// 这里按计划 id 排队，并在轮到自己时才读 `_inputs`（那时上一个已回写）。
+  final Map<String, Future<void>> _writeQueue = <String, Future<void>>{};
+
+  void _enqueuePersist(WeeklyPlan plan, num Function() readValue) {
+    final Future<void> previous = _writeQueue[plan.id] ?? Future<void>.value();
+    final Future<void> next = previous.then((_) => _persistPlan(plan, readValue()));
+    _writeQueue[plan.id] = next;
+    unawaited(next.whenComplete(() {
+      if (identical(_writeQueue[plan.id], next)) _writeQueue.remove(plan.id);
+    }));
+  }
+
   void _handleAdd(WeeklyPlan plan) {
-    unawaited(_persistPlan(plan, (_inputs[plan.id] ?? plan.current) + 1));
+    _enqueuePersist(plan, () => (_inputs[plan.id] ?? plan.current) + 1);
   }
 
   void _handleCommit(WeeklyPlan plan) {
-    unawaited(_persistPlan(plan, _inputs[plan.id] ?? plan.current));
+    _enqueuePersist(plan, () => _inputs[plan.id] ?? plan.current);
   }
 
   void _toast(String message) {

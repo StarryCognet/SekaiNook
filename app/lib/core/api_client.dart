@@ -37,6 +37,13 @@ class ApiClient {
 
   final Dio _dio;
 
+  /// 全局共享实例：给那些不在 Provider 树里、只能自己 new 客户的 API 用。
+  ///
+  /// 以前页面里写 `UploadApi(ApiClient())`，每次换页/每次上传都新建一个 Dio
+  /// 和一套连接池（ApiClient 没有 close，旧连接只能等 GC）。共享实例没有状态
+  /// 需要隔离，合一个是安全的，也让「在途 GET 合并」覆盖到所有调用方。
+  static final ApiClient shared = ApiClient();
+
   static const List<int> retryableStatus = <int>[429, 500, 502, 503, 504];
   static const List<Duration> retryDelays = <Duration>[
     Duration(milliseconds: 400),
@@ -205,16 +212,20 @@ class ApiClient {
         final isTimeout = e.type == DioExceptionType.connectionTimeout ||
             e.type == DioExceptionType.receiveTimeout ||
             e.type == DioExceptionType.sendTimeout;
-
-        if (attempt < retries) {
+        // 只对「可能是一过性」的失败重试（M-6）：超时、连接失败。
+        // 取消、证书错误重试也没用，只会让人白等 36 秒。
+        final isConnection = e.type == DioExceptionType.connectionError;
+        if ((isTimeout || isConnection) && attempt < retries) {
           await Future<void>.delayed(_delayFor(attempt));
           attempt++;
           continue;
         }
 
         throw ApiException(isTimeout ? _timeoutMessage : _networkMessage, 0);
-      } catch (_) {
-        throw const ApiException(_networkMessage, 0);
+      } catch (error) {
+        // 非 Dio 的异常是代码 bug（M-5），别再伪装成「网络连接失败」——
+        // 那样真实错误会被当成网络抖动，永远修不掉。
+        throw ApiException('$error', 0);
       }
     }
   }

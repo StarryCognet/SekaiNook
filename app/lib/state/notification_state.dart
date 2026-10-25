@@ -47,12 +47,17 @@ class NotificationState extends ChangeNotifier {
   /// 当前已加载的分页大小（刷新时沿用）。不在 state 里，对 UI 不可见。
   int _limit = NotificationApi.defaultLimit;
 
+  /// 请求序号（M-8）：轮询刷新与下拉/切身份会并发，
+  /// 只让最后一次发出的请求落库，否则旧响应会把未读数覆盖回去。
+  int _refreshSeq = 0;
+
   /// 切换到某格信箱并加载。
   ///
   /// 换身份时先清空本地列表，避免把上一格信箱的消息递给另一个人看；
   /// 同一身份重载则保留旧列表（下拉刷新不闪空）。
   Future<void> load(NotifyAudience audience, {int? limit}) async {
     if (limit != null) _limit = limit;
+    final seq = ++_refreshSeq;
     final switching = _audience != audience;
     _audience = audience;
     _loading = true;
@@ -65,9 +70,9 @@ class NotificationState extends ChangeNotifier {
 
     try {
       final box = await _api.fetchNotifications(audience, limit: _limit);
-      // 竞态守卫：请求期间身份又变了就丢掉过期结果。
+      // 竞态守卫：请求期间身份又变了、或又发了一次新请求，就丢掉过期结果。
       // **注意此分支直接 return，不改 loading** —— 顺手置 false 会让新身份那次加载提前结束。
-      if (_audience != audience) return;
+      if (seq != _refreshSeq || _audience != audience) return;
       _items = box.items;
       _unreadCount = box.unreadCount;
       _ready = box.ready;
@@ -86,9 +91,10 @@ class NotificationState extends ChangeNotifier {
   Future<void> refresh() async {
     final audience = _audience;
     if (audience == null) return;
+    final seq = ++_refreshSeq;
     try {
       final box = await _api.fetchNotifications(audience, limit: _limit);
-      if (_audience != audience) return;
+      if (seq != _refreshSeq || _audience != audience) return;
       _items = box.items;
       _unreadCount = box.unreadCount;
       _ready = box.ready;

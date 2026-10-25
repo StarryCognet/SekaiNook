@@ -228,7 +228,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
   ///
   /// [FamilyState] 只公开 `LedgerApi`，没有暴露内部的 `ApiClient`，
   /// 而页面不允许改状态层，所以这里自建一个（与账本接口同一套 baseUrl / 超时）。
-  static final UploadApi _uploadApi = UploadApi(ApiClient());
+  static final UploadApi _uploadApi = UploadApi(ApiClient.shared);
 
   @override
   void initState() {
@@ -358,16 +358,24 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
       }
       // 日结算（开户礼金 / 那天完成的任务不够 5 个 / 到 22:00 没打卡睡觉）：
       // 正确性由服务端幂等 id 保证，本地只按「被结算的那一天」节流，纯粹为了省流量。
-      final LedgerSettleResult? settled = await family.settleLedgerOncePerDay();
+      LedgerSettleResult? settled;
+      try {
+        settled = await family.settleLedgerOncePerDay();
+      } catch (_) {
+        // 结算失败不挡首页（P-5）：账本上面已经刷新过了，下次进来再结算
+        return;
+      }
       if (settled == null || settled.applied.isEmpty) return;
+      // 提到闭包外取一次：在 setState 回调里访问会丢掉非空提升
+      final applied = settled.applied;
       try {
         await family.loadLedger();
       } catch (_) {
         // 结算已入账，刷新失败不该把页面变成「加载失败」
       }
       if (!mounted) return;
-      setState(() => _settleNotice = '账本更新：${describeSettleApplied(settled.applied)}');
-      _toast('账本更新：${describeSettleApplied(settled.applied)}', warning: true);
+      setState(() => _settleNotice = '账本更新：${describeSettleApplied(applied)}');
+      _toast('账本更新：${describeSettleApplied(applied)}', warning: true);
     } finally {
       _refreshing = false;
     }
@@ -2050,7 +2058,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
   Future<void> _submit() async {
     final String note = _note.text.trim();
     if (_isDeduct && note.isEmpty) {
-      _toast('写一句原因，让女儿知道为什么扣分', warning: true);
+      _toast('写一句原因，好让家长知道为什么扣分', warning: true);
       return;
     }
     if (_needPhoto && _photo == null) {

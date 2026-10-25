@@ -89,8 +89,12 @@ class TaskConfig {
         unit: (json['unit'] as String?) ?? '积分',
         description: json['description'] as String?,
         dailyLimit: (json['daily_limit'] as num?)?.toInt() ?? (json['dailyLimit'] as num?)?.toInt(),
-        window: json['window'] is Map<String, dynamic>
-            ? TaskWindow.fromJson(json['window'] as Map<String, dynamic>)
+        // 用 `is Map` 而不是 `is Map<String, dynamic>`（L-5）：JSON 解码出来也可能是
+        // Map<dynamic, dynamic>，过窄的判断会让时间窗静默失效（任务全天可打卡）。
+        window: json['window'] is Map
+            ? TaskWindow.fromJson(
+                Map<String, dynamic>.from(json['window'] as Map),
+              )
             : null,
       );
 

@@ -285,11 +285,13 @@ class LocalNotifyState extends ChangeNotifier {
   }
 
   int _nextSlot() {
-    var max = 0;
-    for (final reminder in _reminders) {
-      if (reminder.slot > max) max = reminder.slot;
+    // 先找第一个空闲的 1..99（M-9）：以前是 (max+1).clamp(1,99)，
+    // 顶到 99 之后新提醒全挤在同一个槽位 → 通知 id 相同，后一条覆盖前一条。
+    final Set<int> used = <int>{for (final reminder in _reminders) reminder.slot};
+    for (int slot = 1; slot <= 99; slot++) {
+      if (!used.contains(slot)) return slot;
     }
-    return (max + 1).clamp(1, 99);
+    return 99;
   }
 
   // ---------------------------------------------------------------- 排程
@@ -342,11 +344,37 @@ class LocalNotifyState extends ChangeNotifier {
   Future<void> syncFromRecords(List<LedgerRecord> records, {DateTime? now}) =>
       rescheduleAll(records, now: now);
 
-  /// 把所有开着的提醒项重新排一遍。
+  /// 重排串行队列：并发调用会排队执行，且只保留最后一次请求的参数。
+  ///
+  /// 为什么必须串行：整段流程是「cancelAll → 逐条 schedule」，
+  /// 两轮交错时后一轮的 cancelAll 会把前一轮刚排好的通知撤掉，最后少排几条。
+  Future<void>? _rescheduleRun;
+  ({List<LedgerRecord> records, DateTime? now})? _rescheduleNext;
+
+  /// 把所有开着的提醒项重新排一遍（串行化入口，见 [_rescheduleRun]）。
+  Future<void> rescheduleAll(List<LedgerRecord> records, {DateTime? now}) {
+    _rescheduleNext = (records: records, now: now);
+    return _rescheduleRun ??= _drainReschedule();
+  }
+
+  Future<void> _drainReschedule() async {
+    try {
+      while (true) {
+        final args = _rescheduleNext;
+        _rescheduleNext = null;
+        if (args == null) break;
+        await _doReschedule(args.records, now: args.now);
+      }
+    } finally {
+      _rescheduleRun = null;
+    }
+  }
+
+  /// 真正的重排实现。
   ///
   /// 先 [NotificationSink.cancelAll] 再逐条排 —— 提醒项被删/被改时间以后，
   /// 上一次排的通知必须撤掉，否则会「改了时间还在老时间响」。
-  Future<void> rescheduleAll(List<LedgerRecord> records, {DateTime? now}) async {
+  Future<void> _doReschedule(List<LedgerRecord> records, {DateTime? now}) async {
     _lastRecords = records;
     if (!supported) return;
 

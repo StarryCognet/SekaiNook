@@ -79,7 +79,12 @@ Map<String, int> _toSafeCountRecord(Object? value) {
 int _nextStreak(String? lastActiveDate, int streakDays, String today) {
   if (lastActiveDate == null) return 1;
   if (lastActiveDate == today) return streakDays;
-  final yesterday = toDateKey(DateTime.now().subtract(const Duration(days: 1)));
+  // 用传入的今天反推昨天（M-10）：以前这里读 DateTime.now()，
+  // 跨零点或补算历史时「昨天」会和 today 参数对不上，口径不一致。
+  final DateTime? parsedToday = DateTime.tryParse(today);
+  final yesterday = toDateKey(
+    (parsedToday ?? DateTime.now()).subtract(const Duration(days: 1)),
+  );
   return lastActiveDate == yesterday ? streakDays + 1 : 1;
 }
 
@@ -383,18 +388,33 @@ class GardenState extends ChangeNotifier {
   /// 未同步增量金额之和
   int get pendingDelta => _pendingDelta;
 
-  // ---- 模块级单例状态 ----
+  // ---- 后台补发 ----
 
   /// 补发闸：并发调用**直接丢弃**（不是排队）
   bool _flushing = false;
 
-  static bool _syncLoopReady = false;
+  /// 30 秒兜底补发的定时器。**实例字段**（以前是 static 闸 + 丢弃句柄）：
+  /// store 换代 / 页面销毁时才能 cancel 掉，不会有一个被弃用的实例继续每 30 秒空转。
+  Timer? _syncTimer;
+
+  bool _syncLoopReady = false;
 
   /// 存档是否已读进内存。启动、孩子首页、花园页都会调 [init]，
   /// 真源是内存状态（只有本进程写存档），重复读纯属白费一轮解析 + 一次 refreshLedger。
   bool _inited = false;
 
   bool _appVisible = true;
+
+  /// 并发 refreshLedger 的过期响应守卫：只让最新一轮落地
+  int _refreshSeq = 0;
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    _syncTimer = null;
+    _syncLoopReady = false;
+    super.dispose();
+  }
 
   /// 页面是否在前台（对应 Web 版 `document.hidden`）—— 后台不补发，省电
   void setAppVisible(bool visible) {
@@ -444,6 +464,9 @@ class GardenState extends ChangeNotifier {
       'lastGardenedDate': _lastGardenedDate,
       'tasksDate': _tasksDate,
       'cachedSun': _cachedSun,
+      // 离线队列与上面这些**同一个键、同一次写**：以前拆成两个 key 各写一次，
+      // 中途被打断（杀进程 / 配额满）就会出现「账变了但队列没变」的错位。
+      'pending': _pending.map((op) => op.toJson()).toList(),
     };
     try {
       _prefs.setString(AppConstants.keyGardenState, jsonEncode(payload));
@@ -469,25 +492,23 @@ class GardenState extends ChangeNotifier {
     }
   }
 
-  List<PendingGardenOp> _loadPending() {
-    final raw = _prefs.getString(AppConstants.keyGardenPending);
-    if (raw == null || raw.isEmpty) return <PendingGardenOp>[];
+  /// 读离线队列：新格式在主存档 payload 里；老版本单独存在 [AppConstants.keyGardenPending]，
+  /// 这里做一次兼容读取（下一次 commit 就会并进主存档，旧键只读不写）。
+  List<PendingGardenOp> _loadPending(Map<String, dynamic> saved) {
+    final raw = saved['pending'];
+    if (raw is List) {
+      try {
+        return PendingGardenOp.listFromStored(raw);
+      } catch (_) {
+        // 坏数据当作没有
+      }
+    }
+    final legacy = _prefs.getString(AppConstants.keyGardenPending);
+    if (legacy == null || legacy.isEmpty) return <PendingGardenOp>[];
     try {
-      return PendingGardenOp.listFromStored(jsonDecode(raw));
+      return PendingGardenOp.listFromStored(jsonDecode(legacy));
     } catch (_) {
       return <PendingGardenOp>[];
-    }
-  }
-
-  /// 写离线队列（单独一个键：只有它变了才写，免得每次打卡都整车重写一遍）
-  void _savePending() {
-    try {
-      _prefs.setString(
-        AppConstants.keyGardenPending,
-        jsonEncode(_pending.map((op) => op.toJson()).toList()),
-      );
-    } catch (_) {
-      // 存不下就存不下：内存里的队列还在，本次会话照样补发
     }
   }
 
@@ -547,7 +568,6 @@ class GardenState extends ChangeNotifier {
     _completedCount = completedCount;
 
     _saveState();
-    if (patch.containsKey('pending')) _savePending();
     notifyListeners();
   }
 
@@ -642,6 +662,8 @@ class GardenState extends ChangeNotifier {
   /// 两个请求并行、独立容忍；**两个都失败**才整体返回（连落盘都不发生
   /// —— 保留旧值，绝不因一次失败把阳光清零）。
   Future<void> refreshLedger() async {
+    // 并发守卫：两次刷新交错时只让最后发起的那一轮落地，否则旧响应会把新数据盖回去
+    final seq = ++_refreshSeq;
     // 捕获 await 之前的本地清单（契约里的已知细节：可能已过期，只会少合并）
     final ownedBefore = List<String>.of(_ownedItems);
     // 先发出去再分别 await —— 两个请求真正并行（此前注释写了并行、实现是串行）
@@ -649,6 +671,7 @@ class GardenState extends ChangeNotifier {
     final recordsFuture = _safeRecords();
     final summary = await summaryFuture;
     final records = await recordsFuture;
+    if (seq != _refreshSeq) return; // 期间又发起了一轮，这份结果是过期的
     if (summary == null && records == null) return;
 
     final patch = <String, Object?>{};
@@ -667,7 +690,8 @@ class GardenState extends ChangeNotifier {
   void _ensureSyncLoop() {
     if (_syncLoopReady) return;
     _syncLoopReady = true;
-    Timer.periodic(_flushInterval, (_) {
+    _syncTimer?.cancel();
+    _syncTimer = Timer.periodic(_flushInterval, (_) {
       if (!_appVisible) return;
       unawaited(flushPending());
     });
@@ -731,7 +755,7 @@ class GardenState extends ChangeNotifier {
             ? _toSafeAmount(saved['cachedSun'])
             : _toSafeAmount(saved['balance']));
 
-    var pending = _loadPending();
+    var pending = _loadPending(saved);
     for (final op in _buildMigrationOps(savedBalance, ownedItems)) {
       pending = _pushOp(pending, op);
     }

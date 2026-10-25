@@ -100,7 +100,14 @@ class TaskProgress {
 TaskProgress todayProgress(List<TaskConfig> tasks, List<LedgerRecord> records, {DateTime? now}) {
   final limited = tasks.where((task) => task.dailyLimit != null).toList();
   final total = limited.length;
-  final done = limited.where((task) => isTaskDone(task, records, now: now)).length;
+  // 先聚合一次再查表（M-12）：以前对每个任务调 isTaskDone，
+  // 每个任务都全表扫一遍，任务一多就是 O(任务数 × 流水数)。
+  final Map<String, int> counts = countTodaySubmissionsByTask(records, now: now);
+  var done = 0;
+  for (final task in limited) {
+    final limit = task.dailyLimit;
+    if (limit != null && (counts[task.id] ?? 0) >= limit) done++;
+  }
   return TaskProgress(
     done: done,
     total: total,

@@ -49,32 +49,45 @@ Future<void> main() async {
   // 本地存档要先就绪：主题、身份、花园状态都在 store 构造时读它
   final prefs = await SharedPreferences.getInstance();
 
-  final client = ApiClient();
+  final client = ApiClient.shared;
   final ledgerApi = LedgerApi(client);
   final settingsApi = SettingsApi(client);
+
+  // ⚠️ store 只在这里造一次，绝不放进 DynamicColorBuilder 的 builder 里。
+  // builder 会执行两遍（dynamic_color 拿到系统壁纸色后 setState 一次），
+  // 造在里面就会得到第二套 store：app.dart 里 `late final _router`、`_bootstrap`、
+  // FamilyState listener 全绑第一套，Provider 却用第二套 —— 第二套永不启动，
+  // 本地提醒也不再随账本重排（docs/optimization-audit-2026-10.md L-1 / S-1）。
+  final family = FamilyState(
+    api: ledgerApi,
+    pinGuard: PinGuard(prefs),
+    prefs: prefs,
+  );
+  final theme = ThemeState(prefs: prefs, settingsApi: settingsApi);
+  final settings = SettingsState(prefs: prefs, api: settingsApi);
+  final notifications = NotificationState(api: NotificationApi(client));
+  final customTasks = CustomTasksState(prefs: prefs);
+  final garden = GardenState(prefs: prefs, ledgerApi: ledgerApi);
+  final localNotify = LocalNotifyState(prefs: prefs);
+  final update = UpdateState(prefs: prefs);
 
   // 跟随壁纸：Android 12+ 会把壁纸主色交给 App；拿不到（旧系统 / 桌面 / Web）
   // 时 lightDynamic 是 null，App 里会退回用户选的固定种子。
   runApp(
     DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        final Widget app = SekaiNookApp(
-      family: FamilyState(
-        api: ledgerApi,
-        pinGuard: PinGuard(prefs),
-        prefs: prefs,
-      ),
-      theme: ThemeState(prefs: prefs, settingsApi: settingsApi),
-      settings: SettingsState(prefs: prefs, api: settingsApi),
-      notifications: NotificationState(api: NotificationApi(client)),
-      customTasks: CustomTasksState(prefs: prefs),
-      garden: GardenState(prefs: prefs, ledgerApi: ledgerApi),
-      localNotify: LocalNotifyState(prefs: prefs),
-      update: UpdateState(prefs: prefs),
-        dynamicSeed: lightDynamic?.primary,
-        dynamicDarkSeed: darkDynamic?.primary,
+        return SekaiNookApp(
+          family: family,
+          theme: theme,
+          settings: settings,
+          notifications: notifications,
+          customTasks: customTasks,
+          garden: garden,
+          localNotify: localNotify,
+          update: update,
+          dynamicSeed: lightDynamic?.primary,
+          dynamicDarkSeed: darkDynamic?.primary,
         );
-        return app;
       },
     ),
   );

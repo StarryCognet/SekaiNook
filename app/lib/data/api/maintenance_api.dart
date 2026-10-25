@@ -71,11 +71,11 @@ class MaintenanceApi {
     return OrphanScanResult.fromJson(raw);
   }
 
-  /// 危险操作：body 必须是**严格布尔** `{"confirm": true}`
-  Future<OrphanCleanResult> clean() async {
+  /// 危险操作：需要管理员口令，且 body 必须是**严格布尔** `{"confirm": true}`
+  Future<OrphanCleanResult> clean({required String password}) async {
     final raw = await _api.postJson<Map<String, dynamic>>(
       path,
-      data: <String, dynamic>{'confirm': true},
+      data: <String, dynamic>{'confirm': true, 'password': password},
     );
     if (raw == null) return const OrphanCleanResult(deleted: 0, failed: 0, keys: <String>[]);
     return OrphanCleanResult.fromJson(raw);

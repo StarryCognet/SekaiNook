@@ -1,4 +1,5 @@
 import '../../core/api_client.dart';
+import '../../core/api_exception.dart';
 
 /// 上传结果（对应 Web 版 `src/api/upload.ts`）
 class UploadResult {
@@ -39,9 +40,15 @@ class UploadApi {
       bytes: bytes,
       contentType: contentType,
     );
+    final url = (raw?['url'] ?? '').toString();
+    if (url.isEmpty) {
+      // L-7：接口 200 但没给地址时不能当成功 —— 否则界面会显示「上传成功」
+      // 但存进去的是空图（裂图）且没有任何提示。
+      throw const ApiException('上传成功但没拿到图片地址，请重试', 0);
+    }
     return UploadResult(
-      url: (raw?['url'] ?? '') as String,
-      key: (raw?['key'] ?? '') as String,
+      url: url,
+      key: (raw?['key'] ?? '').toString(),
     );
   }
 }

@@ -62,11 +62,13 @@ Uint8List? compressImage(List<int> bytes) {
   final decoded = img.decodeImage(bytes is Uint8List ? bytes : Uint8List.fromList(bytes));
   if (decoded == null) return null;
 
-  var output = decoded;
-  if (decoded.width > maxImageSide || decoded.height > maxImageSide) {
-    output = decoded.width >= decoded.height
-        ? img.copyResize(decoded, width: maxImageSide)
-        : img.copyResize(decoded, height: maxImageSide);
+  // 按 EXIF 方向摆正（L-2）：竖拍照片的 EXIF 里只写「转 90°」，
+  // 不 bake 的话压缩后方向被压平，家人看到的照片是躺倒的。
+  var output = img.bakeOrientation(decoded);
+  if (output.width > maxImageSide || output.height > maxImageSide) {
+    output = output.width >= output.height
+        ? img.copyResize(output, width: maxImageSide)
+        : img.copyResize(output, height: maxImageSide);
   }
 
   return Uint8List.fromList(img.encodeJpg(output, quality: jpegQuality));

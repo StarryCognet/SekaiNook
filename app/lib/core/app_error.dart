@@ -22,8 +22,12 @@ void reloadApp() {
 
 /// 装一个中文兜底卡片：渲染期异常不再白屏（对应 Web 版 `components/ErrorBoundary.tsx`）。
 void installErrorWidget() {
-  ErrorWidget.builder = (FlutterErrorDetails details) =>
-      AppErrorCard(message: details.exceptionAsString());
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    // 不把原始异常文本显示给用户（L-10）：里面有内部路径、类名、甚至参数值，
+    // 截图外传不合适。日志留在 debug 通道，页面只给一句通用话。
+    debugPrint('[SekaiNook] 渲染异常：${details.exceptionAsString()}');
+    return const AppErrorCard(message: '页面出了点问题，点「重新加载」试试');
+  };
 }
 
 /// 出错兜底卡片。

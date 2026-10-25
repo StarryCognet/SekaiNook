@@ -326,8 +326,8 @@ class _PushSectionState extends State<PushSection> {
               children: <Widget>[
                 const _PushHead(
                   title: '在网站上订阅（浏览器推送）',
-                  description: '不想装 App 的手机（比如 iPhone）走这条：提醒由服务器推给浏览器，'
-                      '得先在手机上订阅一次，订阅入口在网站上。',
+                  description: '原来给手机浏览器留的推送通道：React 网页版下线后这边暂时用不了，'
+                      '下面的「本机提醒」才是现在能用的那条。',
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 _PushBullet(text: '在手机上打开 ${AppConstants.apiBase}，进「设置 → 手机提醒」，把开关打开。'),
