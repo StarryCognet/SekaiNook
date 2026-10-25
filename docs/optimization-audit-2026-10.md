@@ -659,3 +659,14 @@
 
 
 
+### 14.7 后续：2.9.0 轻提示改到顶部（2026-10-25）
+
+用户看 HTML 预览后选定「顶部横幅」方向。`app/lib/ui/widgets/app_toast.dart` 从 `ScaffoldMessenger` + `SnackBar`（只能停底边、会被胶囊导航压住）改为 **root `Overlay` 顶部浮层**：
+
+- 位置：`MediaQuery.viewPaddingOf(context).top + 68`（状态栏 + 顶栏 52 + 8），左右 16，最宽 520 居中；
+- 动画：240ms 下滑淡入（`Cubic(0.2,0,0,1)`）+ 160ms 上收淡出；
+- 新提示直接顶掉旧的（不排队）；停留默认 3s、warning 5s；带「撤销」的按钮行为不变；
+- `AppToast.show` 签名未变，全部调用点零改动；`context.mounted` 与 `Overlay.maybeOf(rootOverlay: true)` 兜底；
+- 弹窗层级核查结论：`showDialog` 默认 `useRootNavigator: true`、`showAppSheet → SnapSheetRoute` 也在 root Navigator，遮罩本就覆盖整屏（含顶/底栏），无需额外改。
+
+发版 **2.9.0+37**：网页版（version.json 2.9.0/build 37）与 APK（证书 SHA-256 校验通过）。预览页 `docs/toast-variants-preview.html`（6 版对比 + 弹窗覆盖演示）、`docs/sheet-overlay-preview.html`。
