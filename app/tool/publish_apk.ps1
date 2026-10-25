@@ -142,9 +142,11 @@ if ($apksigner) {
 # 2026-10 就踩过一次：改了代码、忘了改 pubspec 的 +N，家里人手机上毫无变化。
 $previous = $null
 try {
-    $previous = Invoke-RestMethod -Uri "$PublicBaseUrl/$Prefix/latest.json" -TimeoutSec 20 -ErrorAction Stop
+    # -NoProxy：本机常年开着 127.0.0.1:7890 代理，走代理读清单会 20s 超时，
+    # 闸门就静默失效了（2026-10-25 实测踩到）。发版脚本读自己的公共域名一律直连。
+    $previous = Invoke-RestMethod -Uri "$PublicBaseUrl/$Prefix/latest.json" -TimeoutSec 20 -NoProxy -ErrorAction Stop
 } catch {
-    Write-Warning "读不到线上清单（$($_.Exception.Message)）—— 跳过 versionCode 递增检查"
+    Write-Warning "读不到线上清单（$($_.Exception.Message)）—— 本次跳过 versionCode 递增检查，发布后请手动核对线上 latest.json 的 versionCode"
 }
 if ($previous -and $null -ne $previous.versionCode) {
     $prevCode = [int]$previous.versionCode

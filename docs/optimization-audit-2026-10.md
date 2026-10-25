@@ -670,3 +670,17 @@
 - 弹窗层级核查结论：`showDialog` 默认 `useRootNavigator: true`、`showAppSheet → SnapSheetRoute` 也在 root Navigator，遮罩本就覆盖整屏（含顶/底栏），无需额外改。
 
 发版 **2.9.0+37**：网页版（version.json 2.9.0/build 37）与 APK（证书 SHA-256 校验通过）。预览页 `docs/toast-variants-preview.html`（6 版对比 + 弹窗覆盖演示）、`docs/sheet-overlay-preview.html`。
+
+### 14.8 后续：弹窗时顶栏 / 底栏让位（2.9.1 → 2.9.4，2026-10-25）
+
+用户反馈「弹窗打开时顶栏和底栏还是在最高层级」。先做了两轮加深遮罩（2.9.1 `modalScrim` 32%→46%，2.9.2 `alertScrim` 与它统一），但观感上玻璃顶栏仍透出来，于是做对照页 `docs/modal-cover-preview.html` 让用户选做法，最终定 **方案 A：弹窗打开时顶栏上收、底栏下收并淡出，关闭后回来**。
+
+实现：
+- `app/lib/ui/shell/route_cover.dart`（新增）：`RouteCoverState extends ChangeNotifier` 数「压在上面的 `PopupRoute` 个数」，`covered` 即是否要让位；`_RouteCoverObserver` 在 `didPush/didPop/didRemove` 里增减。**没有用 `ModalRoute.secondaryAnimation`** —— 实测它对 `PopupRoute` 恒为 0（临时测试证过），所以必须挂 navigator observer。
+- `app/lib/app.dart`：新建 `_routeCover`，传给 `createRouter(...)`（第 3 个参数），并在 `MultiProvider` 里提供；`dispose()` 里释放。
+- `app/lib/router.dart`：`GoRouter(observers: <NavigatorObserver>[routeCover.observer])`。
+- `app/lib/ui/shell/main_shell.dart`：顶栏与底栏各包一层 `ListenableBuilder(listenable: cover)` + `_CoveredBar`（`AnimatedOpacity` 0↔1 + `AnimatedSlide` 顶栏 -0.25 / 底栏 +0.35，260ms，`AppMotion.standard`），退场期间 `IgnorePointer`；child 用 `ListenableBuilder` 的 `child` 参数缓存，页面与底栏本身不重建。
+
+验证：`flutter analyze --no-pub` 96 issues（无 error/warning）；`flutter test --no-pub` 192 通过 + 3 跳过；临时测试确认「弹窗 push → covered=true，pop → false」。
+
+发版 **2.9.4+41**：网页版与 APK 均发布。`docs/modal-cover-preview.html` 是四种做法的对照页（现状 / A 让位 / B 压到 82% / C 全屏面板），带层级标注开关。

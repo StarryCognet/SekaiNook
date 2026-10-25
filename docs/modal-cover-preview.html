@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SekaiNook · 弹窗盖住顶栏底栏 · 四种做法对照</title>
+<style>
+  :root{
+    --bg:#F7F9FF; --surface:#F1F4F9; --card:#FFFFFF;
+    --border:#C1C7CE; --text:#181C20; --text2:#41474D; --text3:#5A6066;
+    --primary:#27638A; --primary-soft:#CAE6FF; --seg:#E0E3E8;
+    --danger:#A345E9;
+    --z-bar:30; --z-scrim:40; --z-sheet:41;
+    --ease:cubic-bezier(.2,0,0,1);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:#0e1216;color:#e8ecf1;
+    display:flex;align-items:flex-start;justify-content:center;gap:32px;padding:28px 20px;
+    min-height:100vh;
+  }
+
+  /* ---------- 右侧控制面板 ---------- */
+  .side{width:300px;flex:none}
+  .side h1{font-size:17px;margin:0 0 6px;font-weight:700;letter-spacing:.2px}
+  .side p{font-size:12.5px;line-height:1.6;color:#9aa6b2;margin:0 0 14px}
+  .grp{margin:14px 0 6px;font-size:11px;letter-spacing:.08em;color:#6d7a87;text-transform:uppercase}
+  .opt{
+    display:block;width:100%;text-align:left;cursor:pointer;
+    background:#171d24;border:1px solid #232c36;color:#dbe4ee;
+    border-radius:12px;padding:11px 13px;margin-bottom:8px;font-size:13px;line-height:1.45;
+    transition:border-color .15s,background .15s;
+  }
+  .opt b{display:block;font-size:13.5px;margin-bottom:3px;color:#fff;font-weight:650}
+  .opt span{color:#93a1af;font-size:12px}
+  .opt:hover{border-color:#3a4756;background:#1b232c}
+  .opt.on{border-color:#4d8fc4;background:#17222e;box-shadow:0 0 0 1px #4d8fc4 inset}
+  .opt.on b{color:#9cccf5}
+  .chk{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#9aa6b2;margin-top:12px;cursor:pointer;user-select:none}
+  .chk input{accent-color:#4d8fc4}
+  .note{font-size:11.5px;line-height:1.65;color:#6d7a87;margin-top:16px;border-top:1px solid #1f272f;padding-top:12px}
+  .note code{color:#9cccf5;font-size:11px}
+
+  /* ---------- 手机 ---------- */
+  .stage{flex:none;display:flex;flex-direction:column;align-items:center;gap:14px}
+  .phone{
+    position:relative;width:390px;height:780px;border-radius:38px;overflow:hidden;
+    background:var(--bg);color:var(--text);
+    box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 9px #1b2128,0 0 0 10px #2c343d;
+    isolation:isolate;
+  }
+  .statusbar{
+    height:44px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 26px;font-size:12px;font-weight:600;color:var(--text2);position:relative;z-index:var(--z-bar);
+    background:transparent;
+  }
+
+  /* 顶栏：悬浮玻璃 */
+  .topbar{
+    position:absolute;left:14px;right:14px;top:50px;height:52px;z-index:var(--z-bar);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 8px 0 12px;
+    background:rgba(247,249,255,.74);
+    -webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);
+    border:1px solid rgba(193,199,206,.5);
+    border-radius:20px;
+    box-shadow:0 6px 20px rgba(24,28,32,.08);
+    transition:opacity .26s var(--ease),transform .26s var(--ease);
+  }
+  .topbar .page{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:650}
+  .topbar .page i{width:28px;height:28px;border-radius:9px;background:var(--primary-soft);display:grid;place-items:center;font-style:normal;font-size:14px}
+  .topbar .acts{display:flex;gap:6px}
+  .topbar .acts b{
+    width:40px;height:40px;border-radius:14px;display:grid;place-items:center;font-size:16px;
+    background:rgba(255,255,255,.55);border:1px solid rgba(193,199,206,.45);font-weight:400;
+  }
+
+  /* 页面内容 */
+  .page{position:absolute;inset:0;padding:126px 16px 110px;overflow:hidden;z-index:1}
+  .hero{
+    background:linear-gradient(135deg,#CFE7FF 0%,#EAF3FF 55%,#F7F9FF 100%);
+    border-radius:20px;padding:18px;border:1px solid rgba(193,199,206,.55);margin-bottom:14px;
+  }
+  .hero .k{font-size:12px;color:var(--text3);letter-spacing:.04em}
+  .hero .v{font-size:34px;font-weight:750;color:var(--primary);margin-top:2px;font-variant-numeric:tabular-nums}
+  .hero .v small{font-size:14px;font-weight:600;color:var(--text3);margin-left:4px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+  .card{background:var(--card);border:1px solid rgba(193,199,206,.55);border-radius:20px;padding:14px;box-shadow:0 2px 10px rgba(24,28,32,.04)}
+  .card .t{font-size:12px;color:var(--text3)}
+  .card .n{font-size:22px;font-weight:700;margin-top:4px}
+  .list{background:var(--card);border:1px solid rgba(193,199,206,.55);border-radius:20px;padding:6px 14px}
+  .li{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #EDF0F4;font-size:14px}
+  .li:last-child{border-bottom:0}
+  .li em{width:26px;height:26px;border-radius:9px;background:var(--seg);display:grid;place-items:center;font-style:normal;font-size:13px}
+  .li s{flex:1;text-decoration:none;color:var(--text2)}
+  .li u{text-decoration:none;color:var(--primary);font-weight:650;font-size:13px}
+  .fabzone{position:absolute;left:16px;right:16px;bottom:118px;display:flex;gap:10px;z-index:2}
+  .fab{
+    flex:1;border:0;border-radius:16px;padding:13px;font-size:14px;font-weight:650;cursor:pointer;
+    background:var(--primary);color:#fff;box-shadow:0 8px 22px rgba(39,99,138,.28);font-family:inherit;
+  }
+  .fab.ghost{background:#fff;color:var(--primary);border:1px solid var(--border);box-shadow:none}
+
+  /* 底栏胶囊 */
+  .dock{
+    position:absolute;left:21px;right:21px;bottom:21px;height:62px;z-index:var(--z-bar);
+    display:flex;align-items:center;justify-content:space-around;
+    background:rgba(247,249,255,.72);
+    -webkit-backdrop-filter:blur(20px) saturate(1.7);backdrop-filter:blur(20px) saturate(1.7);
+    border:1px solid rgba(193,199,206,.5);border-radius:31px;
+    box-shadow:0 10px 26px rgba(24,28,32,.14);
+    transition:opacity .26s var(--ease),transform .26s var(--ease);
+  }
+  .di{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;color:var(--text3);width:56px}
+  .di em{width:28px;height:28px;border-radius:10px;display:grid;place-items:center;font-style:normal;font-size:15px}
+  .di.on{color:var(--primary)}
+  .di.on em{background:var(--primary-soft)}
+
+  /* 遮罩 + 面板 */
+  .scrim{
+    position:absolute;inset:0;z-index:var(--z-scrim);
+    background:rgba(6,10,14,.46);opacity:0;pointer-events:none;
+    transition:opacity .26s var(--ease),background .2s linear;
+  }
+  .sheet{
+    position:absolute;left:0;right:0;bottom:0;z-index:var(--z-sheet);
+    background:var(--surface);border-radius:28px 28px 0 0;
+    padding:10px 18px 26px;transform:translateY(112%);
+    transition:transform .34s var(--ease),top .3s var(--ease),height .3s var(--ease);
+    box-shadow:0 -18px 50px rgba(10,16,22,.22);
+    max-height:70%;
+  }
+  .grab{width:38px;height:5px;border-radius:3px;background:#C9D0D8;margin:2px auto 14px}
+  .sheet h2{font-size:17px;margin:0 0 4px;font-weight:700}
+  .sheet .sub{font-size:12.5px;color:var(--text3);margin-bottom:14px}
+  .choice{display:flex;align-items:center;gap:12px;padding:14px 12px;border-radius:16px;background:var(--card);border:1px solid rgba(193,199,206,.5);margin-bottom:10px}
+  .choice em{width:36px;height:36px;border-radius:12px;background:var(--primary-soft);display:grid;place-items:center;font-style:normal;font-size:16px}
+  .choice s{flex:1;text-decoration:none;font-size:14.5px;color:var(--text)}
+  .choice s small{display:block;font-size:11.5px;color:var(--text3);margin-top:2px}
+  .choice u{text-decoration:none;color:var(--text3);font-size:13px}
+  .cancel{width:100%;border:0;background:transparent;color:var(--text3);font-size:14px;padding:12px;font-family:inherit;cursor:pointer}
+
+  /* ---------- 变体 ---------- */
+  /* A：弹窗打开时顶栏底栏让位消失 */
+  body[data-v="a"] .phone.open .topbar{opacity:0;transform:translateY(-14px)}
+  body[data-v="a"] .phone.open .dock{opacity:0;transform:translateY(18px)}
+
+  /* B：不消失，但遮罩压到几乎全黑 */
+  body[data-v="b"] .phone.open .scrim{background:rgba(6,10,14,.82)}
+
+  /* C：面板全屏覆盖（顶栏底栏直接被面板盖住） */
+  body[data-v="c"] .phone.open .sheet{top:0;max-height:none;border-radius:0;padding-top:54px}
+
+  /* D：现状——顶底栏纹丝不动 */
+  /* 无额外规则 */
+
+  /* 层级标注 */
+  body.layers .zlabel{
+    position:absolute;right:8px;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;color:#fff;z-index:99;pointer-events:none;
+  }
+  body.layers .zlabel.top{top:56px;background:#c79100}
+  body.layers .zlabel.scrim{top:150px;background:#c62828}
+  body.layers .zlabel.sheet{bottom:8px;background:#2e7d32}
+  body.layers .zlabel.dock{bottom:26px;background:#6a1b9a}
+  .zlabel{display:none}
+  body.layers .zlabel{display:block}
+
+  .caption{font-size:12.5px;color:#93a1af;text-align:center;max-width:390px;line-height:1.6}
+  .caption b{color:#fff}
+</style>
+</head>
+<body data-v="d">
+
+  <aside class="side">
+    <h1>弹窗时，顶栏和底栏怎么办？</h1>
+    <p>同一个底部面板，四种处理方式。点手机里的「打卡」「选分类」看效果，点遮罩或「取消」关掉。</p>
+
+    <div class="grp">做法</div>
+    <button class="opt on" data-v="d" onclick="pick(this)">
+      <b>现状：只是被遮罩压暗</b>
+      <span>遮罩 46% 盖在最上层，但顶栏底栏的玻璃还在，颜色透出来 → 看起来还「浮在上面」</span>
+    </button>
+    <button class="opt" data-v="a" onclick="pick(this)">
+      <b>方案 A：弹窗时顶栏底栏让位消失</b>
+      <span>顶栏上移淡出、底栏下移淡出（0.26s），关闭后回来。整个屏幕只剩面板</span>
+    </button>
+    <button class="opt" data-v="b" onclick="pick(this)">
+      <b>方案 B：不消失，遮罩压到 82%</b>
+      <span>仍在原位，但暗到几乎看不见；切换动画最小，改动最少</span>
+    </button>
+    <button class="opt" data-v="c" onclick="pick(this)">
+      <b>方案 C：面板直接铺满全屏</b>
+      <span>面板从屏幕最顶长出来，顶栏底栏被面板本身盖住；像打开了一个新页面</span>
+    </button>
+
+    <label class="chk"><input type="checkbox" id="layers" onchange="document.body.classList.toggle('layers', this.checked)"> 标出层级（z-index）</label>
+
+    <div class="note">
+      现在代码里的真实情况：<br>
+      · 顶栏、底栏是 <code>z=30</code> 的页面内浮层<br>
+      · 遮罩是 <code>z=40</code>、面板 <code>z=41</code>（都在 root Navigator 的 Overlay 里）<br>
+      · 所以遮罩<b>确实</b>盖住了它们——只是 46% 还看得见玻璃边界，视觉上像没盖住。<br><br>
+      要“看着真的被盖住”，光加深遮罩不够，得让顶栏底栏自己退场（A）或让面板铺满（C）。
+    </div>
+  </aside>
+
+  <div class="stage">
+    <div class="phone" id="phone">
+      <div class="statusbar"><span>9:41</span><span>●●● ⏻ 100%</span></div>
+
+      <div class="topbar" id="topbar">
+        <div class="page"><i>◎</i>今天</div>
+        <div class="acts"><b>🔔</b><b>☾</b></div>
+      </div>
+
+      <div class="page">
+        <div class="hero">
+          <div class="k">今天的阳光</div>
+          <div class="v">1,095<small>克</small></div>
+        </div>
+        <div class="row">
+          <div class="card"><div class="t">待审批</div><div class="n">1</div></div>
+          <div class="card"><div class="t">今日完成</div><div class="n">3 / 5</div></div>
+        </div>
+        <div class="list">
+          <div class="li"><em>📖</em><s>背古诗</s><u>+10</u></div>
+          <div class="li"><em>🧹</em><s>收拾书桌</s><u>待审批</u></div>
+          <div class="li"><em>🏃</em><s>户外活动 30 分钟</s><u>已完成</u></div>
+        </div>
+        <div class="fabzone">
+          <button class="fab" onclick="openSheet()">打卡</button>
+          <button class="fab ghost" onclick="openSheet()">选分类</button>
+        </div>
+      </div>
+
+      <div class="dock">
+        <div class="di on"><em>▦</em>首页</div>
+        <div class="di"><em>◎</em>家庭</div>
+        <div class="di"><em>✎</em>计划</div>
+        <div class="di"><em>✦</em>花园</div>
+        <div class="di"><em>⚙</em>设置</div>
+      </div>
+
+      <div class="scrim" id="scrim" onclick="closeSheet()"></div>
+
+      <div class="sheet" id="sheet">
+        <div class="grab"></div>
+        <h2>选择分类</h2>
+        <div class="sub">这条记录会记在哪个分类下</div>
+        <div class="choice"><em>📖</em><s>学习<small>阅读、背诗、写字</small></s><u>›</u></div>
+        <div class="choice"><em>🧹</em><s>家务<small>收拾、洗碗、倒垃圾</small></s><u>›</u></div>
+        <div class="choice"><em>🏃</em><s>运动<small>户外活动、跳绳、跑步</small></s><u>›</u></div>
+        <button class="cancel" onclick="closeSheet()">取消</button>
+      </div>
+
+      <span class="zlabel top">顶栏 z30</span>
+      <span class="zlabel dock">底栏 z30</span>
+      <span class="zlabel scrim">遮罩 z40</span>
+      <span class="zlabel sheet">面板 z41</span>
+    </div>
+    <div class="caption" id="cap">当前：<b>现状——遮罩盖住了，但顶栏底栏还透出来</b></div>
+  </div>
+
+<script>
+  const phone = document.getElementById('phone');
+  const cap = document.getElementById('cap');
+  const names = {
+    d: '现状——遮罩盖住了，但顶栏底栏还透出来',
+    a: '方案 A——弹窗时顶栏底栏让位消失',
+    b: '方案 B——不消失，遮罩压到 82%',
+    c: '方案 C——面板铺满全屏，顶底栏被面板盖住'
+  };
+  function pick(btn){
+    document.querySelectorAll('.opt').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    document.body.dataset.v = btn.dataset.v;
+    cap.innerHTML = '当前：<b>' + names[btn.dataset.v] + '</b>';
+  }
+  function openSheet(){ phone.classList.add('open'); }
+  function closeSheet(){ phone.classList.remove('open'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+</script>
+</body>
+</html>
