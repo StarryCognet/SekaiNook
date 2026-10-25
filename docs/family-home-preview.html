@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SekaiNook · 家庭页卡片顺序与分页切换预览</title>
+<style>
+  :root{
+    --doc-bg:#F5F6FA; --doc-surface:#FFFFFF; --doc-text:#1C2333; --doc-text2:#4A5468;
+    --doc-text3:#78839A; --doc-border:#E4E8F1; --doc-accent:#8A5464; --doc-accent-soft:#F7E9ED;
+    --doc-warn:#B4791A; --doc-warn-soft:#FDF3E1; --doc-ok:#22703F; --doc-ok-soft:#E9F6EE;
+    --doc-info:#2A5B8C; --doc-info-soft:#EAF2FA;
+    --font:"Inter","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    --mono:"JetBrains Mono","Cascadia Code",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--doc-bg);color:var(--doc-text);font-family:var(--font);
+    font-size:15px;line-height:1.72;-webkit-font-smoothing:antialiased}
+  code{font-family:var(--mono);font-size:.88em;background:#EEF1F7;border-radius:5px;padding:1px 5px;color:#3B4557}
+  .wrap{max-width:1360px;margin:0 auto;padding:0 32px 90px}
+
+  /* ---------- 顶栏 ---------- */
+  .topbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:22px;flex-wrap:wrap;
+    padding:11px 32px;background:rgba(245,246,250,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--doc-border)}
+  .brand{font-weight:700;font-size:15px;letter-spacing:.2px}
+  .brand span{font-weight:500;color:var(--doc-text3)}
+  .topnav{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+  .topnav a{text-decoration:none;color:var(--doc-text2);font-size:13.5px;font-weight:500;padding:5px 11px;border-radius:8px}
+  .topnav a:hover{background:var(--doc-accent-soft);color:var(--doc-accent)}
+  .themes{display:flex;gap:6px;align-items:center;padding-left:16px;border-left:1px solid var(--doc-border)}
+  .themes b{font-size:12px;color:var(--doc-text3);font-weight:600;margin-right:2px}
+  .themes button{font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;padding:5px 11px;
+    border-radius:999px;border:1px solid var(--doc-border);background:#fff;color:var(--doc-text2);transition:.15s}
+  .themes button[aria-pressed="true"]{background:var(--doc-accent);border-color:var(--doc-accent);color:#fff}
+  .themes button:hover{border-color:var(--doc-accent)}
+
+  /* ---------- 头部 ---------- */
+  .hero{padding:52px 0 8px}
+  .kicker{font-size:12.5px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--doc-accent)}
+  .hero h1{font-size:34px;line-height:1.28;margin:12px 0 14px;letter-spacing:-.4px}
+  .hero .lead{max-width:860px;color:var(--doc-text2);font-size:15.5px;margin:0}
+  .hero .lead b{color:var(--doc-text)}
+  .vcards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:26px}
+  .vcard{background:var(--doc-surface);border:1px solid var(--doc-border);border-radius:14px;padding:16px 18px}
+  .vcard h4{margin:0 0 6px;font-size:12px;letter-spacing:.6px;color:var(--doc-text3);font-weight:700;text-transform:uppercase}
+  .vcard p{margin:0;font-size:14px;color:var(--doc-text2);line-height:1.66}
+  .vcard.is-warn{background:var(--doc-warn-soft);border-color:#EED9B4}
+  .vcard.is-warn h4{color:var(--doc-warn)}
+  .vcard.is-ok{background:var(--doc-ok-soft);border-color:#CBE8D6}
+  .vcard.is-ok h4{color:var(--doc-ok)}
+
+  /* ---------- 区块 ---------- */
+  .sec{margin-top:62px;scroll-margin-top:78px}
+  .sec-head{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  .sec-num{flex:0 0 auto;font-family:var(--mono);font-size:12px;font-weight:700;color:#fff;
+    background:var(--doc-accent);border-radius:6px;padding:2px 7px;letter-spacing:.5px}
+  .sec-head h2{font-size:22px;margin:0;letter-spacing:-.2px}
+  .sec-sub{color:var(--doc-text2);font-size:14.5px;max-width:1000px;margin:0 0 24px}
+  .sec-sub b{color:var(--doc-text)}
+
+  /* ---------- 表格 ---------- */
+  .tblwrap{background:var(--doc-surface);border:1px solid var(--doc-border);border-radius:14px;overflow:hidden}
+  table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.tbl th{text-align:left;font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--doc-text3);
+    font-weight:700;padding:11px 14px;background:#FAFBFD;border-bottom:1px solid var(--doc-border);white-space:nowrap}
+  table.tbl td{padding:10px 14px;border-bottom:1px solid #EEF1F7;vertical-align:top}
+  table.tbl tr:last-child td{border-bottom:0}
+  table.tbl td.dim{color:var(--doc-text3)}
+  table.tbl td.num{font-family:var(--mono);font-size:13px;text-align:right;white-space:nowrap}
+  table.tbl tr.hit td{background:var(--doc-warn-soft)}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:6px;
+    background:var(--doc-warn-soft);color:var(--doc-warn);border:1px solid #EFDCB8;white-space:nowrap}
+  .tag.ok{background:var(--doc-ok-soft);color:var(--doc-ok);border-color:#CBE8D6}
+  .tag.new{background:var(--doc-accent-soft);color:var(--doc-accent);border-color:#EBD3DA}
+  .tag.info{background:var(--doc-info-soft);color:var(--doc-info);border-color:#CFE0F0}
+
+  .note-card{background:var(--doc-surface);border:1px solid var(--doc-border);border-left:3px solid var(--doc-accent);
+    border-radius:12px;padding:14px 18px;margin-top:14px;font-size:14px;color:var(--doc-text2)}
+  .note-card b{color:var(--doc-text)}
+  .note-card.warn{border-left-color:var(--doc-warn);background:var(--doc-warn-soft);border-color:#EED9B4}
+  .note-card.warn b{color:#8A5B08}
+  .note-card.ok{border-left-color:var(--doc-ok);background:var(--doc-ok-soft);border-color:#CBE8D6}
+  .note-card.ok b{color:var(--doc-ok)}
+
+  /* ---------- 布局 ---------- */
+  .gallery{display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start}
+  .col-mock{display:flex;flex-direction:column;gap:12px}
+  .caption{margin:0;font-size:12.8px;color:var(--doc-text3);max-width:390px;line-height:1.6}
+  .caption b{color:var(--doc-text2)}
+  .cols{display:grid;grid-template-columns:auto minmax(0,1fr);gap:36px;align-items:start}
+  .col-info{display:flex;flex-direction:column;gap:0}
+  .col-info .note-card{margin-top:0;margin-bottom:12px}
+  .plan-title{font-size:16.5px;margin:0}
+  .plan-sub{font-size:13.5px;color:var(--doc-text2);margin:0 0 16px;max-width:420px}
+
+  /* ==================== 手机壳（1px = 1dp） ==================== */
+  .phone{
+    /* 玫瑰粉（出厂默认）浅色 —— seed #D8C0C3 经 M3 fromSeed 推近似 */
+    --bg:#FFF8F9; --surface:#FFFFFF; --soft:#F6EBEE;
+    --text:#221A1C; --text2:#514347; --text3:#6B5D62; --border:#E7D7DB;
+    --primary:#7E5261; --primary-soft:#F8D9E2; --on-primary:#FFFFFF;
+    --success:#2F8B58; --success-ink:#1E6A3C; --danger:#C0394F; --danger-ink:#9E2436;
+    --warning:#A9701A; --warning-ink:#84560B;
+    position:relative;flex:0 0 auto;width:390px;overflow:hidden;
+    background:var(--bg);color:var(--text);border:10px solid #14161C;border-radius:40px;
+    box-shadow:0 22px 55px rgba(20,22,28,.26);font-family:var(--font);
+    transition:background .25s,color .25s;
+  }
+  .phone[data-theme="dark"]{
+    --bg:#191113; --surface:#231B1D; --soft:#2E2528;
+    --text:#F2E3E6; --text2:#D6C3C7; --text3:#B5A2A6; --border:#4A3B40;
+    --primary:#EFC1CC; --primary-soft:#5B3A44; --on-primary:#3A1622;
+    --success:#7FD3A4; --success-ink:#A6E3BF; --danger:#FF92A2; --danger-ink:#FFB3BF;
+    --warning:#E5B15C; --warning-ink:#F0C77F;
+  }
+  .phone[data-theme="blue"]{
+    --bg:#F6FAFE; --surface:#FFFFFF; --soft:#EAF2FB;
+    --text:#121A26; --text2:#3F4C5E; --text3:#5D6B7E; --border:#D8E3F0;
+    --primary:#1E6FA8; --primary-soft:#D7E9F8; --on-primary:#FFFFFF;
+    --success:#1E7D5C; --success-ink:#14624A; --danger:#BF3B52; --danger-ink:#9C2239;
+    --warning:#A0701C; --warning-ink:#7E570C;
+  }
+  .phone.fixed{height:864px}          /* 内容区 844 = 390×844 参考屏 */
+  .phone.auto{height:auto}
+
+  .ic{width:16px;height:16px;flex:0 0 auto}
+  .ic14{width:14px;height:14px;flex:0 0 auto}
+  .ic20{width:20px;height:20px;flex:0 0 auto}
+  .ic18{width:18px;height:18px;flex:0 0 auto}
+
+  /* 让位占位（顶栏 / 底栏） */
+  .slot{display:flex;align-items:center;justify-content:center;font-size:10.5px;letter-spacing:.4px;
+    color:var(--text3);background:
+      repeating-linear-gradient(135deg,color-mix(in srgb,var(--border) 55%,transparent) 0 6px,transparent 6px 12px);
+    opacity:.75}
+  .slot.top{height:108px;border-bottom:1px dashed var(--border)}
+  .slot.bot{height:138px;border-top:1px dashed var(--border)}
+  .list{padding:0 16px}
+  .list > * + *{margin-top:16px}
+
+  /* 首屏可见底线 */
+  .foldline{position:absolute;left:0;right:0;border-top:2px dashed var(--danger);z-index:12;pointer-events:none}
+  .foldline span{position:absolute;right:8px;top:-11px;background:var(--danger);color:#fff;
+    font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;white-space:nowrap}
+
+  /* ---------- 卡片 ---------- */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;position:relative}
+  .row{display:flex;align-items:center;gap:4px}
+  .spacer{flex:1 1 auto}
+  .h14{font-size:14px;color:var(--text2);font-weight:500}
+  .h15{font-size:15px;font-weight:700}
+  .h16{font-size:16px;font-weight:600}
+  .xs12{font-size:12px;color:var(--text3)}
+  .xs11{font-size:11px;color:var(--text3)}
+  .tn{font-variant-numeric:tabular-nums}
+  .pill{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 9px;border-radius:999px;
+    font-size:12px;font-weight:600;white-space:nowrap}
+  .pill.ok{background:color-mix(in srgb,var(--success) 13%,transparent);color:var(--success-ink)}
+  .pill.bad{background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger-ink)}
+  .pill.warnp{background:color-mix(in srgb,var(--warning) 14%,transparent);color:var(--warning-ink)}
+  .btn{display:flex;align-items:center;justify-content:center;gap:6px;height:44px;border-radius:999px;
+    font-size:14px;font-weight:600;color:#fff}
+  .btn.ok{background:var(--success);color:color-mix(in srgb,var(--success) 8%,#fff)}
+  .btn.pri{background:var(--primary);color:var(--on-primary)}
+  .btn.ghost{background:var(--soft);color:var(--text2)}
+  .btn.dis{background:var(--soft);color:var(--text3);opacity:.75}
+  .btnrow{display:flex;gap:8px}
+  .btnrow .btn{flex:1}
+  .divider{height:1px;background:var(--border);margin:16px 0}
+
+  /* 余额卡 */
+  .bal-num{font-size:40px;font-weight:700;line-height:1.15;letter-spacing:-1px}
+  .bal-pos{color:var(--success)}
+  .bal-neg{color:var(--danger)}
+  .bal-sub{font-size:12px;color:var(--text3);margin-top:-2px}
+  .pending{display:flex;align-items:center;gap:4px;font-size:14px;color:var(--primary);font-weight:600}
+  .inp{height:44px;border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;
+    padding:0 12px;font-size:13px;color:var(--text3);background:var(--surface)}
+
+  /* 今日卡 */
+  .clock{font-size:34px;font-weight:700;text-align:center;line-height:1.1;letter-spacing:-.5px}
+  .date{font-size:14px;color:var(--text2);text-align:center}
+  .progress{height:6px;border-radius:999px;background:var(--soft);overflow:hidden}
+  .progress i{display:block;height:100%;border-radius:999px;background:var(--success)}
+
+  /* 趋势卡 */
+  .sec-hd{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
+  .sec-hd::before{content:"";width:3px;height:16px;border-radius:2px;background:var(--primary)}
+  .chart{height:160px;display:flex;align-items:flex-end;gap:0;padding:10px 0 0;position:relative}
+  .chart .bars{flex:1;display:flex;align-items:flex-end;justify-content:space-around;height:100%}
+  .chart .bar{width:18px;border-radius:8px 8px 0 0;background:var(--success);opacity:.85}
+  .xaxis{display:flex;justify-content:space-between;font-size:9.5px;color:var(--text2);
+    font-variant-numeric:tabular-nums;margin-top:6px;letter-spacing:-.3px;padding:0 1px}
+  .xaxis span{text-align:center;white-space:nowrap}
+
+  /* 状态条（方案 B 合并头部） */
+  .strip{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;
+    display:flex;align-items:center;gap:14px}
+  .strip .big{font-size:30px;font-weight:700;line-height:1.1;letter-spacing:-.8px}
+  .strip .meta{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .mini-ring{width:38px;height:38px;border-radius:999px;position:relative;display:grid;place-items:center;
+    background:conic-gradient(var(--success) 0 60%,var(--soft) 60% 100%);flex:0 0 auto}
+  .mini-ring::after{content:"";position:absolute;inset:4px;border-radius:999px;background:var(--surface)}
+  .mini-ring b{position:relative;z-index:1;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+
+  /* 分段控件（照 fl_ui/segmented_control.dart：高 44 / inset 4 / 滑块 primary / 250ms easeOutCubic） */
+  .seg{position:relative;height:44px;border-radius:999px;background:var(--soft);padding:4px;display:flex}
+  .seg-pill{position:absolute;top:4px;left:4px;bottom:4px;width:calc((100% - 8px) / 3);border-radius:999px;
+    background:var(--primary);transition:transform 250ms cubic-bezier(.33,1,.68,1);z-index:0}
+  .seg-btn{position:relative;z-index:1;flex:1;display:flex;align-items:center;justify-content:center;gap:4px;
+    font-size:14px;font-weight:500;color:var(--text2);border:0;background:transparent;cursor:pointer;
+    font-family:var(--font);padding:0;transition:color 200ms}
+  .seg-btn.on{color:var(--on-primary);font-weight:700}
+  .cnt{min-width:16px;height:16px;border-radius:999px;background:var(--danger);color:#fff;font-size:10.5px;
+    font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 4px}
+  .seg-btn.on .cnt{background:var(--on-primary);color:var(--primary)}
+
+  /* 任务区 */
+  .ring{width:52px;height:52px;border-radius:999px;position:relative;display:grid;place-items:center;
+    background:conic-gradient(var(--success) 0 55%,var(--soft) 55% 100%);flex:0 0 auto}
+  .ring::after{content:"";position:absolute;inset:5px;border-radius:999px;background:var(--surface)}
+  .ring b{position:relative;z-index:1;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+  .headcol{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .headcol .t{font-size:15px;font-weight:700}
+  .headcol .s{font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums}
+  .tseg{display:flex;background:var(--soft);border-radius:999px;padding:4px;gap:2px}
+  .tseg .it{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;font-size:13px;font-weight:600;
+    color:var(--text2);padding:8px 0;border-radius:999px}
+  .tseg .it.on{background:var(--primary-soft);color:var(--text);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--primary) 35%,transparent)}
+  .grp-hd{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;margin:0 0 8px}
+  .grp-hd .c{font-size:12px;font-weight:700;color:var(--text3);font-variant-numeric:tabular-nums}
+  .badge-must{font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:5px;
+    background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger-ink);border:1px solid color-mix(in srgb,var(--danger) 26%,transparent)}
+  .row-task{display:flex;align-items:center;gap:8px;min-height:56px;padding:8px;border-radius:12px;
+    border:1px solid var(--border);background:var(--soft)}
+  .row-task + .row-task{margin-top:6px}
+  .row-task.ready{background:color-mix(in srgb,var(--success) 7%,var(--surface));
+    border-color:color-mix(in srgb,var(--success) 30%,var(--border))}
+  .row-task.ready.warnr{background:color-mix(in srgb,var(--danger) 6%,var(--surface));
+    border-color:color-mix(in srgb,var(--danger) 26%,var(--border))}
+  .ibox{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;
+    background:color-mix(in srgb,var(--success) 12%,var(--surface));color:var(--success-ink);flex:0 0 auto}
+  .ibox.red{background:color-mix(in srgb,var(--danger) 11%,var(--surface));color:var(--danger-ink)}
+  .ibox.warn{background:color-mix(in srgb,var(--warning) 13%,var(--surface));color:var(--warning-ink)}
+  .ttl{font-size:14px;font-weight:600;line-height:1.3}
+  .meta{font-size:12px;color:var(--text3);line-height:1.3}
+  .meta.red{color:var(--danger-ink);font-weight:600}
+  .val{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--success-ink)}
+  .val.red{color:var(--danger-ink)}
+  .chk{width:24px;height:24px;border-radius:999px;border:1.5px solid color-mix(in srgb,var(--success) 50%,transparent);
+    display:grid;place-items:center;flex:0 0 auto;color:var(--success)}
+  .chk.done{background:var(--success);border-color:var(--success);color:#fff}
+  .chk.lock{border-color:var(--border);color:var(--text3);background:var(--soft)}
+  .foldrow{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);font-weight:600;
+    padding:10px 4px 2px}
+  .foldrow .spacer{flex:1}
+  .wdots{display:inline-flex;gap:3px}
+  .wdots i{width:6px;height:6px;border-radius:999px;background:var(--soft);display:block}
+  .wdots i.on{background:var(--success)}
+
+  /* 待审批 / 历史 */
+  .appr{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--surface)}
+  .appr .who{font-size:13px;font-weight:700}
+  .appr .what{font-size:13px;color:var(--text2)}
+  .rec{display:flex;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid var(--border)}
+  .rec:last-child{border-bottom:0}
+  .rec .t{font-size:12px;color:var(--text3);width:38px;flex:0 0 auto;font-variant-numeric:tabular-nums}
+  .rec .n{font-size:13.5px;font-weight:600;flex:1;min-width:0}
+  .rec .v{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+  .emp{font-size:13px;color:var(--text3);text-align:center;padding:28px 0}
+
+  /* 分页容器（照 SlideFadeSwitcher：grid 叠层、高度取最高层、顶对齐） */
+  .pg{display:grid;align-items:start;margin-top:16px}
+  .pg-layer{grid-area:1/1;opacity:0;visibility:hidden;pointer-events:none}
+  .pg-layer.on{opacity:1;visibility:visible;pointer-events:auto}
+  .pg-layer.leaving{visibility:visible;z-index:1}
+
+  /* V1 现状：160ms 进 / 90ms 退，±12dp，进场 opacity 走 decelerate、位移走 standard */
+  @keyframes v1In{from{opacity:0}to{opacity:1}}
+  @keyframes v1Slide{from{transform:translateX(12px)}to{transform:translateX(0)}}
+  @keyframes v1Out{from{opacity:1}to{opacity:0}}
+  @keyframes v1SlideOut{from{transform:translateX(0)}to{transform:translateX(-12px)}}
+  .pg[data-mode="v1"] .pg-layer.entering{
+    animation:v1In 160ms cubic-bezier(.05,.7,.1,1) both, v1Slide 160ms cubic-bezier(.2,0,0,1) both}
+  .pg[data-mode="v1"] .pg-layer.leaving{
+    animation:v1Out 90ms cubic-bezier(.3,0,.8,.15) both, v1SlideOut 90ms cubic-bezier(.2,0,0,1) both}
+
+  /* V2 方向感：240ms，±32dp，按 tab 顺序判断方向 */
+  @keyframes v2In{from{opacity:0;transform:translateX(calc(32px * var(--dir,1)))}
+    to{opacity:1;transform:translateX(0)}}
+  @keyframes v2Out{from{opacity:1;transform:translateX(0)}
+    to{opacity:0;transform:translateX(calc(-32px * var(--dir,1)))}}
+  .pg[data-mode="v2"] .pg-layer.entering{animation:v2In 240ms cubic-bezier(.05,.7,.1,1) both}
+  .pg[data-mode="v2"] .pg-layer.leaving{animation:v2Out 200ms cubic-bezier(.3,0,.8,.15) both}
+
+  /* V3 fade-through：旧缩放到 1.03 淡出 / 新从 0.96 放大淡入，无位移 */
+  @keyframes v3In{from{opacity:0;transform:scale(.965)}to{opacity:1;transform:scale(1)}}
+  @keyframes v3Out{from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(1.03)}}
+  .pg[data-mode="v3"] .pg-layer.entering{animation:v3In 240ms cubic-bezier(.2,0,0,1) both}
+  .pg[data-mode="v3"] .pg-layer.leaving{animation:v3Out 160ms cubic-bezier(.3,0,.8,.15) both}
+
+  /* 顺序条图：只画「首屏那 598dp」，比例 598dp→306px（0.512）。线下用遮罩条挡住并写明还差什么 */
+  .omaps{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+  .omap-col{width:200px}
+  .omap{position:relative;width:200px;height:340px;border-radius:18px;border:1px solid var(--doc-border);
+    background:var(--doc-surface);overflow:hidden;padding:0}
+  .omap .body{padding:0 10px}
+  .ob{border-radius:8px;margin-bottom:5px;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;
+    font-size:10.5px;font-weight:700;color:#3B4557;text-align:center;line-height:1.25;padding:2px}
+  .ob .sub{display:block;font-size:9px;font-weight:500;opacity:.75}
+  .ob.bal{background:#F7E9ED;color:#8A5464;border:1px solid #EBD3DA}
+  .ob.today{background:#E9F6EE;color:#22703F;border:1px solid #CBE8D6}
+  .ob.trend{background:#FDF3E1;color:#8A5B08;border:1px solid #EED9B4}
+  .ob.tasks{background:#E7EEF8;color:#2A5B8C;border:1px solid #CFE0F0}
+  .ob.strip{background:#F0F2F7;color:#4A5468;border:1px solid #DDE2EC}
+  .omap .cut{position:absolute;left:0;right:0;top:306px;border-top:2px dashed #C0394F;z-index:5}
+  .omap .cut span{position:absolute;right:6px;top:-9px;background:#C0394F;color:#fff;font-size:9px;
+    font-weight:700;padding:0 5px;border-radius:999px}
+  .omap .beyond{position:absolute;left:0;right:0;bottom:0;height:34px;z-index:4;
+    background:#FBFCFE;border-top:1px solid #E4E8F0;
+    display:flex;align-items:center;justify-content:center;text-align:center;
+    font-size:10px;font-weight:600;color:#7A8598;line-height:1.35;padding:0 6px}
+  .omap .ghost{opacity:.28;filter:grayscale(.5)}
+  .omap-tag{position:absolute;left:6px;top:6px;z-index:4;font-size:9.5px;font-weight:700;letter-spacing:.4px;
+    padding:1px 6px;border-radius:5px;background:#fff;border:1px solid var(--doc-border);color:var(--doc-text2)}
+  .omap-col h4{margin:10px 0 4px;font-size:14px}
+  .omap-col p{margin:0;font-size:12.3px;color:var(--doc-text3);line-height:1.55}
+  .omap-col p b{color:var(--doc-text2)}
+
+  /* 【待确认】问答卡 */
+  .qa{background:var(--doc-surface);border:1px solid var(--doc-border);border-radius:12px;padding:14px 18px;margin-top:12px}
+  .qa > b{font-size:14.5px;display:block;margin-bottom:4px}
+  .qa p{margin:0 0 6px;font-size:13.5px;color:var(--doc-text2)}
+  .qa .default{font-size:13.5px;color:var(--doc-ok)}
+  .qa .default b{color:var(--doc-ok)}
+  .footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--doc-border);font-size:12.5px;color:var(--doc-text3)}
+
+  /* 排序 demo */
+  .sortwrap{background:var(--bg)}
+  .sortbar{display:flex;align-items:center;gap:8px;padding:14px 16px 0}
+  .sortbar .t{font-size:16px;font-weight:700;flex:1}
+  .editbtn{font-family:var(--font);font-size:12.5px;font-weight:700;border-radius:999px;padding:6px 13px;
+    border:1px solid var(--border);background:var(--surface);color:var(--primary);cursor:pointer}
+  .editbtn[data-on="1"]{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+  .sortlist{padding:14px 16px 0;display:flex;flex-direction:column;gap:10px}
+  .sort-item{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;
+    display:flex;align-items:center;gap:10px;transition:box-shadow .18s,transform .18s,opacity .18s}
+  .sort-item .grip{width:18px;flex:0 0 auto;color:var(--text3);opacity:0;transition:opacity .18s;
+    display:flex;flex-direction:column;gap:2px}
+  .sort-item .grip i{display:block;height:2px;border-radius:2px;background:currentColor}
+  .sortlist[data-edit="1"] .sort-item{cursor:grab;border-style:dashed;border-color:color-mix(in srgb,var(--primary) 40%,var(--border))}
+  .sortlist[data-edit="1"] .sort-item .grip{opacity:1}
+  .sort-item.dragging{opacity:.55;box-shadow:0 12px 26px rgba(20,22,28,.2);transform:scale(1.01)}
+  .sort-item .no{width:20px;height:20px;border-radius:999px;background:var(--soft);color:var(--text2);
+    font-size:11px;font-weight:700;display:grid;place-items:center;flex:0 0 auto;font-variant-numeric:tabular-nums}
+  .sort-item .tx{flex:1;min-width:0}
+  .sort-item .tx b{display:block;font-size:13.5px}
+  .sort-item .tx span{font-size:11.5px;color:var(--text3)}
+  .sort-item .mv{display:none;gap:4px}
+  .sortlist[data-edit="1"] .sort-item .mv{display:flex}
+  .sort-item .mv button{width:26px;height:26px;border-radius:8px;border:1px solid var(--border);
+    background:var(--surface);color:var(--text2);font-size:12px;cursor:pointer;font-family:var(--font);padding:0}
+  .savetip{margin:14px 16px 18px;font-size:11.5px;color:var(--text3);display:flex;align-items:center;gap:6px}
+
+  @media(max-width:1180px){ .cols{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="g-clock"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></g>
+    <g id="g-check"><path d="M4.8 12.6l4.4 4.4L19.4 6.8"/></g>
+    <g id="g-chevron"><path d="M6.5 9.5L12 15l5.5-5.5"/></g>
+    <g id="g-alert"><path d="M12 3.6L21 19.2H3z"/><path d="M12 9.5v4.2"/><circle cx="12" cy="16.9" r=".9" fill="currentColor" stroke="none"/></g>
+    <g id="g-star"><path d="M12 3.9l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.92l-5.1 2.68.98-5.68L3.75 9.9l5.7-.83z"/></g>
+    <g id="g-flag"><path d="M6 21V4.2"/><path d="M6 4.9h11.4l-2.1 3.15 2.1 3.15H6"/></g>
+    <g id="g-trophy"><path d="M7.2 4.2h9.6v3.6a4.8 4.8 0 0 1-9.6 0z"/><path d="M7.2 5.6H4.4v1.2a3.4 3.4 0 0 0 3.2 3.4"/><path d="M16.8 5.6h2.8v1.2a3.4 3.4 0 0 1-3.2 3.4"/><path d="M12 12.6v3.6"/><path d="M8.4 20.2h7.2"/><path d="M9.6 20.2l.6-4h3.6l.6 4"/></g>
+    <g id="g-award"><circle cx="12" cy="9.4" r="4.9"/><path d="M8.9 13.6L7.4 20.7l4.6-2.4 4.6 2.4-1.5-7.1"/></g>
+    <g id="g-briefcase"><rect x="3.4" y="7.3" width="17.2" height="12.2" rx="2.4"/><path d="M9 7.3V6.1a2.1 2.1 0 0 1 2.1-2.1h1.8A2.1 2.1 0 0 1 15 6.1v1.2"/><path d="M3.4 12.6h17.2"/></g>
+    <g id="g-droplet"><path d="M12 3.4c3.5 4.3 5.6 7 5.6 9.8a5.6 5.6 0 0 1-11.2 0c0-2.8 2.1-5.5 5.6-9.8z"/></g>
+    <g id="g-scissors"><circle cx="6.2" cy="6.6" r="2.3"/><circle cx="6.2" cy="17.4" r="2.3"/><path d="M8.1 8.1l11.6 9.2"/><path d="M8.1 15.9L19.7 6.7"/></g>
+    <g id="g-calendar"><rect x="3.5" y="5.2" width="17" height="15.3" rx="2.4"/><path d="M8 3.2v4"/><path d="M16 3.2v4"/><path d="M3.5 9.6h17"/></g>
+    <g id="g-book"><path d="M4 5.2c2.6-1 4.9-1 7 .3v13.9c-2.1-1.3-4.4-1.3-7-.3z"/><path d="M20 5.2c-2.6-1-4.9-1-7 .3v13.9c2.1-1.3 4.4-1.3 7-.3z"/></g>
+    <g id="g-compose"><path d="M4.6 19.4l.9-3.6L16.2 5.1a1.9 1.9 0 0 1 2.7 0l.1.1a1.9 1.9 0 0 1 0 2.7L8.2 18.5z"/><path d="M14.6 6.7l2.7 2.7"/></g>
+    <g id="g-broom"><path d="M14.2 4.2l5.6 5.6"/><path d="M12.4 6l5.6 5.6-4.3 4.3-5.6-5.6z"/><path d="M8.4 15.6L5.3 18.7"/><path d="M6.2 20.2l1.6-2.4 1.2 1.2-2.4 1.6z"/></g>
+    <g id="g-moon"><path d="M19.4 14.6A7.9 7.9 0 0 1 9.4 4.6a8.2 8.2 0 1 0 10 10z"/></g>
+    <g id="g-home"><path d="M4 10.6L12 4l8 6.6"/><path d="M6.2 9.5v9.3a1.4 1.4 0 0 0 1.4 1.4h8.8a1.4 1.4 0 0 0 1.4-1.4V9.5"/><path d="M10.2 20.2v-5.3h3.6v5.3"/></g>
+    <g id="g-users"><circle cx="9.2" cy="8.4" r="3.4"/><path d="M3.2 20.2c0-3.3 2.7-5.4 6-5.4s6 2.1 6 5.4"/><path d="M16.4 5.6a3.2 3.2 0 0 1 0 6.2"/><path d="M17.6 14.9c2.1.6 3.4 2.2 3.4 4.4"/></g>
+    <g id="g-chart"><path d="M4.2 20V4.4"/><path d="M4.2 20h15.6"/><path d="M8.4 16.4v-4.2"/><path d="M13 16.4V8.2"/><path d="M17.6 16.4v-6.6"/></g>
+    <g id="g-wallet"><path d="M20 8.6V6.8a1.9 1.9 0 0 0-1.9-1.9H5.8A1.9 1.9 0 0 0 3.9 6.8v10.4a1.9 1.9 0 0 0 1.9 1.9h12.2a1.9 1.9 0 0 0 1.9-1.9v-1.8"/><path d="M14.6 8.6h6.1a1.4 1.4 0 0 1 1.4 1.4v3.2a1.4 1.4 0 0 1-1.4 1.4h-6.1a1.4 1.4 0 0 1-1.4-1.4v-3.2a1.4 1.4 0 0 1 1.4-1.4z"/><circle cx="16.6" cy="11.2" r=".9" fill="currentColor" stroke="none"/></g>
+    <g id="g-fire"><path d="M12 3.4c.6 3 2.6 3.9 4 5.8 1.3 1.8 1.4 3.7.5 5.3"/><path d="M12 20.2c-3 0-5-1.9-5-4.4 0-2 1.2-3.2 2.5-4.4.9-.8 1.6-1.7 1.8-2.9 1 1 1.4 2.1 1.4 3.3.9-.5 1.6-1.3 1.9-2.3 1.2 1.1 2 2.6 2 4.2 0 2.7-2.1 4.5-4.6 4.5z"/></g>
+    <g id="g-tablet"><rect x="4.4" y="3.2" width="15.2" height="17.6" rx="2.2"/><path d="M10.6 17.8h2.8"/></g>
+    <g id="g-rise"><path d="M4 17.2l5.2-5 3.2 3 6.8-7"/><path d="M14.2 8.2h5v5"/></g>
+    <g id="g-fall"><path d="M4 6.8l5.2 5 3.2-3 6.8 7"/><path d="M14.2 15.8h5v-5"/></g>
+    <g id="g-plus"><path d="M12 5.4v13.2"/><path d="M5.4 12h13.2"/></g>
+    <g id="g-minus"><path d="M5.4 12h13.2"/></g>
+    <g id="g-trash"><path d="M4.8 7.2h14.4"/><path d="M9.4 7.2V5.6a1.4 1.4 0 0 1 1.4-1.4h2.4a1.4 1.4 0 0 1 1.4 1.4v1.6"/><path d="M6.6 7.2l.8 11.6a1.6 1.6 0 0 0 1.6 1.5h6a1.6 1.6 0 0 0 1.6-1.5l.8-11.6"/></g>
+    <g id="g-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2.6v2.2M12 19.2v2.2M4.3 4.3l1.6 1.6M18.1 18.1l1.6 1.6M2.6 12h2.2M19.2 12h2.2M4.3 19.7l1.6-1.6M18.1 5.9l1.6-1.6"/></g>
+    <g id="g-edit"><path d="M4.6 19.4l.9-3.6L16.2 5.1a1.9 1.9 0 0 1 2.7 0l.1.1a1.9 1.9 0 0 1 0 2.7L8.2 18.5z"/></g>
+    <g id="g-grip"><circle cx="9" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.2" fill="currentColor" stroke="none"/></g>
+  </defs>
+</svg>
+
+<div class="topbar">
+  <div class="brand">SekaiNook <span>/ 家庭页预览</span></div>
+  <div class="topnav">
+    <a href="#s1">现状诊断</a>
+    <a href="#s2">卡片顺序</a>
+    <a href="#s3">方案 B</a>
+    <a href="#s4">自定义排序</a>
+    <a href="#s5">切换动效</a>
+    <a href="#s6">待确认</a>
+  </div>
+  <div class="themes">
+    <b>主题</b>
+    <button data-th="rose" aria-pressed="true">玫瑰粉</button>
+    <button data-th="dark" aria-pressed="false">深色</button>
+    <button data-th="blue" aria-pressed="false">晴空蓝</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="kicker">Family Home · 卡片顺序 &amp; 分页切换</div>
+    <h1>家庭页：卡片该按什么顺序排，「任务区 / 待审批 / 历史记录」该怎么切</h1>
+    <p class="lead">
+      这份预览只讨论两件事 —— <b>卡片排列顺序</b>和<b>分页切换动画</b>。
+      所有动效都是按现有代码里的真实参数复刻的（时长、位移、曲线取自 <code>AppMotion</code> 与
+      <code>SlideFadeSwitcher</code>），可以直接点着看，不用凭想象。
+      任务分类与积分的 7 条规则按上次确认的推荐口径定稿，<b>本轮仍未改任何代码</b>。
+    </p>
+    <div class="vcards">
+      <div class="vcard is-warn">
+        <h4>问题 ① · 顺序</h4>
+        <p>任务区排在第四块。按 390×844 屏算，首屏可用高度只有 <b>598dp</b>，而它前面三张卡已经占满 —— <b>打开页面看不到打卡区</b>，必须先滑一段。</p>
+      </div>
+      <div class="vcard is-warn">
+        <h4>问题 ② · 重复</h4>
+        <p>「今日任务与作息」卡的两个按钮（按时完成作业 / 按时睡觉）和任务区里的是<b>同一批任务</b>。同一件事出现两次，还各占 200+ dp。</p>
+      </div>
+      <div class="vcard">
+        <h4>问题 ③ · 动效</h4>
+        <p>现在的切换是 <b>160ms / 12dp 横向淡入淡出</b>。位移只有 12dp、退场只有 90ms，实际观感接近「直接换了一屏」，没有方向感。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 01 ==================== -->
+  <div class="sec" id="s1">
+    <div class="sec-head"><span class="sec-num">01</span><h2>现状：首屏装得下什么</h2></div>
+    <p class="sec-sub">
+      屏按 <b>390×844dp</b> 算（项目其它设计稿同一基准）。顶栏胶囊让位 108dp、底栏胶囊让位 138dp，
+      所以列表可视高度 = 844 − 108 − 138 = <b>598dp</b>。下面两张图里红色虚线就是这条底线，<b>虚线以下的卡片，打开页面时一个像素都看不到</b>。
+    </p>
+
+    <div class="tblwrap" style="margin-bottom:26px">
+      <table class="tbl">
+        <thead>
+          <tr><th>卡片</th><th>孩子视角高度（估算）</th><th>家长视角高度（估算）</th><th>孩子首屏累计位置</th><th>家长首屏累计位置</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="dim">① 当前总积分</td><td class="num">≈124dp</td><td class="num">≈307dp <span class="dim" style="font-size:10.5px">（含待审批行 + 兑换区）</span></td><td class="num">0–124</td><td class="num">0–307</td></tr>
+          <tr><td class="dim">② 今日任务与作息</td><td class="num">≈226dp</td><td class="num">≈226dp</td><td class="num">140–366</td><td class="num">323–549</td></tr>
+          <tr><td class="dim">③ 近 14 天趋势</td><td class="num">≈224dp</td><td class="num">≈224dp</td><td class="num">382–606</td><td class="num">565–789</td></tr>
+          <tr class="hit"><td><b>④ 任务区 / 待审批 / 历史</b></td><td class="num">≈400dp+</td><td class="num">≈400dp+</td><td class="num" style="color:#9E2436;font-weight:700">622 起 → 看不到</td><td class="num" style="color:#9E2436;font-weight:700">805 起 → 看不到</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="gallery">
+      <div class="col-mock">
+        <div class="phone fixed" data-theme="rose">
+          <div class="slot top">顶栏 + 状态栏让位 · 108dp</div>
+          <div class="list">
+            <!-- ① 余额卡（孩子视角） -->
+            <div class="card">
+              <div class="row">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)"><use href="#g-wallet"/></svg>
+                <span class="h14">当前总积分</span>
+                <span class="spacer"></span>
+                <span class="pill ok">盈余</span>
+              </div>
+              <div style="margin-top:8px">
+                <div class="bal-num bal-pos tn">1,286</div>
+                <div class="bal-sub">可用积分</div>
+              </div>
+            </div>
+            <!-- ② 今日卡 -->
+            <div class="card" style="text-align:center">
+              <div class="row" style="justify-content:flex-start">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)"><use href="#g-clock"/></svg>
+                <span class="h16">今日任务与作息</span>
+              </div>
+              <div style="margin-top:8px">
+                <div class="clock tn">20:41</div>
+                <div class="date">10 月 25 日 周六</div>
+              </div>
+              <div style="margin-top:8px"><span class="pill ok">作息正常</span></div>
+              <div class="btnrow" style="margin-top:16px">
+                <div class="btn ok">
+                  <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#g-check"/></svg>按时完成作业
+                </div>
+                <div class="btn pri">
+                  <svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#g-moon"/></svg>按时睡觉
+                </div>
+              </div>
+              <div class="progress" style="margin-top:8px"><i style="width:50%"></i></div>
+            </div>
+            <!-- ③ 趋势卡 -->
+            <div class="card">
+              <div class="sec-hd">近 14 天积分趋势</div>
+              <div style="margin-top:12px">
+                <div class="chart">
+                  <div class="bars">
+                    <div class="bar" style="height:34%"></div><div class="bar" style="height:52%"></div>
+                    <div class="bar" style="height:28%"></div><div class="bar" style="height:66%"></div>
+                    <div class="bar" style="height:44%"></div><div class="bar" style="height:72%"></div>
+                    <div class="bar" style="height:38%"></div><div class="bar" style="height:58%"></div>
+                    <div class="bar" style="height:80%"></div><div class="bar" style="height:46%"></div>
+                    <div class="bar" style="height:62%"></div><div class="bar" style="height:36%"></div>
+                    <div class="bar" style="height:70%"></div><div class="bar" style="height:56%"></div>
+                  </div>
+                </div>
+                <div class="xaxis">
+                  <span>10/12</span><span>10/14</span><span>10/16</span><span>10/18</span>
+                  <span>10/20</span><span>10/22</span><span>10/24</span>
+                </div>
+              </div>
+            </div>
+            <!-- ④ 任务区（首屏外） -->
+            <div class="card">
+              <div class="row" style="gap:14px">
+                <div class="ring"><b>3/5</b></div>
+                <div class="headcol">
+                  <div class="t">现在能做 4 件</div>
+                  <div class="s">22:00 之后还能打卡 1 件 · 今天已完成 1 件</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="slot bot">底栏胶囊让位 · 138dp</div>
+          <div class="foldline" style="top:706px"><span>首屏可见底线（598dp）</span></div>
+        </div>
+        <p class="caption"><b>孩子视角</b>：首屏能看到余额、今日卡、趋势卡，<b>任务区整块在虚线以下</b>。想打卡得先滑一屏。</p>
+      </div>
+
+      <div class="col-mock">
+        <div class="phone fixed" data-theme="rose">
+          <div class="slot top">顶栏 + 状态栏让位 · 108dp</div>
+          <div class="list">
+            <div class="card">
+              <div class="row">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)"><use href="#g-wallet"/></svg>
+                <span class="h14">当前总积分</span>
+                <span class="spacer"></span>
+                <span class="pill ok">盈余</span>
+              </div>
+              <div style="margin-top:8px">
+                <div class="bal-num bal-pos tn">1,286</div>
+                <div class="bal-sub">可用积分</div>
+              </div>
+              <div class="pending" style="margin-top:8px">
+                <svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#g-flag"/></svg>
+                待审批 3 项
+              </div>
+              <div class="divider"></div>
+              <div class="xs12">积分兑换现金 · 100 积分 = 10 元</div>
+              <div class="inp" style="margin-top:8px">想兑换多少积分（最多 1286）</div>
+              <div class="btn dis" style="margin-top:8px;height:40px">兑换 0 元现金</div>
+            </div>
+            <div class="card" style="text-align:center">
+              <div class="row" style="justify-content:flex-start">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)"><use href="#g-clock"/></svg>
+                <span class="h16">今日任务与作息</span>
+              </div>
+              <div style="margin-top:8px">
+                <div class="clock tn">20:41</div>
+                <div class="date">10 月 25 日 周六</div>
+              </div>
+              <div style="margin-top:8px"><span class="pill ok">作息正常</span></div>
+              <div class="btnrow" style="margin-top:16px">
+                <div class="btn ok"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#g-check"/></svg>按时完成作业</div>
+                <div class="btn pri"><svg class="ic18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#g-moon"/></svg>按时睡觉</div>
+              </div>
+              <div class="progress" style="margin-top:8px"><i style="width:50%"></i></div>
+            </div>
+            <div class="card">
+              <div class="sec-hd">近 14 天积分趋势</div>
+              <div style="margin-top:12px">
+                <div class="chart">
+                  <div class="bars">
+                    <div class="bar" style="height:34%"></div><div class="bar" style="height:52%"></div>
+                    <div class="bar" style="height:28%"></div><div class="bar" style="height:66%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="slot bot">底栏胶囊让位 · 138dp</div>
+          <div class="foldline" style="top:706px"><span>首屏可见底线（598dp）</span></div>
+        </div>
+        <p class="caption"><b>家长视角</b>：余额卡因为多了「待审批」和「兑换现金」两块，一屏只装到趋势卡顶部 —— 任务区在 <b>805dp</b> 开外，得滑两下。</p>
+      </div>
+    </div>
+
+    <div class="note-card warn">
+      <b>这就是「卡片排列顺序问题」的硬证据。</b>
+      四块卡的顺序写死在 <code>family_dashboard_page.dart:688-694</code>（<code>EnterBox(index: 0..3)</code>），
+      积分卡永远第一、任务区永远最后。而任务区恰好是每天打开这个页面<b>唯一必做的事</b>。
+    </div>
+  </div>
+
+  <!-- ==================== 02 ==================== -->
+  <div class="sec" id="s2">
+    <div class="sec-head"><span class="sec-num">02</span><h2>三种排法，同一屏高下谁先露出来</h2></div>
+    <p class="sec-sub">
+      下面四张竖条图只画<b>首屏那 598dp</b>（按 0.512 等比缩成 306px 高），色块高度 = 那张卡的真实占比，
+      红虚线 = 首屏底线。线下已经看不到的部分用底部灰条挡住，并注明还差多少。
+      <b>虚线以上的色块，就是打开页面立刻能看到的东西。</b>
+    </p>
+
+    <div class="omaps">
+      <!-- 现状 -->
+      <div class="omap-col">
+        <div class="omap">
+          <div class="omap-tag">现状</div>
+          <div class="body">
+            <div class="ob bal" style="height:63px">① 总积分<span class="sub">124dp</span></div>
+            <div class="ob today" style="height:116px">② 今日任务与作息<span class="sub">226dp</span></div>
+            <div class="ob trend" style="height:115px">③ 近 14 天趋势<span class="sub">224dp · 底部被切 8dp</span></div>
+            <div class="ob tasks" style="height:279px">④ 任务区<span class="sub">546dp</span></div>
+          </div>
+          <div class="cut"></div>
+          <div class="beyond">↓ 线下：④ 任务区 546dp</div>
+        </div>
+        <h4>现状 · 任务区垫底</h4>
+        <p>首屏只有 <b>3 张卡</b>，任务区从 622 起 —— <b>一个像素都看不到</b>。孩子要打卡、家长要看待审批，打开页面第一件事就是往下滑。</p>
+      </div>
+
+      <!-- A -->
+      <div class="omap-col">
+        <div class="omap">
+          <div class="omap-tag" style="color:#22703F;border-color:#CBE8D6;background:#E9F6EE">A · 只换序</div>
+          <div class="body">
+            <div class="ob bal" style="height:63px">① 总积分<span class="sub">124dp</span></div>
+            <div class="ob tasks" style="height:279px">② 任务区<span class="sub">546dp · 尾部被切 88dp</span></div>
+            <div class="ob today" style="height:116px">③ 今日任务与作息<span class="sub">226dp</span></div>
+            <div class="ob trend" style="height:115px">④ 近 14 天趋势<span class="sub">224dp</span></div>
+          </div>
+          <div class="cut"></div>
+          <div class="beyond">↓ 线下：任务区尾部 + 今日卡</div>
+        </div>
+        <h4>A · 只把任务区提上来</h4>
+        <p>改动最小：只动那 4 行 <code>EnterBox</code> 的顺序。首屏 = 余额 + <b>任务区的 458/546</b>（必须任务全在，本周任务跑到一半）。</p>
+      </div>
+
+      <!-- B -->
+      <div class="omap-col">
+        <div class="omap">
+          <div class="omap-tag" style="color:#8A5464;border-color:#EBD3DA;background:#F7E9ED">B · 推荐</div>
+          <div class="body">
+            <div class="ob strip" style="height:37px">① 状态条（积分 + 进度）<span class="sub">72dp</span></div>
+            <div class="ob tasks" style="height:279px">② 任务区<span class="sub">546dp · 尾部被切 ~50dp</span></div>
+            <div class="ob trend" style="height:13px">③ 趋势折叠<span class="sub">25dp</span></div>
+            <div class="ob today" style="height:116px">④ 今日作息<span class="sub">已并入状态条</span></div>
+          </div>
+          <div class="cut"></div>
+          <div class="beyond">↓ 线下：趋势折叠行 + 今日已完成</div>
+        </div>
+        <h4>B · 合并头部 + 换序</h4>
+        <p>把「积分 + 今日进度 + 作息」并成一条 <b>72dp 状态条</b>，删掉重复的两个按钮。首屏 = 状态条 + <b>任务区的 ~495/546</b>，<b>剪指甲行刚好被切一半</b>。</p>
+      </div>
+
+      <!-- C -->
+      <div class="omap-col">
+        <div class="omap">
+          <div class="omap-tag" style="color:#2A5B8C;border-color:#CFE0F0;background:#EAF2FA">C · 可拖</div>
+          <div class="body">
+            <div class="ob strip" style="height:37px">① 状态条 ⋮⋮<span class="sub">默认第 1</span></div>
+            <div class="ob tasks" style="height:279px">② 任务区 ⋮⋮<span class="sub">默认第 2</span></div>
+            <div class="ob trend" style="height:13px">③ 趋势折叠 ⋮⋮<span class="sub">25dp</span></div>
+            <div class="ob today" style="height:116px">④ 今日作息 ⋮⋮<span class="sub">可拖到最前</span></div>
+          </div>
+          <div class="cut"></div>
+          <div class="beyond">↓ 线下：趋势折叠行 + 今日已完成</div>
+        </div>
+        <h4>C · B + 自定义顺序</h4>
+        <p>默认就是 B 的顺序。另外允许每台手机自己拖：孩子把任务区放最前、家长把待审批放最前。见下一节。</p>
+      </div>
+    </div>
+
+    <div class="note-card ok">
+      <b>我推荐 B。</b>它顺手解决两件事：任务区进首屏，以及「今日任务与作息」卡和任务区<b>重复</b>的问题
+      —— 那张卡的两个按钮本来就是任务区里的「按时完成作业」「按时睡觉」，却独立占 226dp 再出现一次。
+      A 是零风险备选：只改 4 行顺序，其它一行不动。
+    </div>
+  </div>
+
+  <!-- ==================== 03 ==================== -->
+  <div class="sec" id="s3">
+    <div class="sec-head"><span class="sec-num">03</span><h2>方案 B 长什么样（完整首屏）</h2></div>
+    <p class="sec-sub">
+      头部压成一条状态条：左边积分、右边今日进度环，「今天必须完成 2 件」直接写在状态条里。
+      下面是任务区（规则按上次确认的样子），最下面是折叠的趋势行（点开原地展开，不跳页）。
+    </p>
+
+    <div class="cols">
+      <div class="col-mock">
+        <div class="phone fixed" data-theme="rose">
+          <div class="slot top">顶栏 + 状态栏让位 · 108dp</div>
+          <div class="list">
+            <!-- 状态条 -->
+            <div class="strip">
+              <div class="meta">
+                <div class="big bal-pos tn">1,286</div>
+                <div class="xs11">当前总积分 · 今日 <span style="color:var(--success-ink);font-weight:700">+50</span></div>
+              </div>
+              <div class="spacer"></div>
+              <div class="meta" style="align-items:flex-end;gap:2px">
+                <div class="xs11" style="font-weight:700;color:var(--danger-ink)">必须完成 1/3</div>
+                <div class="xs11">22:00 结算</div>
+              </div>
+              <div class="mini-ring"><b>2/5</b></div>
+            </div>
+
+            <!-- 任务区卡片 -->
+            <div class="card">
+              <div class="row" style="gap:14px">
+                <div class="ring"><b>2/5</b></div>
+                <div class="headcol">
+                  <div class="t">现在能做 4 件</div>
+                  <div class="s">22:00 之后还能打卡 1 件 · 今天已完成 2 件</div>
+                </div>
+              </div>
+              <div class="tseg" style="margin:16px 0 4px">
+                <div class="it on"><svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#g-rise"/></svg>赚钱任务</div>
+                <div class="it"><svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#g-fall"/></svg>消费 / 罚款</div>
+              </div>
+
+              <div style="margin-top:16px">
+                <div class="grp-hd">
+                  <svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="color:var(--danger-ink)"><use href="#g-alert"/></svg>
+                  今天必须完成 <span class="c">1/3</span>
+                  <span class="spacer"></span>
+                  <span class="badge-must">漏一件 −10</span>
+                </div>
+                <div class="row-task ready">
+                  <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-moon"/></svg></div>
+                  <div style="flex:1;min-width:0">
+                    <div class="ttl">按时睡觉</div>
+                    <div class="meta">19:00–22:00 可打卡 · 已完成</div>
+                  </div>
+                  <div class="val">+10</div>
+                  <div class="chk done"><svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><use href="#g-check"/></svg></div>
+                </div>
+                <div class="row-task ready warnr">
+                  <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-compose"/></svg></div>
+                  <div style="flex:1;min-width:0">
+                    <div class="ttl">按时完成作业</div>
+                    <div class="meta red">21:00 前没打卡 · −10</div>
+                  </div>
+                  <div class="val">+20</div>
+                  <div class="chk"></div>
+                </div>
+                <div class="row-task ready">
+                  <div class="ibox warn"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-sun"/></svg></div>
+                  <div style="flex:1;min-width:0">
+                    <div class="ttl">洗脸刷牙</div>
+                    <div class="meta">每天一次 · 未打卡 −10</div>
+                  </div>
+                  <div class="val">+5</div>
+                  <div class="chk"></div>
+                </div>
+              </div>
+
+              <div style="margin-top:16px">
+                <div class="grp-hd">
+                  <svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)"><use href="#g-calendar"/></svg>
+                  本周任务
+                  <span class="spacer"></span>
+                  <span class="xs11">周一 起算</span>
+                </div>
+                <div class="row-task">
+                  <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-droplet"/></svg></div>
+                  <div style="flex:1;min-width:0">
+                    <div class="ttl">洗头 <span class="badge-must">必须</span></div>
+                    <div class="meta">本周 1/3 次 <span class="wdots" style="vertical-align:middle;margin-left:4px"><i class="on"></i><i></i><i></i></span></div>
+                  </div>
+                  <div class="val">+5</div>
+                  <div class="chk"></div>
+                </div>
+                <div class="row-task">
+                  <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-scissors"/></svg></div>
+                  <div style="flex:1;min-width:0">
+                    <div class="ttl">剪指甲（手指甲 / 脚指甲）<span class="badge-must">必须</span></div>
+                    <div class="meta">每周一次 · 未做 −10</div>
+                  </div>
+                  <div class="val">+10</div>
+                  <div class="chk"></div>
+                </div>
+              </div>
+
+              <div class="foldrow">
+                <svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success)"><use href="#g-check"/></svg>
+                今日已完成 2 项
+                <span class="spacer"></span>
+                <svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text3)"><use href="#g-chevron"/></svg>
+              </div>
+            </div>
+
+            <!-- 趋势折叠行 -->
+            <div class="card" style="padding:14px 16px">
+              <div class="row">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)"><use href="#g-chart"/></svg>
+                <span class="h14" style="color:var(--text);font-weight:600">近 14 天趋势</span>
+                <span class="spacer"></span>
+                <span class="h14 tn" style="color:var(--success-ink);font-weight:700">+320</span>
+                <svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text3)"><use href="#g-chevron"/></svg>
+              </div>
+            </div>
+          </div>
+          <div class="slot bot">底栏胶囊让位 · 138dp</div>
+          <div class="foldline" style="top:706px"><span>首屏可见底线（598dp）</span></div>
+        </div>
+        <p class="caption">红线以上是：<b>状态条 + 3 件必须任务 + 本周任务前两行</b>（剪指甲行被切一半，「今日已完成」和趋势折叠行还在线下一点）。<b>打开页面就能打卡</b>，这是方案 A/B 共同拿到的东西。</p>
+      </div>
+
+      <div class="col-info">
+        <div class="note-card ok" style="margin-bottom:12px">
+          <b>状态条（新）· 72dp</b><br>
+          左：积分大数字 + 今日净增减。右：「必须完成 x/3 · 22:00 结算」+ 今日进度环。
+          原来余额卡里的「待审批 3 项」在家长视角时挪到状态条第二行，仍是可点入口。
+        </div>
+        <div class="note-card">
+          <b>兑换现金区去哪了</b><br>
+          从余额卡里搬走。它一个月才用一次，却让家长首屏多占 180dp。建议挪到「积分」页，或家长视角下折叠成状态条右侧一个小按钮。
+        </div>
+        <div class="note-card">
+          <b>「今日任务与作息」卡 · 删掉</b><br>
+          时钟、日期、作息状态并进状态条（时间本来就该在顶栏一侧显示)；两个按钮本来就在任务区里，不再重复。
+        </div>
+        <div class="note-card">
+          <b>趋势卡 · 折叠成一行</b><br>
+          一行「近 14 天趋势 +320 ›」，点开原地展开成 160dp 柱状图。趋势不是每天要看的东西，不该占首屏 224dp。
+        </div>
+        <div class="note-card warn">
+          <b>代价说清楚</b><br>
+          首屏少了柱状图的爽感，家长少了一个「一眼看到兑换入口」的位置。
+          换来的是<b>打开就能打卡</b>、孩子不用先滑一屏 —— 按每天打开 3 次算，这笔账划算。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 04 ==================== -->
+  <div class="sec" id="s4">
+    <div class="sec-head"><span class="sec-num">04</span><h2>自定义排序：所有卡片都能拖</h2></div>
+    <p class="sec-sub">
+      点右上角「编辑」进入排序态：卡片变虚线框、左边出现手柄，可以<b>直接拖动</b>（桌面上按住卡片拖），
+      也可以用右侧 ↑ ↓ 微调（手机上更稳）。松手即生效，顺序存本地。
+    </p>
+
+    <div class="cols">
+      <div class="col-mock">
+        <div class="phone auto" data-theme="rose">
+          <div class="sortbar">
+            <span class="t">家庭</span>
+            <span class="editbtn" id="editBtn" data-on="0">编辑</span>
+          </div>
+          <div class="sortlist" id="sortList">
+            <div class="sort-item" draggable="false">
+              <span class="grip"><i></i><i></i><i></i></span>
+              <span class="no">1</span>
+              <div class="tx"><b>状态条 · 积分 + 今日进度</b><span>1,286 分 · 今日 +50 · 必须 1/3</span></div>
+              <span class="mv"><button data-mv="-1">↑</button><button data-mv="1">↓</button></span>
+            </div>
+            <div class="sort-item" draggable="false">
+              <span class="grip"><i></i><i></i><i></i></span>
+              <span class="no">2</span>
+              <div class="tx"><b>任务区 / 待审批 / 历史记录</b><span>现在能做 4 件 · 今日已完成 2 项</span></div>
+              <span class="mv"><button data-mv="-1">↑</button><button data-mv="1">↓</button></span>
+            </div>
+            <div class="sort-item" draggable="false">
+              <span class="grip"><i></i><i></i><i></i></span>
+              <span class="no">3</span>
+              <div class="tx"><b>近 14 天趋势</b><span>折叠一行 · 点开原地展开</span></div>
+              <span class="mv"><button data-mv="-1">↑</button><button data-mv="1">↓</button></span>
+            </div>
+            <div class="sort-item" draggable="false">
+              <span class="grip"><i></i><i></i><i></i></span>
+              <span class="no">4</span>
+              <div class="tx"><b>今日作息</b><span>时钟 / 日期 / 作息状态</span></div>
+              <span class="mv"><button data-mv="-1">↑</button><button data-mv="1">↓</button></span>
+            </div>
+            <div class="sort-item" draggable="false">
+              <span class="grip"><i></i><i></i><i></i></span>
+              <span class="no">5</span>
+              <div class="tx"><b>积分兑换现金</b><span>仅家长 · 100 积分 = 10 元</span></div>
+              <span class="mv"><button data-mv="-1">↑</button><button data-mv="1">↓</button></span>
+            </div>
+          </div>
+          <div class="savetip">
+            <svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#g-flag"/></svg>
+            顺序会记住，下次打开还是这个排法
+          </div>
+        </div>
+        <p class="caption">上面是可交互的：点「编辑」后<b>按住卡片上下拖</b>，或点 ↑ ↓。序号会自动重排。</p>
+      </div>
+
+      <div class="col-info">
+        <div class="note-card">
+          <b>为什么要自定义</b><br>
+          孩子和家长要的东西不一样：孩子要任务区在最上；家长要「待审批」在最上。
+          一条固定顺序照顾不了两种人 —— 而现在这个页面对两边是<b>同一套顺序</b>。
+        </div>
+        <div class="note-card">
+          <b>默认值就是方案 B</b><br>
+          没动过的人看到的就是 B 的顺序。自定义是「高级选项」，藏在编辑态里，不打扰默认体验。
+        </div>
+        <div class="note-card warn">
+          <b>待确认</b><br>
+          顺序存哪？我倾向存<b>本地</b>（SharedPreferences，跟主题同一个地方）：
+          两台手机各用各的，不需要后端字段，也不会因为一方改了影响另一方。
+          缺点是换手机要重排 —— 如果要跟账号走，得加一张用户偏好表。
+        </div>
+        <div class="note-card">
+          <b>实现成本</b><br>
+          卡片列表从 4 个写死的 <code>EnterBox</code> 改成 <code>for (final key in order)</code> 循环，
+          加一个 <code>FamilyCardOrder</code> 的本地存储。排序交互用 <code>ReorderableListView</code> 就能做，
+          不用手写拖拽。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 05 ==================== -->
+  <div class="sec" id="s5">
+    <div class="sec-head"><span class="sec-num">05</span><h2>「任务区 / 待审批 / 历史记录」切换动效</h2></div>
+    <p class="sec-sub">
+      三个都是真实可点的手机壳，参数照代码复刻。<b>先点一遍现状，再点两个候选</b> —— 差别在位移距离和方向感。
+      胶囊滑块三种都一样（250ms easeOutCubic，与现有 <code>SegmentedControl</code> 一致）。
+    </p>
+
+    <div class="gallery">
+      <!-- V1 现状 -->
+      <div class="col-mock" data-tabs>
+        <div class="phone auto" data-theme="rose" style="width:390px">
+          <div style="padding:18px 16px 16px">
+            <div class="row" style="margin-bottom:14px">
+              <span class="h16">家庭</span>
+              <span class="spacer"></span>
+              <span class="pill" style="background:var(--soft);color:var(--text2)">V1 · 现状</span>
+            </div>
+            <div class="seg"><div class="seg-pill"></div>
+              <button class="seg-btn on">任务区</button>
+              <button class="seg-btn">待审批 <span class="cnt">3</span></button>
+              <button class="seg-btn">历史记录</button>
+            </div>
+            <div class="pg" data-mode="v1">
+              <div class="pg-layer on">
+                <div class="card">
+                  <div class="row" style="gap:14px">
+                    <div class="ring"><b>2/5</b></div>
+                    <div class="headcol"><div class="t">现在能做 4 件</div><div class="s">今天已完成 2 件</div></div>
+                  </div>
+                  <div class="tseg" style="margin:14px 0 4px">
+                    <div class="it on">赚钱任务</div><div class="it">消费 / 罚款</div>
+                  </div>
+                  <div class="row-task ready" style="margin-top:12px">
+                    <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-compose"/></svg></div>
+                    <div style="flex:1"><div class="ttl">按时完成作业</div><div class="meta red">21:00 前没打卡 · −10</div></div>
+                    <div class="val">+20</div><div class="chk"></div>
+                  </div>
+                  <div class="row-task ready">
+                    <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-broom"/></svg></div>
+                    <div style="flex:1"><div class="ttl">整理房间</div><div class="meta">今天还能做 2 次</div></div>
+                    <div class="val">+10</div><div class="chk"></div>
+                  </div>
+                  <div class="row-task">
+                    <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-moon"/></svg></div>
+                    <div style="flex:1"><div class="ttl">按时睡觉</div><div class="meta">19:00 之后可打卡</div></div>
+                    <div class="val">+10</div><div class="chk lock"><svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#g-clock"/></svg></div>
+                  </div>
+                </div>
+              </div>
+              <div class="pg-layer">
+                <div class="card">
+                  <div class="grp-hd">等待家长确认 <span class="c">3</span></div>
+                  <div class="appr">
+                    <div class="row"><span class="who">小樱</span><span class="spacer"></span><span class="pill warnp">待确认</span></div>
+                    <div class="what">整理房间 <span style="color:var(--success-ink);font-weight:700">+10</span></div>
+                    <div class="btnrow"><div class="btn ghost" style="height:36px;font-size:13px">驳回</div><div class="btn ok" style="height:36px;font-size:13px">通过</div></div>
+                  </div>
+                  <div class="appr" style="margin-top:8px">
+                    <div class="row"><span class="who">小樱</span><span class="spacer"></span><span class="pill warnp">待确认</span></div>
+                    <div class="what">洗头（本周第 2 次）<span style="color:var(--success-ink);font-weight:700">+5</span></div>
+                  </div>
+                  <div class="appr" style="margin-top:8px">
+                    <div class="row"><span class="who">小樱</span><span class="spacer"></span><span class="pill warnp">待确认</span></div>
+                    <div class="what">上班一天 <span style="color:var(--success-ink);font-weight:700">+500</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="pg-layer">
+                <div class="card">
+                  <div class="sec-hd">今天</div>
+                  <div class="rec"><span class="t">20:31</span><span class="n">按时完成作业</span><span class="v" style="color:var(--success-ink)">+20</span></div>
+                  <div class="rec"><span class="t">19:10</span><span class="n">整理房间</span><span class="v" style="color:var(--success-ink)">+10</span></div>
+                  <div class="rec"><span class="t">18:02</span><span class="n">看 iPad 30 分钟</span><span class="v" style="color:var(--danger-ink)">−10</span></div>
+                  <div class="rec"><span class="t">12:20</span><span class="n">洗碗</span><span class="v" style="color:var(--success-ink)">+5</span></div>
+                  <div class="rec"><span class="t">08:15</span><span class="n">洗头（本周第 2 次）</span><span class="v" style="color:var(--success-ink)">+5</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="caption">
+          <b>V1 现状</b> · <code>SlideFadeSwitcher</code>：进 160ms、退 90ms、±12dp，
+          曲线 <code>decelerate</code> / <code>standard</code>。<br>
+          观感：几乎只是「换了一屏」，12dp 位移在 390 宽上只有 3%，方向感很弱。
+        </p>
+      </div>
+
+      <!-- V2 方向感 -->
+      <div class="col-mock" data-tabs>
+        <div class="phone auto" data-theme="rose">
+          <div style="padding:18px 16px 16px">
+            <div class="row" style="margin-bottom:14px">
+              <span class="h16">家庭</span>
+              <span class="spacer"></span>
+              <span class="pill" style="background:#E9F6EE;color:#22703F">V2 · 方向感</span>
+            </div>
+            <div class="seg"><div class="seg-pill"></div>
+              <button class="seg-btn on">任务区</button>
+              <button class="seg-btn">待审批 <span class="cnt">3</span></button>
+              <button class="seg-btn">历史记录</button>
+            </div>
+            <div class="pg" data-mode="v2">
+              <div class="pg-layer on">
+                <div class="card">
+                  <div class="row" style="gap:14px">
+                    <div class="ring"><b>2/5</b></div>
+                    <div class="headcol"><div class="t">现在能做 4 件</div><div class="s">今天已完成 2 件</div></div>
+                  </div>
+                  <div class="tseg" style="margin:14px 0 4px">
+                    <div class="it on">赚钱任务</div><div class="it">消费 / 罚款</div>
+                  </div>
+                  <div class="row-task ready" style="margin-top:12px">
+                    <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-compose"/></svg></div>
+                    <div style="flex:1"><div class="ttl">按时完成作业</div><div class="meta red">21:00 前没打卡 · −10</div></div>
+                    <div class="val">+20</div><div class="chk"></div>
+                  </div>
+                  <div class="row-task ready">
+                    <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-broom"/></svg></div>
+                    <div style="flex:1"><div class="ttl">整理房间</div><div class="meta">今天还能做 2 次</div></div>
+                    <div class="val">+10</div><div class="chk"></div>
+                  </div>
+                  <div class="row-task">
+                    <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-moon"/></svg></div>
+                    <div style="flex:1"><div class="ttl">按时睡觉</div><div class="meta">19:00 之后可打卡</div></div>
+                    <div class="val">+10</div><div class="chk lock"><svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#g-clock"/></svg></div>
+                  </div>
+                </div>
+              </div>
+              <div class="pg-layer">
+                <div class="card">
+                  <div class="grp-hd">等待家长确认 <span class="c">3</span></div>
+                  <div class="appr">
+                    <div class="row"><span class="who">小樱</span><span class="spacer"></span><span class="pill warnp">待确认</span></div>
+                    <div class="what">整理房间 <span style="color:var(--success-ink);font-weight:700">+10</span></div>
+                    <div class="btnrow"><div class="btn ghost" style="height:36px;font-size:13px">驳回</div><div class="btn ok" style="height:36px;font-size:13px">通过</div></div>
+                  </div>
+                  <div class="appr" style="margin-top:8px">
+                    <div class="row"><span class="who">小樱</span><span class="spacer"></span><span class="pill warnp">待确认</span></div>
+                    <div class="what">洗头（本周第 2 次）<span style="color:var(--success-ink);font-weight:700">+5</span></div>
+                  </div>
+                  <div class="appr" style="margin-top:8px">
+                    <div class="row"><span class="who">小樱</span><span class="spacer"></span><span class="pill warnp">待确认</span></div>
+                    <div class="what">上班一天 <span style="color:var(--success-ink);font-weight:700">+500</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="pg-layer">
+                <div class="card">
+                  <div class="sec-hd">今天</div>
+                  <div class="rec"><span class="t">20:31</span><span class="n">按时完成作业</span><span class="v" style="color:var(--success-ink)">+20</span></div>
+                  <div class="rec"><span class="t">19:10</span><span class="n">整理房间</span><span class="v" style="color:var(--success-ink)">+10</span></div>
+                  <div class="rec"><span class="t">18:02</span><span class="n">看 iPad 30 分钟</span><span class="v" style="color:var(--danger-ink)">−10</span></div>
+                  <div class="rec"><span class="t">12:20</span><span class="n">洗碗</span><span class="v" style="color:var(--success-ink)">+5</span></div>
+                  <div class="rec"><span class="t">08:15</span><span class="n">洗头（本周第 2 次）</span><span class="v" style="color:var(--success-ink)">+5</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="caption">
+          <b>V2 方向感（推荐）</b> · 240ms、±32dp，按 tab 顺序决定方向：往右切内容从右进、往左切从左进。<br>
+          观感：三段是并列的「页面」，滑动方向跟手指点选的位置一致，来回切两次就建立空间感。
+        </p>
+      </div>
+
+      <!-- V3 fade-through -->
+      <div class="col-mock" data-tabs>
+        <div class="phone auto" data-theme="rose">
+          <div style="padding:18px 16px 16px">
+            <div class="row" style="margin-bottom:14px">
+              <span class="h16">家庭</span>
+              <span class="spacer"></span>
+              <span class="pill" style="background:#EAF2FA;color:#2A5B8C">V3 · fade-through</span>
+            </div>
+            <div class="seg"><div class="seg-pill"></div>
+              <button class="seg-btn on">任务区</button>
+              <button class="seg-btn">待审批 <span class="cnt">3</span></button>
+              <button class="seg-btn">历史记录</button>
+            </div>
+            <div class="pg" data-mode="v3">
+              <div class="pg-layer on">
+                <div class="card">
+                  <div class="row" style="gap:14px">
+                    <div class="ring"><b>2/5</b></div>
+                    <div class="headcol"><div class="t">现在能做 4 件</div><div class="s">今天已完成 2 件</div></div>
+                  </div>
+                  <div class="tseg" style="margin:14px 0 4px">
+                    <div class="it on">赚钱任务</div><div class="it">消费 / 罚款</div>
+                  </div>
+                  <div class="row-task ready" style="margin-top:12px">
+                    <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-compose"/></svg></div>
+                    <div style="flex:1"><div class="ttl">按时完成作业</div><div class="meta red">21:00 前没打卡 · −10</div></div>
+                    <div class="val">+20</div><div class="chk"></div>
+                  </div>
+                  <div class="row-task ready">
+                    <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-broom"/></svg></div>
+                    <div style="flex:1"><div class="ttl">整理房间</div><div class="meta">今天还能做 2 次</div></div>
+                    <div class="val">+10</div><div class="chk"></div>
+                  </div>
+                  <div class="row-task">
+                    <div class="ibox"><svg class="ic20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-moon"/></svg></div>
+                    <div style="flex:1"><div class="ttl">按时睡觉</div><div class="meta">19:00 之后可打卡</div></div>
+                    <div class="val">+10</div><div class="chk lock"><svg class="ic14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#g-clock"/></svg></div>
+                  </div>
+                </div>
+              </div>
+              <div class="pg-layer">
+                <div class="card">
+                  <div class="grp-hd">等待家长确认 <span class="c">3</span></div>
+                  <div class="appr">
+                    <div class="row"><span class="who">小樱</span><span class="spacer"></span><span class="pill warnp">待确认</span></div>
+                    <div class="what">整理房间 <span style="color:var(--success-ink);font-weight:700">+10</span></div>
+                    <div class="btnrow"><div class="btn ghost" style="height:36px;font-size:13px">驳回</div><div class="btn ok" style="height:36px;font-size:13px">通过</div></div>
+                  </div>
+                  <div class="appr" style="margin-top:8px">
+                    <div class="row"><span class="who">小樱</span><span class="spacer"></span><span class="pill warnp">待确认</span></div>
+                    <div class="what">洗头（本周第 2 次）<span style="color:var(--success-ink);font-weight:700">+5</span></div>
+                  </div>
+                  <div class="appr" style="margin-top:8px">
+                    <div class="row"><span class="who">小樱</span><span class="spacer"></span><span class="pill warnp">待确认</span></div>
+                    <div class="what">上班一天 <span style="color:var(--success-ink);font-weight:700">+500</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="pg-layer">
+                <div class="card">
+                  <div class="sec-hd">今天</div>
+                  <div class="rec"><span class="t">20:31</span><span class="n">按时完成作业</span><span class="v" style="color:var(--success-ink)">+20</span></div>
+                  <div class="rec"><span class="t">19:10</span><span class="n">整理房间</span><span class="v" style="color:var(--success-ink)">+10</span></div>
+                  <div class="rec"><span class="t">18:02</span><span class="n">看 iPad 30 分钟</span><span class="v" style="color:var(--danger-ink)">−10</span></div>
+                  <div class="rec"><span class="t">12:20</span><span class="n">洗碗</span><span class="v" style="color:var(--success-ink)">+5</span></div>
+                  <div class="rec"><span class="t">08:15</span><span class="n">洗头（本周第 2 次）</span><span class="v" style="color:var(--success-ink)">+5</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="caption">
+          <b>V3 fade-through</b> · 旧内容放大到 1.03 淡出、新内容从 0.965 放大淡入，240ms，无横向位移。<br>
+          观感：最安静，适合「三块内容形态差别大」的场合；但三个 tab 是平级的，没有方向提示会稍弱一点。
+        </p>
+      </div>
+    </div>
+
+    <div class="note-card ok">
+      <b>我推荐 V2。</b>三个 tab 是<b>并列的三页</b>（任务 / 待审批 / 历史），横向滑动自带「第几页」的空间信息，
+      而且从「任务区」点到「历史记录」时方向一致 —— 用户的点击位置本身就是从左往右的。
+      V1 的问题不是丑，是<b>太短太近</b>：160ms + 12dp，观感等于瞬切。V3 更保险但太平。
+    </div>
+  </div>
+
+  <!-- ==================== 06 ==================== -->
+  <div class="sec" id="s6">
+    <div class="sec-head"><span class="sec-num">06</span><h2>需要你拍板的 5 件事</h2></div>
+    <p class="sec-sub">下面每条我都给了默认建议。<b>回「按默认」我就照绿色那行做</b>；不对的直接说，我改。</p>
+
+    <div class="qa">
+      <b>① 卡片顺序选哪个方案？</b>
+      <p>A 只换序 / B 合并头部 + 换序 / C 在 B 之上再加自定义排序。</p>
+      <div class="default">建议：<b>C</b>。默认用 B 的顺序（大多数人不改），同时把排序做成编辑态的隐藏能力。</div>
+    </div>
+    <div class="qa">
+      <b>② 「今日任务与作息」卡删掉可以吗？</b>
+      <p>它的两个按钮（作业 / 睡觉）和任务区完全重复。时钟、日期、作息状态并进状态条后，这张卡就没内容了。</p>
+      <div class="default">建议：<b>删</b>。时钟保留在状态条左侧小字，作息罚分提示（已过 22:00）并进状态条。</div>
+    </div>
+    <div class="qa">
+      <b>③ 趋势卡留在家庭页吗？</b>
+      <p>现状占 224dp 排第三，但一周看一次就够。可以：折叠成一行 / 移进「统计」页 / 保持原样。</p>
+      <div class="default">建议：<b>折叠成一行</b>（+320 › 点开原地展开）。既不丢，也不占首屏。</div>
+    </div>
+    <div class="qa">
+      <b>④ 自定义顺序存本地还是跟账号走？</b>
+      <p>本地 = 零后端改动、各用各的；跟账号 = 换手机能继承，但要加偏好表。</p>
+      <div class="default">建议：<b>先存本地</b>（SharedPreferences，和主题放一起）。真有人抱怨换机丢顺序再加云端。</div>
+    </div>
+    <div class="qa">
+      <b>⑤ 切换动效用哪版？</b>
+      <p>V1 现状（160ms/12dp）/ V2 方向感（240ms/32dp）/ V3 fade-through（缩放）。</p>
+      <div class="default">建议：<b>V2</b>。动效令牌走 <code>AppMotion.normal</code>（240ms）+ <code>decelerate</code>，不新增常量。</div>
+    </div>
+
+    <div class="note-card">
+      <b>确认后我会改这些地方（现在一行都没动）</b><br>
+      ① <code>app/lib/config/family_rules.dart</code>：必须任务 + 周任务 + 特殊加分（上次确认的 7 条）<br>
+      ② <code>app/lib/ui/pages/family/family_dashboard_page.dart:688-694</code>：卡片顺序改成按配置循环<br>
+      ③ 同文件 <code>_buildTabs</code> 里的 <code>SlideFadeSwitcher</code>：换成本次的动效参数<br>
+      ④ <code>app/lib/ui/widgets/motion/switcher.dart</code>：若要改默认转场，在这里加一个变体而不是改全局<br>
+      ⑤ 新增本地存储 <code>FamilyCardOrder</code>（若选 C）<br>
+      改完 <code>flutter analyze --no-pub</code> + <code>flutter test --no-pub</code>，然后按发版流程走网页版 + APK 两端。
+    </div>
+  </div>
+
+  <div class="footer">
+    SekaiNook · 家庭页预览稿（2026-10-25）· 交互与动效真实可点，页面尺寸 1px = 1dp。
+    任务分类规则按上次确认的 7 条推荐口径记录，本轮未修改仓库内任何代码。
+  </div>
+</div>
+
+<script>
+  /* ---------- 主题切换 ---------- */
+  function applyTheme(th) {
+    document.querySelectorAll('.phone').forEach(function (p) { p.dataset.theme = th; });
+    document.querySelectorAll('.themes button').forEach(function (b) {
+      b.setAttribute('aria-pressed', b.dataset.th === th ? 'true' : 'false');
+    });
+  }
+  document.querySelectorAll('.themes button').forEach(function (btn) {
+    btn.addEventListener('click', function () { applyTheme(btn.dataset.th); });
+  });
+  var _q = new URLSearchParams(location.search).get('theme');
+  if (_q) applyTheme(_q);
+
+  /* ---------- 分页切换（三个 demo 共用） ---------- */
+  document.querySelectorAll('[data-tabs]').forEach(function (root) {
+    var seg = root.querySelector('.seg');
+    var pill = seg.querySelector('.seg-pill');
+    var btns = [].slice.call(seg.querySelectorAll('.seg-btn'));
+    var layers = [].slice.call(root.querySelectorAll('.pg-layer'));
+    var pg = root.querySelector('.pg');
+    var cur = 0;
+
+    function go(i) {
+      if (i === cur) return;
+      var dir = i > cur ? 1 : -1;
+      layers.forEach(function (l) { l.classList.remove('entering', 'leaving'); });
+      void pg.offsetWidth;
+      var oldL = layers[cur], newL = layers[i];
+      oldL.classList.remove('on');
+      oldL.classList.add('leaving');
+      newL.classList.add('on', 'entering');
+      newL.style.setProperty('--dir', String(dir));
+      btns.forEach(function (b, k) { b.classList.toggle('on', k === i); });
+      pill.style.transform = 'translateX(' + (i * 100) + '%)';
+      cur = i;
+      setTimeout(function () {
+        oldL.classList.remove('leaving');
+        newL.classList.remove('entering');
+      }, 520);
+    }
+    btns.forEach(function (b, i) {
+      b.addEventListener('click', function () { go(i); });
+    });
+    pill.style.transform = 'translateX(0%)';
+  });
+
+  /* ---------- 自定义排序 demo ---------- */
+  (function () {
+    var list = document.getElementById('sortList');
+    var btn = document.getElementById('editBtn');
+    var items = function () { return [].slice.call(list.querySelectorAll('.sort-item')); };
+
+    function renumber() {
+      items().forEach(function (el, i) {
+        el.querySelector('.no').textContent = String(i + 1);
+      });
+    }
+
+    btn.addEventListener('click', function () {
+      var on = list.dataset.edit === '1';
+      list.dataset.edit = on ? '0' : '1';
+      btn.dataset.on = on ? '0' : '1';
+      btn.textContent = on ? '编辑' : '完成';
+      items().forEach(function (el) { el.draggable = !on; });
+    });
+
+    // ↑ ↓ 微调（手机上比拖动稳）
+    list.addEventListener('click', function (e) {
+      var mv = e.target.closest('[data-mv]');
+      if (!mv) return;
+      var el = mv.closest('.sort-item');
+      var d = Number(mv.dataset.mv);
+      if (d < 0 && el.previousElementSibling) {
+        list.insertBefore(el, el.previousElementSibling);
+      } else if (d > 0 && el.nextElementSibling) {
+        list.insertBefore(el.nextElementSibling, el);
+      }
+      renumber();
+    });
+
+    // 桌面端拖动
+    var dragEl = null;
+    list.addEventListener('dragstart', function (e) {
+      var el = e.target.closest('.sort-item');
+      if (!el || list.dataset.edit !== '1') { e.preventDefault(); return; }
+      dragEl = el;
+      el.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', 'x'); } catch (_) {}
+    });
+    list.addEventListener('dragend', function () {
+      if (dragEl) dragEl.classList.remove('dragging');
+      dragEl = null;
+      renumber();
+    });
+    list.addEventListener('dragover', function (e) {
+      if (!dragEl) return;
+      e.preventDefault();
+      var over = e.target.closest('.sort-item');
+      if (!over || over === dragEl) return;
+      var r = over.getBoundingClientRect();
+      var after = (e.clientY - r.top) > r.height / 2;
+      list.insertBefore(dragEl, after ? over.nextSibling : over);
+    });
+  })();
+</script>
+</body>
+</html>
