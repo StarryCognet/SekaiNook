@@ -59,7 +59,9 @@ void main() {
     int unread = 0,
     bool dark = false,
     bool hasBackground = false,
+    bool elevated = false,
     double topPadding = 0,
+    ThemeBrightness brightness = ThemeBrightness.system,
   }) async {
     final _TapLog log = _TapLog();
     await tester.pumpWidget(
@@ -97,6 +99,8 @@ void main() {
                       page: page,
                       unread: unread,
                       hasBackground: hasBackground,
+                      elevated: elevated,
+                      brightness: brightness,
                       onNotifications: () => log.notifications++,
                       onToggleBrightness: () => log.brightness++,
                     ),
@@ -133,28 +137,28 @@ void main() {
     expect(find.text('99+'), findsOneWidget);
   });
 
-  testWidgets('浅色时：点月亮切一次，点太阳（当前这档）不动', (WidgetTester tester) async {
+  testWidgets('明暗是单按钮：点一下就调一次（三档怎么循环是 store 的事）', (WidgetTester tester) async {
     final _TapLog log = await pumpTopBar(tester);
 
-    await tester.tap(_glyph(AppIcons.sun));
-    await tester.pump();
-    expect(log.brightness, 0, reason: '已经在浅色，点太阳不该把用户弹到深色去');
+    // 出厂「跟随设备」档 → 按钮画的是设备图标，而不是太阳或月亮
+    expect(_glyph(AppIcons.devices), findsOneWidget);
+    expect(_glyph(AppIcons.sun), findsNothing);
+    expect(_glyph(AppIcons.moon), findsNothing);
 
-    await tester.tap(_glyph(AppIcons.moon));
+    await tester.tap(_glyph(AppIcons.devices));
     await tester.pump();
-    expect(log.brightness, 1);
+    expect(log.brightness, 1, reason: '单按钮点一下就该切一格');
   });
 
-  testWidgets('深色时：点太阳切一次，点月亮（当前这档）不动', (WidgetTester tester) async {
-    final _TapLog log = await pumpTopBar(tester, dark: true);
+  testWidgets('按钮图标跟着当前档走：浅色太阳 / 深色月亮 / 跟随设备设备', (WidgetTester tester) async {
+    await pumpTopBar(tester, brightness: ThemeBrightness.light);
+    expect(_glyph(AppIcons.sun), findsOneWidget);
 
-    await tester.tap(_glyph(AppIcons.moon));
-    await tester.pump();
-    expect(log.brightness, 0);
+    await pumpTopBar(tester, brightness: ThemeBrightness.dark);
+    expect(_glyph(AppIcons.moon), findsOneWidget);
 
-    await tester.tap(_glyph(AppIcons.sun));
-    await tester.pump();
-    expect(log.brightness, 1);
+    await pumpTopBar(tester, brightness: ThemeBrightness.system);
+    expect(_glyph(AppIcons.devices), findsOneWidget);
   });
 
   testWidgets('真悬浮：顶栏不占布局（盖在内容上），让位交给 contentInset', (WidgetTester tester) async {
@@ -193,10 +197,9 @@ void main() {
     expect(tester.takeException(), isNull);
     // 省略号截断走的是 Text.overflow，data 仍是全名
     expect(find.text('这是一个特别特别长的页面名用来把胶囊撑爆'), findsOneWidget);
-    // 右侧两件（铃铛 / 深浅开关）没被挤走
+    // 右侧两件（铃铛 / 明暗按钮）没被挤走
     expect(_glyph(AppIcons.bell), findsOneWidget);
-    expect(_glyph(AppIcons.sun), findsOneWidget);
-    expect(_glyph(AppIcons.moon), findsOneWidget);
+    expect(_glyph(AppIcons.devices), findsOneWidget);
   });
 
   testWidgets('有背景图时不炸（走玻璃底那一档色）', (WidgetTester tester) async {
@@ -205,14 +208,42 @@ void main() {
     expect(find.text('首页'), findsOneWidget);
   });
 
-  group('接线层（AppTopBarHost）', () {
-    /// 滑块（托着当前那一档的圆）在右边 = 正托着月亮
-    Finder knobOnRight() => find.byWidgetPredicate(
-          (Widget widget) =>
-              widget is AnimatedAlign && widget.alignment == Alignment.centerRight,
-        );
+  // ---- B 版：首屏通透 / 滚下去才浮现 ----
 
-    testWidgets('认得出当前页，点月亮真的把主题切过去', (WidgetTester tester) async {
+  /// 顶栏那颗胶囊当前的底色与落影（AnimatedContainer 的 decoration 就是目标值）
+  ShapeDecoration barDecoration(WidgetTester tester) {
+    final AnimatedContainer container = tester.widget<AnimatedContainer>(
+      find.descendant(
+        of: find.byType(AppTopBar),
+        matching: find.byType(AnimatedContainer),
+      ),
+    );
+    return container.decoration! as ShapeDecoration;
+  }
+
+  testWidgets('B 版首屏：没有胶囊底、没有落影，页名直接浮在底色上', (WidgetTester tester) async {
+    await pumpTopBar(tester);
+    final ShapeDecoration decoration = barDecoration(tester);
+    expect(decoration.color, Colors.transparent, reason: '首屏不该有那条白胶囊');
+    expect(decoration.shadows, isEmpty, reason: '首屏不该有落影');
+  });
+
+  testWidgets('B 版滚动后：底色与落影都浮现出来', (WidgetTester tester) async {
+    await pumpTopBar(tester, elevated: true);
+    final ShapeDecoration decoration = barDecoration(tester);
+    expect(decoration.color, isNot(Colors.transparent));
+    expect(decoration.shadows, isNotEmpty);
+  });
+
+  testWidgets('设了自定义背景图：即使首屏也要有底，不然照片从底下过会吃掉文字', (WidgetTester tester) async {
+    await pumpTopBar(tester, hasBackground: true);
+    final ShapeDecoration decoration = barDecoration(tester);
+    expect(decoration.color, isNot(Colors.transparent));
+    expect(decoration.shadows, isNotEmpty);
+  });
+
+  group('接线层（AppTopBarHost）', () {
+    testWidgets('认得出当前页，点明暗按钮真的三档循环', (WidgetTester tester) async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       final ThemeState theme = ThemeState(
@@ -262,18 +293,25 @@ void main() {
 
       expect(find.text('设置'), findsOneWidget);
       expect(theme.brightness, ThemeBrightness.system, reason: '出厂跟随系统');
-      expect(knobOnRight(), findsNothing);
+      expect(_glyph(AppIcons.devices), findsOneWidget, reason: '跟随设备档画设备图标');
 
-      // 点月亮：走的就是设置页那颗按钮用的同一条路（ThemeState.toggleBrightness）
-      await tester.tap(_glyph(AppIcons.moon));
-      await tester.pumpAndSettle();
-      expect(theme.brightness, ThemeBrightness.dark);
-      expect(knobOnRight(), findsOneWidget, reason: '滑块要托到月亮那一档');
-
-      await tester.tap(_glyph(AppIcons.sun));
+      // 跟随设备 → 浅色（走的就是设置页那三颗按钮用的同一条路 ThemeState.setBrightness）
+      await tester.tap(_glyph(AppIcons.devices));
       await tester.pumpAndSettle();
       expect(theme.brightness, ThemeBrightness.light);
-      expect(knobOnRight(), findsNothing);
+      expect(_glyph(AppIcons.sun), findsOneWidget);
+
+      // 浅色 → 深色
+      await tester.tap(_glyph(AppIcons.sun));
+      await tester.pumpAndSettle();
+      expect(theme.brightness, ThemeBrightness.dark);
+      expect(_glyph(AppIcons.moon), findsOneWidget);
+
+      // 深色 → 跟随设备，绕回出厂那一档
+      await tester.tap(_glyph(AppIcons.moon));
+      await tester.pumpAndSettle();
+      expect(theme.brightness, ThemeBrightness.system);
+      expect(_glyph(AppIcons.devices), findsOneWidget);
     });
   });
 }

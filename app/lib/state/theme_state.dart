@@ -150,12 +150,18 @@ class ThemeState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 右上角太阳/月亮按钮：在浅色与深色之间来回切。
+  /// 右上角那颗明暗按钮：浅色 → 深色 → 跟随系统 → 浅色，点一下循环一格。
   ///
-  /// [effectiveDark] 是「现在看上去是不是深色」—— 偏好是「跟随系统」时，
-  /// 光看 [_brightness] 判断不出该往哪边切，得由界面把当前实际明暗问出来传进来。
-  Future<void> toggleBrightness({required bool effectiveDark}) =>
-      setBrightness(effectiveDark ? ThemeBrightness.light : ThemeBrightness.dark);
+  /// 为什么要第三档：手机自带「日落自动深色」时，用户想要的是「跟着设备走」，
+  /// 而不是被 App 钉死在浅色或深色上。设置在设置页早就有了，顶栏以前只能表达
+  /// 两档，所以切不到它。
+  Future<void> cycleBrightness() => setBrightness(
+        switch (_brightness) {
+          ThemeBrightness.light => ThemeBrightness.dark,
+          ThemeBrightness.dark => ThemeBrightness.system,
+          ThemeBrightness.system => ThemeBrightness.light,
+        },
+      );
 
   // ---- 跟随壁纸 ----
 

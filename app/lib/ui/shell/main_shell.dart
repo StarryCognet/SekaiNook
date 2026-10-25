@@ -121,6 +121,27 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     return path == '/home' || path == '/family';
   }
 
+  // ---- B 版顶栏：滚到条下面才淡入胶囊底 ----
+
+  /// 页面内容是否已经滚到顶栏下面。
+  ///
+  /// 首屏给 `false` —— 顶栏完全透明，页名像大标题一样浮在底色上；
+  /// 滚过一点点（6dp，够避开列表回弹的抖动）才把胶囊底与落影淡进来。
+  bool _topBarElevated = false;
+
+  /// 判定阈值：小于它算「还在顶部」，避免列表轻微回弹就让顶栏忽明忽暗
+  static const double _topBarElevatedAt = 6;
+
+  bool _handleScroll(ScrollNotification notification) {
+    // 只认最外层那条列表；卡片里的横向列表、聊天流之类的内层滚动不该摇顶栏
+    if (notification.depth != 0) return false;
+    final bool shouldElevate = notification.metrics.pixels > _topBarElevatedAt;
+    if (shouldElevate != _topBarElevated) {
+      setState(() => _topBarElevated = shouldElevate);
+    }
+    return false;
+  }
+
   int _indexForLocation(String location) {
     // 顺序要紧：`/family/plan` 必须先于 `/family` 判断
     if (location.startsWith('/family/plan')) return 2;
@@ -145,6 +166,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         Uri.parse(location).path != Uri.parse(_currentLocation).path) {
       _backStack.add(_currentLocation);
       if (_backStack.length > 20) _backStack.removeAt(0);
+      // 换了页面就该重新从「首屏」算起：新页面一般是滚在顶部的，
+      // 若不复位，顶栏会先带着上一页的胶囊底淡一下再消失。
+      _topBarElevated = false;
     }
     _currentLocation = location;
   }
@@ -206,21 +230,28 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   padding: MediaQuery.of(context).padding.copyWith(top: 0, bottom: 0),
                 ),
                 // 换 Tab 时内容横向滑入淡出 —— 比硬切更容易看清「去了哪一格」
-                child: SlideFadeSwitcher(
-                  childKey: ValueKey<String>(location),
-                  offset: 16,
-                  child: widget.child,
+                child: NotificationListener<ScrollNotification>(
+                  // B 版顶栏：首屏没有胶囊底、没有落影，页名直接浮在底色上；
+                  // 内容一滚到条下面就把底和影淡进来（过渡在 AppTopBar 的
+                  // AnimatedContainer 里）。只认最外层那条列表的滚动，
+                  // `depth != 0` 是卡片内部横向列表之类，别拿它摇顶栏。
+                  onNotification: _handleScroll,
+                  child: SlideFadeSwitcher(
+                    childKey: ValueKey<String>(location),
+                    offset: 16,
+                    child: widget.child,
+                  ),
                 ),
               ),
               // 全局顶栏（Web 版 MainLayout 的 Header）：浮在内容之上的一层，
-              // 左边当前页、右边铃铛与深浅开关。
+              // 左边当前页、右边铃铛与明暗按钮。
               Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
                 child: ListenableBuilder(
                   listenable: cover,
-                  child: AppTopBarHost(location: location),
+                  child: AppTopBarHost(location: location, elevated: _topBarElevated),
                   builder: (BuildContext context, Widget? child) =>
                       _CoveredBar(covered: cover.covered, slideUp: true, child: child!),
                 ),

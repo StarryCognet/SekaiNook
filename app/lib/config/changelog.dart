@@ -27,10 +27,22 @@ class ChangelogEntry {
 }
 
 /// 当前版本号（与 [changelog] 第一条保持一致）。
-const String appVersion = '2.9.5';
+const String appVersion = '2.9.6';
 
 /// 版本历史（倒序：最新在前）。
 const List<ChangelogEntry> changelog = <ChangelogEntry>[
+  ChangelogEntry(
+    version: '2.9.6',
+    date: '2026-10-25 15:45:00',
+    title: '顶栏瘦了一圈，多了「跟随设备」的明暗档',
+    changes: <String>[
+      '顶栏从 52dp 收到 42dp，左边的色块拿掉了，页面名用更大的字直接写出来',
+      '首屏时顶栏完全透明、没有落影，像是标题浮在页面上；往下滚一点，白底和阴影才慢慢浮现',
+      '右边的太阳/月亮两段开关换成一颗按钮：浅色 → 深色 → 跟随设备，点一下换一档，图标会淡入转一下',
+      '新增「跟随设备」一档：手机自己到点变深色时，App 跟着一起变，不再固定在浅色或深色',
+      '阴影从两层并成一层，浅色底上不再糊出一圈灰',
+    ],
+  ),
   ChangelogEntry(
     version: '2.9.5',
     date: '2026-10-25 14:55:00',

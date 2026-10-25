@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SekaiNook · 顶栏改版预览</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{
+  background:#F6F7FB;
+  color:#1C2333;
+  font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+:root{
+  --doc-bg:#F6F7FB;
+  --doc-surface:#FFFFFF;
+  --doc-text:#1C2333;
+  --doc-text2:#4A5468;
+  --doc-text3:#78839A;
+  --doc-border:#E4E8F1;
+  --doc-accent:#8A5464;
+  --doc-accent-soft:#F7E9ED;
+  --doc-warn:#B4791A;
+  --doc-warn-soft:#FDF4E3;
+  --doc-ok:#22703F;
+  --doc-ok-soft:#EAF5EE;
+  --doc-info:#2A5B8C;
+  --doc-info-soft:#EBF2FA;
+}
+.wrap{max-width:1340px;margin:0 auto;padding:0 32px 100px}
+
+/* ---------- 顶栏文档条 ---------- */
+.docbar{
+  position:sticky;top:0;z-index:50;
+  background:rgba(246,247,251,.86);backdrop-filter:saturate(180%) blur(14px);
+  border-bottom:1px solid var(--doc-border);
+}
+.docbar-in{max-width:1340px;margin:0 auto;padding:12px 32px;display:flex;align-items:center;gap:18px}
+.docbar .brand{font-weight:700;font-size:15px;letter-spacing:.2px}
+.docbar .brand em{font-style:normal;color:var(--doc-text3);font-weight:500;margin-left:8px;font-size:13px}
+.docnav{display:flex;gap:2px;margin-left:auto;flex-wrap:wrap}
+.docnav a{
+  color:var(--doc-text2);text-decoration:none;font-size:13px;padding:6px 11px;border-radius:999px;
+  transition:background .18s,color .18s;white-space:nowrap;
+}
+.docnav a:hover{background:#EAEDF5;color:var(--doc-text)}
+.themes{display:flex;gap:6px;margin-left:14px;padding-left:16px;border-left:1px solid var(--doc-border)}
+.themes button{
+  width:22px;height:22px;border-radius:999px;border:2px solid transparent;cursor:pointer;
+  background:#D8C0C3;padding:0;transition:transform .15s,border-color .15s;
+}
+.themes button[data-th="dark"]{background:#22262F}
+.themes button[data-th="blue"]{background:#03A9F4}
+.themes button:hover{transform:scale(1.12)}
+.themes button.on{border-color:var(--doc-accent);box-shadow:0 0 0 2px #fff inset}
+
+/* ---------- hero ---------- */
+.hero{padding:56px 0 8px}
+.kicker{
+  display:inline-flex;align-items:center;gap:7px;font-size:12px;letter-spacing:.6px;
+  text-transform:uppercase;color:var(--doc-accent);background:var(--doc-accent-soft);
+  padding:5px 12px;border-radius:999px;font-weight:700;
+}
+.hero h1{font-size:36px;line-height:1.3;margin:16px 0 12px;letter-spacing:-.4px;font-weight:700}
+.hero .lead{font-size:15.5px;color:var(--doc-text2);max-width:760px;margin:0}
+.hero .lead b{color:var(--doc-text)}
+.vcards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px}
+.vcard{
+  background:var(--doc-surface);border:1px solid var(--doc-border);border-radius:14px;
+  padding:16px 18px;
+}
+.vcard .t{font-size:12px;color:var(--doc-text3);font-weight:600;letter-spacing:.4px}
+.vcard .v{font-size:15px;font-weight:600;margin-top:5px;line-height:1.55}
+.vcard.is-warn{background:var(--doc-warn-soft);border-color:#F0E0BC}
+.vcard.is-warn .t{color:#8A6516}
+.vcard.is-warn .v{color:#5E4410}
+.vcard.is-ok{background:var(--doc-ok-soft);border-color:#CDE8D7}
+.vcard.is-ok .t{color:#1B5A32}
+.vcard.is-ok .v{color:#12472B}
+
+/* ---------- 节 ---------- */
+.sec{padding-top:58px}
+.sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+.sec-num{
+  display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
+  border-radius:8px;background:var(--doc-accent);color:#fff;font-size:13px;font-weight:700;
+  flex:none;transform:translateY(-1px);
+}
+.sec-head h2{font-size:21px;margin:0;font-weight:700;letter-spacing:-.2px}
+.sec-sub{color:var(--doc-text2);font-size:14px;margin:8px 0 24px;max-width:820px}
+.sec-sub b{color:var(--doc-text)}
+
+.note-card{
+  background:var(--doc-surface);border:1px solid var(--doc-border);border-radius:14px;
+  padding:14px 18px;font-size:13.5px;color:var(--doc-text2);line-height:1.75;
+}
+.note-card+.note-card{margin-top:10px}
+.note-card b{color:var(--doc-text)}
+.note-card.warn{background:var(--doc-warn-soft);border-color:#F0E0BC;color:#5E4410}
+.note-card.warn b{color:#4A3508}
+.note-card.ok{background:var(--doc-ok-soft);border-color:#CDE8D7;color:#14532D}
+.note-card.ok b{color:#0B3A20}
+
+/* ---------- 现状放大拆解 ---------- */
+.zoomwrap{
+  background:var(--doc-surface);border:1px solid var(--doc-border);border-radius:18px;
+  padding:30px 30px 26px;margin-top:8px;
+}
+.zoom{
+  position:relative;height:300px;border-radius:16px;overflow:hidden;
+  background:linear-gradient(180deg,#FBF2F4 0%,#FBF7F8 52%,#FFFFFF 52%,#FFFFFF 100%);
+  border:1px solid #EEE2E6;
+}
+/* 状态栏拟态 */
+.zoombar{height:88px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 6px;}
+.zoombar span{font-size:17px;font-weight:600;color:#3A2B30;letter-spacing:.3px}
+.zoombar .r{display:flex;gap:7px;align-items:center}
+.zoombar .r i{display:block;width:19px;height:11px;border-radius:2px;background:#5C4A50;opacity:.75}
+.zoombar .r i.b{width:25px;height:12px;border-radius:3px;border:2px solid #5C4A50;background:none;position:relative}
+.zoombar .r i.b::after{content:"";position:absolute;inset:2px;border-radius:1px;background:#5C4A50}
+
+/* 放大的顶栏本体 —— 1.75x */
+.tb-zoom{position:relative;margin:8px 28px 0;height:91px;display:flex;align-items:center}
+.tb-zoom .pill{
+  position:absolute;inset:0;border-radius:26px;background:#FFF;
+  border:1px solid #EFDDE2;
+  box-shadow:0 14px 35px -4px rgba(60,30,40,.16), 0 4px 10px rgba(60,30,40,.07);
+  display:flex;align-items:center;padding:0 11px;
+}
+.pchip{display:flex;align-items:center;gap:14px}
+.pbox{
+  width:49px;height:49px;border-radius:14px;background:#F8D9E2;
+  display:flex;align-items:center;justify-content:center;flex:none;
+}
+.pbox svg{width:28px;height:28px;stroke:#7E5261}
+.pname{font-size:24.5px;font-weight:600;color:#221A1C;letter-spacing:.2px}
+.pright{display:flex;align-items:center;gap:7px;margin-left:auto}
+.pchipbtn{
+  width:70px;height:70px;display:flex;align-items:center;justify-content:center;position:relative;
+}
+.pchipbtn svg{width:35px;height:35px;stroke:#514347}
+.pbadge{
+  position:absolute;top:8px;right:12px;min-width:26px;height:26px;border-radius:999px;
+  background:#C0394F;color:#fff;font-size:17px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;padding:0 5px;
+}
+.ptoggle{
+  width:78px;height:52px;border-radius:999px;background:#F6EBEE;display:flex;align-items:center;
+  padding:5px;gap:2px;margin-left:2px;
+}
+.ptoggle .seg{
+  flex:1;height:42px;border-radius:999px;display:flex;align-items:center;justify-content:center;
+}
+.ptoggle .seg.on{background:#7E5261}
+.ptoggle .seg svg{width:24px;height:24px;stroke:#6B5D62}
+.ptoggle .seg.on svg{stroke:#fff}
+/* 标注圈 */
+.mk{
+  position:absolute;width:26px;height:26px;border-radius:999px;background:#C0394F;color:#fff;
+  font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 8px rgba(192,57,79,.4);font-family:-apple-system,sans-serif;
+}
+.mk.m1{top:-14px;left:43%}
+.mk.m2{bottom:-14px;left:5%}
+.mk.m3{top:-14px;left:1.6%}
+.mk.m4{top:-14px;left:87%}
+.mk.m5{bottom:-14px;left:91%}
+/* 虚线辅助 */
+.dline{position:absolute;border:1px dashed #C0394F;opacity:.5}
+.dh{left:28px;right:28px;top:8px;height:0;border-width:1px 0 0 0}
+.dh2{left:28px;right:28px;top:99px;height:0;border-width:1px 0 0 0}
+
+.zoomlegend{display:grid;grid-template-columns:1fr 1fr;gap:10px 26px;margin-top:26px}
+.zi{display:flex;gap:11px;font-size:13.4px;color:var(--doc-text2);line-height:1.7}
+.zi .n{
+  flex:none;width:22px;height:22px;border-radius:999px;background:var(--doc-accent-soft);
+  color:var(--doc-accent);font-weight:800;font-size:12.5px;display:flex;align-items:center;
+  justify-content:center;margin-top:2px;
+}
+.zi b{color:var(--doc-text)}
+
+/* ---------- 手机壳 ---------- */
+.gallery{display:flex;flex-wrap:wrap;gap:34px;margin-top:6px}
+.col-mock{width:390px;flex:none}
+.caption{font-size:12.5px;color:var(--doc-text3);margin:12px 2px 0;line-height:1.65}
+.caption b{color:var(--doc-text2)}
+
+.phone{
+  position:relative;width:390px;height:844px;border-radius:44px;background:#14161C;
+  padding:10px;box-shadow:0 24px 60px -18px rgba(20,22,28,.34), 0 4px 14px rgba(20,22,28,.14);
+  overflow:hidden;
+  /* 玫瑰浅色 */
+  --bg:#FFF8F9; --surface:#FFFFFF; --soft:#F6EBEE; --text:#221A1C; --text2:#514347;
+  --text3:#6B5D62; --border:#E7D7DB; --primary:#7E5261; --primary-soft:#F8D9E2;
+  --on-primary:#FFFFFF; --success:#2F8B58; --success-ink:#1E6A3C;
+  --danger:#C0394F; --danger-ink:#9E2436; --warning:#A9701A;
+}
+.phone[data-theme="dark"]{
+  --bg:#141118; --surface:#1E1A22; --soft:#28222C; --text:#F2EAEE; --text2:#CBBFC6;
+  --text3:#978A92; --border:#332C37; --primary:#C79BAA; --primary-soft:#3A2C34;
+  --on-primary:#241A20; --success:#7FD3A4; --success-ink:#8EDFB0;
+  --danger:#F08A9C; --danger-ink:#F6A3B2; --warning:#E3B45F;
+}
+.phone[data-theme="blue"]{
+  --bg:#F5FAFE; --surface:#FFFFFF; --soft:#E8F3FB; --text:#0F2231; --text2:#41576A;
+  --text3:#6A7F91; --border:#D5E5F1; --primary:#0B6FA4; --primary-soft:#D5EAF7;
+  --on-primary:#FFFFFF; --success:#2F8B58; --success-ink:#1E6A3C;
+  --danger:#C0394F; --danger-ink:#9E2436; --warning:#A9701A;
+}
+.screen{
+  position:relative;width:100%;height:100%;border-radius:35px;overflow:hidden;
+  background:var(--bg);color:var(--text);
+}
+.statusbar{
+  height:47px;display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 26px 5px;font-size:13px;font-weight:600;color:var(--text);opacity:.9;
+}
+.statusbar .r{display:flex;gap:5px;align-items:center}
+.statusbar .r i{display:block;width:15px;height:9px;border-radius:2px;background:currentColor;opacity:.72}
+.statusbar .r i.b{width:21px;height:10px;border-radius:3px;border:1.6px solid currentColor;background:none;position:relative}
+.statusbar .r i.b::after{content:"";position:absolute;inset:1.6px;border-radius:1px;background:currentColor}
+
+/* 页内内容（用于看顶栏与内容的关系） */
+.pagebody{padding:0 16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px}
+
+/* ===== 各版顶栏 ===== */
+/* 现状 */
+.tb{position:relative;display:flex;align-items:center}
+.tb-now{
+  margin:8px 16px 0;height:52px;border-radius:999px;background:var(--surface);
+  box-shadow:0 10px 22px -3px rgba(60,20,30,.13), 0 2px 6px rgba(60,20,30,.06);
+  display:flex;align-items:center;padding:0 6px;
+}
+.tb-now .box{
+  width:28px;height:28px;border-radius:8px;background:var(--primary-soft);
+  display:flex;align-items:center;justify-content:center;margin-left:2px;flex:none;
+}
+.tb-now .box svg{width:16px;height:16px;stroke:var(--primary)}
+.tb-now .nm{font-size:14px;font-weight:600;margin-left:8px}
+.tb-now .r{display:flex;align-items:center;gap:4px;margin-left:auto}
+.tb-now .chip{width:40px;height:40px;display:flex;align-items:center;justify-content:center;position:relative}
+.tb-now .chip svg{width:20px;height:20px;stroke:var(--text2)}
+.tb-now .bdg{position:absolute;top:2px;right:4px;min-width:16px;height:16px;border-radius:999px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.tb-now .tog{width:52px;height:28px;border-radius:999px;background:var(--soft);display:flex;align-items:center;padding:3px;gap:1px;margin-left:2px}
+.tb-now .tog .s{flex:1;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center}
+.tb-now .tog .s.on{background:var(--primary)}
+.tb-now .tog .s svg{width:13px;height:13px;stroke:var(--text3)}
+.tb-now .tog .s.on svg{stroke:var(--on-primary)}
+
+/* A 瘦身胶囊 */
+.tb-a{
+  margin:8px 14px 0;height:42px;border-radius:999px;background:var(--surface);
+  box-shadow:0 4px 10px -4px rgba(60,20,30,.08);
+  display:flex;align-items:center;padding:0 8px 0 14px;
+}
+.tb-a .ic{display:flex;align-items:center;justify-content:center;flex:none}
+.tb-a .ic svg{width:19px;height:19px;stroke:var(--primary)}
+.tb-a .nm{font-size:15px;font-weight:600;margin-left:8px;letter-spacing:.1px}
+.tb-a .r{display:flex;align-items:center;gap:2px;margin-left:auto}
+.tb-a .chip{width:36px;height:36px;display:flex;align-items:center;justify-content:center;position:relative}
+.tb-a .chip svg{width:19px;height:19px;stroke:var(--text2)}
+.tb-a .bdg{position:absolute;top:3px;right:4px;min-width:15px;height:15px;border-radius:999px;background:var(--danger);color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.tb-a .tog{width:46px;height:26px;border-radius:999px;background:var(--soft);display:flex;align-items:center;padding:3px;gap:1px;margin-left:4px}
+.tb-a .tog .s{flex:1;height:20px;border-radius:999px;display:flex;align-items:center;justify-content:center}
+.tb-a .tog .s.on{background:var(--primary)}
+.tb-a .tog .s svg{width:12px;height:12px;stroke:var(--text3)}
+.tb-a .tog .s.on svg{stroke:var(--on-primary)}
+
+/* B 通透（首屏透明 / 滚动后浮现） */
+.tb-b{margin:4px 16px 0;height:44px;display:flex;align-items:center;padding:0 2px}
+.tb-b .nm{font-size:15px;font-weight:600;letter-spacing:.1px}
+.tb-b .r{display:flex;align-items:center;gap:2px;margin-left:auto}
+.tb-b .chip{width:36px;height:36px;display:flex;align-items:center;justify-content:center;position:relative}
+.tb-b .chip svg{width:19px;height:19px;stroke:var(--text2)}
+.tb-b .bdg{position:absolute;top:3px;right:4px;min-width:15px;height:15px;border-radius:999px;background:var(--danger);color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.tb-b.scrolled{
+  margin:0;height:52px;padding-top:47px;height:99px;padding-left:16px;padding-right:8px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+}
+.tb-b.scrolled .nm{font-size:17px;font-weight:700}
+
+/* C 大标题 */
+.tb-c{padding:14px 16px 0}
+.tb-c .top{height:40px;display:flex;align-items:center}
+.tb-c .top .r{display:flex;align-items:center;gap:2px;margin-left:auto}
+.tb-c .top .chip{width:36px;height:36px;display:flex;align-items:center;justify-content:center;position:relative}
+.tb-c .top .chip svg{width:19px;height:19px;stroke:var(--text2)}
+.tb-c .top .bdg{position:absolute;top:3px;right:4px;min-width:15px;height:15px;border-radius:999px;background:var(--danger);color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.tb-c .big{font-size:26px;font-weight:700;letter-spacing:-.3px;margin:2px 0 0}
+.tb-c.collapsed{margin:8px 16px 0;height:44px;border-radius:999px;background:var(--surface);box-shadow:0 6px 14px -4px rgba(60,20,30,.10);display:flex;align-items:center;padding:0 8px 0 14px}
+.tb-c.collapsed .nm{font-size:15px;font-weight:600}
+.tb-c.collapsed .top{flex:1;height:auto}
+
+/* D 直线 */
+.tb-d{
+  padding-top:47px;height:99px;background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding-left:16px;padding-right:8px;
+}
+.tb-d .nm{font-size:17px;font-weight:700;letter-spacing:-.1px}
+.tb-d .r{display:flex;align-items:center;gap:2px;margin-left:auto}
+.tb-d .chip{width:36px;height:36px;display:flex;align-items:center;justify-content:center;position:relative}
+.tb-d .chip svg{width:19px;height:19px;stroke:var(--text2)}
+.tb-d .bdg{position:absolute;top:3px;right:4px;min-width:15px;height:15px;border-radius:999px;background:var(--danger);color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 3px}
+
+/* E 极窄 */
+.tb-e{margin:6px 16px 0;height:38px;display:flex;align-items:center;padding:0 2px}
+.tb-e .nm{font-size:14px;font-weight:600;color:var(--text2)}
+.tb-e .r{margin-left:auto;display:flex}
+.tb-e .chip{width:32px;height:32px;display:flex;align-items:center;justify-content:center;position:relative}
+.tb-e .chip svg{width:18px;height:18px;stroke:var(--text2)}
+.tb-e .bdg{position:absolute;top:2px;right:2px;min-width:14px;height:14px;border-radius:999px;background:var(--danger);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 2px}
+
+/* 页内容示意 */
+.blk{height:11px;border-radius:6px;background:var(--soft)}
+.blk.w60{width:60%}.blk.w40{width:40%}.blk.w80{width:80%}
+.mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}
+.taskrow{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--border)}
+.taskrow .ib{width:30px;height:30px;border-radius:8px;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;flex:none}
+.taskrow .ib svg{width:16px;height:16px;stroke:var(--primary)}
+.taskrow .tx{font-size:13px;font-weight:600}
+.taskrow .sub{font-size:11px;color:var(--text3);margin-top:1px}
+.taskrow .v{margin-left:auto;font-size:13px;font-weight:700;color:var(--success-ink)}
+
+/* 底栏 */
+.dock{
+  position:absolute;left:16px;right:16px;bottom:8px;height:66px;border-radius:999px;
+  background:var(--surface);box-shadow:0 8px 22px -6px rgba(60,20,30,.16);
+  display:flex;align-items:center;padding:4px;
+}
+.dock .it{flex:1;height:58px;border-radius:999px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.dock .it.on{background:var(--primary-soft)}
+.dock .it svg{width:19px;height:19px;stroke:var(--text3)}
+.dock .it.on svg{stroke:var(--primary)}
+.dock .it span{font-size:9.5px;color:var(--text3);font-weight:600}
+.dock .it.on span{color:var(--primary)}
+
+/* 标注徽章 */
+.tagline{display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap}
+.tag{
+  font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;
+  background:var(--doc-info-soft);color:var(--doc-info);
+}
+.tag.g{background:var(--doc-ok-soft);color:var(--doc-ok)}
+.tag.y{background:var(--doc-warn-soft);color:var(--doc-warn)}
+.tag.r{background:#FCEDEF;color:#A3273A}
+
+/* 表格 */
+.tblwrap{background:var(--doc-surface);border:1px solid var(--doc-border);border-radius:16px;overflow:hidden;margin-top:20px}
+table.tbl{width:100%;border-collapse:collapse;font-size:13.4px}
+table.tbl th{
+  text-align:left;font-size:12px;letter-spacing:.4px;color:var(--doc-text3);font-weight:700;
+  padding:13px 16px;background:#FAFBFD;border-bottom:1px solid var(--doc-border);white-space:nowrap;
+}
+table.tbl td{padding:13px 16px;border-bottom:1px solid #F0F2F7;vertical-align:top;color:var(--doc-text2)}
+table.tbl tr:last-child td{border-bottom:none}
+table.tbl td b{color:var(--doc-text);font-weight:600}
+table.tbl code{
+  font:12px/1.5 "SF Mono",Menlo,Consolas,monospace;background:#F3F5FA;color:#3D4658;
+  padding:1px 5px;border-radius:5px;word-break:break-all;
+}
+table.tbl tr.hit{background:var(--doc-ok-soft)}
+table.tbl tr.hit td b{color:#12472B}
+
+/* 结论 */
+.pick{display:grid;grid-template-columns:auto minmax(0,1fr);gap:34px;margin-top:8px;align-items:start}
+.pick .phone{transform-origin:top left}
+.pickinfo h3{margin:0 0 6px;font-size:16px}
+.pickinfo .desc{font-size:13.5px;color:var(--doc-text2);line-height:1.8}
+.pickinfo ul{margin:12px 0 0;padding-left:20px;font-size:13.4px;color:var(--doc-text2);line-height:1.85}
+.pickinfo li b{color:var(--doc-text)}
+
+.footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--doc-border);font-size:12.5px;color:var(--doc-text3)}
+
+@media (max-width:1180px){
+  .vcards{grid-template-columns:1fr}
+  .zoomlegend{grid-template-columns:1fr}
+  .pick{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <g id="g-check"><path d="M4 12l5 5 11-11"/></g>
+  <g id="g-bell"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></g>
+  <g id="g-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g>
+  <g id="g-moon"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></g>
+  <g id="g-list"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M8 9l2 2 3.5-3.5M8 15.5h8"/></g>
+  <g id="g-home"><path d="M3 10l9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></g>
+  <g id="g-cal"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></g>
+  <g id="g-flower"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3"/></g>
+  <g id="g-gear"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></g>
+  <g id="g-broom"><path d="M14 3l7 7M9 21l-5-5 7-7 5 5z"/></g>
+</defs></svg>
+
+<div class="docbar">
+  <div class="docbar-in">
+    <div class="brand">SekaiNook<em>顶栏改版预览</em></div>
+    <nav class="docnav">
+      <a href="#s1">01 现状拆解</a>
+      <a href="#s2">02 五版对比</a>
+      <a href="#s3">03 推荐</a>
+      <a href="#s4">04 成本</a>
+    </nav>
+    <div class="themes">
+      <button class="on" data-th="rose" title="玫瑰（出厂默认）"></button>
+      <button data-th="dark" title="深色"></button>
+      <button data-th="blue" title="蓝色"></button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="hero">
+    <span class="kicker">TOP BAR · 4 个方案 + 现状</span>
+    <h1>顶栏为什么显厚重，改法有四种</h1>
+    <p class="lead">
+      我把现在这条顶栏按真实尺寸放大了 1.75 倍来拆，问题集中在三个地方：<b>52dp 的胶囊里只有 3 个字</b>、
+      <b>左右两端轻重差太多</b>、<b>落影是两层叠出来的灰雾</b>。下面是五张手机壳（现状 + 四版），可以直接点着看。
+    </p>
+    <div class="vcards">
+      <div class="vcard is-warn">
+        <div class="t">现状占位</div>
+        <div class="v">顶栏本体 52dp，比下面几版都高</div>
+      </div>
+      <div class="vcard">
+        <div class="t">最省事的改法</div>
+        <div class="v">A 版：高度 52→42、去掉左侧色块、阴影减到一层</div>
+      </div>
+      <div class="vcard is-ok">
+        <div class="t">我个人推荐</div>
+        <div class="v">A 版观感 + B 版的「首屏通透、滚动才浮现」</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 01 现状拆解 ================= -->
+  <section class="sec" id="s1">
+    <div class="sec-head"><span class="sec-num">01</span><h2>现状：先看清它在难看在哪儿</h2></div>
+    <p class="sec-sub">
+      下面这条是 <b>1.75 倍</b>放大后的顶栏（真实 52dp 高、左右各留 16dp、圆角 = 高度的一半）。
+      ①–⑤ 对应下面五条，如果和你的观感对不上，请告诉我你更烦哪一条 —— 我按那个方向改。
+    </p>
+
+    <div class="zoomwrap">
+      <div class="zoom">
+        <div class="zoombar">
+          <span>9:41</span>
+          <div class="r"><i></i><i></i><i class="b"></i></div>
+        </div>
+        <div class="tb-zoom">
+          <div class="pill">
+            <div class="pchip">
+              <div class="pbox"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-list"/></svg></div>
+              <div class="pname">任务</div>
+            </div>
+            <div class="pright">
+              <div class="pchipbtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-bell"/></svg>
+                <span class="pbadge">3</span>
+              </div>
+              <div class="ptoggle">
+                <div class="seg on"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><use href="#g-sun"/></svg></div>
+                <div class="seg"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><use href="#g-moon"/></svg></div>
+              </div>
+            </div>
+          </div>
+          <span class="mk m3">1</span>
+          <span class="mk m1">2</span>
+          <span class="mk m2">3</span>
+          <span class="mk m4">4</span>
+          <span class="mk m5">5</span>
+        </div>
+      </div>
+
+      <div class="zoomlegend">
+        <div class="zi"><span class="n">1</span><div><b>左侧色块抢眼。</b>28dp 的 <code>primarySoft</code> 方块 + 16dp 图标，颜色比文字还重，视线先落在方块上而不是页名。</div></div>
+        <div class="zi"><span class="n">2</span><div><b>空得显眼。</b>整条 358dp 宽，左边只占「方块 + 任务」约 90dp，中间 130dp 完全空白 —— 胶囊里越空，越像一条没装东西的枕头。</div></div>
+        <div class="zi"><span class="n">3</span><div><b>两层落影。</b>现在叠了 <code>blur 20 / y6</code> 与 <code>blur 4 / y1</code> 两层，浅色底上会糊出一圈灰雾，看着"脏"。</div></div>
+        <div class="zi"><span class="n">4</span><div><b>右边两个件不一样重。</b>铃铛是 40×40 的散件，明暗是 52×28 的胶囊，两者并排、基线却不在一条线上。</div></div>
+        <div class="zi"><span class="n">5</span><div><b>说了两遍同一件事。</b>底栏选中项也叫「任务」，顶栏再写一遍；且上下两条都是悬浮胶囊，把内容夹在中间。</div></div>
+      </div>
+    </div>
+
+    <div class="note-card warn" style="margin-top:20px">
+      <b>这五条是我的判断，不是你的原话。</b>如果你是嫌「占地方」（顶栏加上下留白吃掉 60dp，首屏少一行任务），那重点看 <b>E 极窄版</b>；如果是嫌「丑/重」，看 <b>A</b> 和 <b>B</b>。
+    </div>
+  </section>
+
+  <!-- ================= 02 五版对比 ================= -->
+  <section class="sec" id="s2">
+    <div class="sec-head"><span class="sec-num">02</span><h2>五版并排（都能点主题）</h2></div>
+    <p class="sec-sub">
+      每张都是 390×844 的真实比例，顶栏下面放了两行任务卡和底栏，方便看它们搭在一起的样子。
+      <b>顶栏高度标在每张下面</b>，可以按「比现状省多少」来比。
+    </p>
+
+    <div class="gallery">
+
+      <!-- 现状 -->
+      <div class="col-mock">
+        <div class="phone" data-theme="rose">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><div class="r"><i></i><i></i><i class="b"></i></div></div>
+            <div class="tb-now">
+              <div class="box"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-list"/></svg></div>
+              <div class="nm">任务</div>
+              <div class="r">
+                <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-bell"/></svg><span class="bdg">3</span></div>
+                <div class="tog"><div class="s on"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><use href="#g-sun"/></svg></div><div class="s"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><use href="#g-moon"/></svg></div></div>
+              </div>
+            </div>
+            <div class="pagebody mt16" data-fill></div>
+            <div class="dock">
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-home"/></svg><span>首页</span></div>
+              <div class="it on"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-list"/></svg><span>任务</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-cal"/></svg><span>计划</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-flower"/></svg><span>花园</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-gear"/></svg><span>设置</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="caption"><b>现状</b> · 顶栏 52dp，让出 107dp。两层阴影 + 左侧色块 + 右边一散件一胶囊。</p>
+      </div>
+
+      <!-- A 瘦身 -->
+      <div class="col-mock">
+        <div class="phone" data-theme="rose">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><div class="r"><i></i><i></i><i class="b"></i></div></div>
+            <div class="tb-a">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-list"/></svg></div>
+              <div class="nm">任务</div>
+              <div class="r">
+                <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-bell"/></svg><span class="bdg">3</span></div>
+                <div class="tog"><div class="s on"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><use href="#g-sun"/></svg></div><div class="s"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><use href="#g-moon"/></svg></div></div>
+              </div>
+            </div>
+            <div class="pagebody mt16" data-fill></div>
+            <div class="dock">
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-home"/></svg><span>首页</span></div>
+              <div class="it on"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-list"/></svg><span>任务</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-cal"/></svg><span>计划</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-flower"/></svg><span>花园</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-gear"/></svg><span>设置</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="tagline"><span class="tag g">省 8dp</span><span class="tag">改动最小</span></div>
+        <p class="caption"><b>A 瘦身胶囊</b> · 42dp，比现状矮 10dp。去左侧色块（图标直接主色）、名字 15px、右侧两件统一 36dp、阴影减到一层 <code>blur 10 / y3</code>。</p>
+      </div>
+
+      <!-- B 通透 -->
+      <div class="col-mock">
+        <div class="phone" data-theme="rose">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><div class="r"><i></i><i></i><i class="b"></i></div></div>
+            <div class="tb-b">
+              <div class="nm">任务</div>
+              <div class="r">
+                <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-bell"/></svg><span class="bdg">3</span></div>
+              </div>
+            </div>
+            <div class="pagebody" style="margin-top:4px" data-fill></div>
+            <div class="dock">
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-home"/></svg><span>首页</span></div>
+              <div class="it on"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-list"/></svg><span>任务</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-cal"/></svg><span>计划</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-flower"/></svg><span>花园</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-gear"/></svg><span>设置</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="tagline"><span class="tag g">省 8dp</span><span class="tag y">要加滚动监听</span></div>
+        <p class="caption"><b>B 通透版</b> · 首屏没有胶囊、没有阴影，页名直接浮在底色上；往下滚过 12dp 才淡入白底 + 一条分隔线。明暗开关收进设置页。</p>
+      </div>
+
+      <!-- C 大标题 -->
+      <div class="col-mock">
+        <div class="phone" data-theme="rose">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><div class="r"><i></i><i></i><i class="b"></i></div></div>
+            <div class="tb-c">
+              <div class="top">
+                <div class="r">
+                  <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-bell"/></svg><span class="bdg">3</span></div>
+                  <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-sun"/></svg></div>
+                </div>
+              </div>
+              <div class="big">任务</div>
+            </div>
+            <div class="pagebody mt12" data-fill></div>
+            <div class="dock">
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-home"/></svg><span>首页</span></div>
+              <div class="it on"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-list"/></svg><span>任务</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-cal"/></svg><span>计划</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-flower"/></svg><span>花园</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-gear"/></svg><span>设置</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="tagline"><span class="tag r">+6dp</span><span class="tag y">要全套统一</span></div>
+        <p class="caption"><b>C 大标题</b> · 26px 大标题独占一行，滚动后收缩成 44dp 胶囊。气势最好，但花园/设置页得跟着改，不然像两套 App。</p>
+      </div>
+
+      <!-- D 直线 -->
+      <div class="col-mock">
+        <div class="phone" data-theme="rose">
+          <div class="screen">
+            <div class="tb-d">
+              <div class="nm">任务</div>
+              <div class="r">
+                <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-bell"/></svg><span class="bdg">3</span></div>
+                <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-sun"/></svg></div>
+              </div>
+            </div>
+            <div class="pagebody mt12" data-fill></div>
+            <div class="dock">
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-home"/></svg><span>首页</span></div>
+              <div class="it on"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-list"/></svg><span>任务</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-cal"/></svg><span>计划</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-flower"/></svg><span>花园</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-gear"/></svg><span>设置</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="tagline"><span class="tag g">省 8dp</span><span class="tag y">换风格</span></div>
+        <p class="caption"><b>D 直线版</b> · 贴边 52dp，白底 + 底部 1px 线，名字 17px w700。最"正常"，但丢掉悬浮语言，和底下那颗悬浮胶囊不配套了。</p>
+      </div>
+
+      <!-- E 极窄 -->
+      <div class="col-mock">
+        <div class="phone" data-theme="rose">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><div class="r"><i></i><i></i><i class="b"></i></div></div>
+            <div class="tb-e">
+              <div class="nm">任务</div>
+              <div class="r">
+                <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-bell"/></svg><span class="bdg">3</span></div>
+                <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-sun"/></svg></div>
+              </div>
+            </div>
+            <div class="pagebody" style="margin-top:2px" data-fill></div>
+            <div class="dock">
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-home"/></svg><span>首页</span></div>
+              <div class="it on"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-list"/></svg><span>任务</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-cal"/></svg><span>计划</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-flower"/></svg><span>花园</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-gear"/></svg><span>设置</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="tagline"><span class="tag g">省 18dp</span><span class="tag y">功能要收</span></div>
+        <p class="caption"><b>E 极窄条</b> · 38dp，没有任何底、只有名字和两颗图标。明暗开关收进设置。给内容让出最多空间。</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= 03 推荐 ================= -->
+  <section class="sec" id="s3">
+    <div class="sec-head"><span class="sec-num">03</span><h2>我推荐 A + B 的组合</h2></div>
+    <p class="sec-sub">
+      A 的形状（矮一些、图标不带底、阴影只留一层）+ B 的行为（首屏不加底、滚动才浮现）。
+      这样观感最轻、代码改动也可控 —— 顶栏本来就是个纯展示组件，改的都是装饰参数。
+    </p>
+
+    <div class="pick">
+      <div class="col-mock">
+        <div class="phone" data-theme="rose">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><div class="r"><i></i><i></i><i class="b"></i></div></div>
+            <div class="tb-a">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-list"/></svg></div>
+              <div class="nm">任务</div>
+              <div class="r">
+                <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-bell"/></svg><span class="bdg">3</span></div>
+                <div class="tog"><div class="s on"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><use href="#g-sun"/></svg></div><div class="s"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><use href="#g-moon"/></svg></div></div>
+              </div>
+            </div>
+            <div class="pagebody mt16" data-fill></div>
+            <div class="dock">
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-home"/></svg><span>首页</span></div>
+              <div class="it on"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-list"/></svg><span>任务</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-cal"/></svg><span>计划</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-flower"/></svg><span>花园</span></div>
+              <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-gear"/></svg><span>设置</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="caption"><b>推荐版</b> · 42dp 胶囊 + 单层落影，首屏即可；滚动超过 8dp 时胶囊底从透明淡入（B 的行为）</p>
+      </div>
+
+      <div class="pickinfo">
+        <h3>具体改什么</h3>
+        <div class="desc">
+          全部在 <code style="font:12.5px/1.5 'SF Mono',Menlo,Consolas,monospace;background:#F3F5FA;padding:1px 5px;border-radius:5px;color:#3D4658">app/lib/ui/shell/app_top_bar.dart</code> 一个文件里，几何常量都在那个类顶部。
+        </div>
+        <ul>
+          <li><b>innerHeight 52 → 42</b>，<code>topMargin</code> 保持 8；比现状省 10dp（<code>contentInset</code> 跟着自动变，两处不用各改一遍）。</li>
+          <li><b>删掉左侧 28dp 的 <code>primarySoft</code> 方块</b>，图标直接用 <code>palette.primary</code> 画 19px —— 少一层色块，视线回到文字上。</li>
+          <li><b>名字 14 → 15px</b>，<code>w600</code> 不变。胶囊里只有字，字得稍微大一点才不显空。</li>
+          <li><b>阴影从两层减到一层</b>：<code>blur 10, y 3, alpha .10（深色 .28）</code>。深色模式本来就该更轻。</li>
+          <li><b>右侧两件统一到 36dp</b>：铃铛 40→36，明暗胶囊 52×28 → 46×26，两者垂直居中对齐。</li>
+          <li><b>（可选 B 行为）</b>首屏不给胶囊底：<code>color</code> 用 <code>Colors.transparent</code>、阴影为空，页面滚动 offset &gt; 8 时用 <code>AnimatedContainer(160ms)</code> 淡入白底 + 阴影。要接一个 <code>ScrollNotification</code> 监听，或者在外壳里传 <code>elevated</code> 布尔。</li>
+        </ul>
+        <div class="note-card ok" style="margin-top:18px">
+          <b>为什么不动底栏：</b>底栏是 FlClash 那套跟手胶囊，动了就得两处一起调；顶栏是纯展示组件，只改装饰参数，风险小。
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 04 成本表 ================= -->
+  <section class="sec" id="s4">
+    <div class="sec-head"><span class="sec-num">04</span><h2>五版的代价</h2></div>
+    <p class="sec-sub">按「改几个文件 / 要不要动交互 / 会不会波及别的页面」排。</p>
+    <div class="tblwrap">
+      <table class="tbl">
+        <tr>
+          <th>方案</th><th>顶栏高</th><th>比现状省</th><th>改什么</th><th>风险</th>
+        </tr>
+        <tr class="hit">
+          <td><b>A 瘦身胶囊</b></td><td>42dp</td><td>10dp</td><td>只改 <code>app_top_bar.dart</code> 的几何常量与装饰</td><td>低 —— 纯装饰，不影响滚动与路由</td>
+        </tr>
+        <tr>
+          <td><b>A + B 通透</b></td><td>42dp</td><td>10dp</td><td>上面 + 一个滚动监听（或外壳传 <code>elevated</code>）</td><td>中 —— 要接 <code>NotificationListener</code>，注意别和下拉刷新打架</td>
+        </tr>
+        <tr>
+          <td><b>C 大标题</b></td><td>96dp → 44dp</td><td>展开时反而更高</td><td>顶栏重写 + 滚动收缩 + <b>其它 4 页跟着改</b></td><td>高 —— 五页风格要一起换，等于一次视觉改版</td>
+        </tr>
+        <tr>
+          <td><b>D 直线</b></td><td>52dp</td><td>0</td><td>去掉圆角/阴影/侧边留白，改成贴边 + 底线</td><td>中 —— 和悬浮底栏语言不再成套</td>
+        </tr>
+        <tr>
+          <td><b>E 极窄</b></td><td>38dp</td><td>14dp</td><td>顶栏瘦身 + 把明暗开关挪进设置页</td><td>中 —— 少一个快捷入口，家里老人可能找不到</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="note-card" style="margin-top:18px">
+      <b>一句话结论：</b>A 是「不改结构、只改装饰」的最小改动，观感立刻轻一档；想再进一步就叠 B 的滚动浮现。
+      C 更适合以后整套视觉改版时一起做，现在单改一页会显得突兀。
+    </div>
+  </section>
+
+  <div class="footer">
+    SekaiNook · 顶栏改版预览（2026-10-25）· 页面尺寸 1px = 1dp，顶栏几何取自 <code>app/lib/ui/shell/app_top_bar.dart</code> 现有常量 · 本轮未修改仓库内任何代码
+  </div>
+
+</div>
+
+<script>
+(function(){
+  var btns = document.querySelectorAll('.themes button');
+  var phones = document.querySelectorAll('.phone');
+  function apply(th){
+    phones.forEach(function(p){ p.setAttribute('data-theme', th); });
+    btns.forEach(function(b){ b.classList.toggle('on', b.dataset.th === th); });
+  }
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){ apply(b.dataset.th); });
+  });
+  var rows = [
+    ['check','按时完成作业','21:00 前打卡 · 没做 −10','+20'],
+    ['broom','整理房间','今天还能做 2 次','+10'],
+    ['flower','洗脸刷牙','每天必须 · 没做 −10','+5'],
+    ['moon','按时睡觉','19:00 之后可打卡','+10']
+  ];
+  var html = '<div style="font-size:11.5px;font-weight:700;color:var(--text3);letter-spacing:.3px;margin-bottom:8px">今天必须完成 · 3 件</div>';
+  html += rows.map(function(r,i){
+    return '<div class="taskrow'+(i?' mt8':'')+'">'
+      + '<div class="ib"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-'+r[0]+'"/></svg></div>'
+      + '<div><div class="tx">'+r[1]+'</div><div class="sub">'+r[2]+'</div></div>'
+      + '<div class="v">'+r[3]+'</div></div>';
+  }).join('');
+  html += '<div style="font-size:11.5px;font-weight:700;color:var(--text3);letter-spacing:.3px;margin:14px 0 8px">本周任务</div>';
+  html += '<div class="taskrow">'
+      + '<div class="ib"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-cal"/></svg></div>'
+      + '<div><div class="tx">洗头</div><div class="sub">本周 1/3 次 · 缺一次 −10</div></div>'
+      + '<div class="v">+5</div></div>';
+  html += '<div class="taskrow mt8">'
+      + '<div class="ib"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#g-broom"/></svg></div>'
+      + '<div><div class="tx">剪指甲</div><div class="sub">每周一次 · 未做 −10</div></div>'
+      + '<div class="v">+10</div></div>';
+  document.querySelectorAll('[data-fill]').forEach(function(el){ el.innerHTML = html; });
+
+  var q = new URLSearchParams(location.search).get('theme');
+  if (q) apply(q);
+})();
+</script>
+</body>
+</html>
