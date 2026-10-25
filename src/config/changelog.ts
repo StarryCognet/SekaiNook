@@ -14,10 +14,18 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.9.3';
+export const APP_VERSION = '2.9.4';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.9.4',
+    date: '2026-10-25 14:30:00',
+    title: '弹窗打开时，顶栏和底栏让位消失',
+    changes: [
+      '底部面板、确认框弹出时，悬浮的顶栏和底部胶囊导航会一起收起来，关掉后再滑回来 —— 弹窗真正铺在整屏最上层，不再有光条压在面板上面',
+    ],
+  },
   {
     version: '2.9.3',
     date: '2026-10-25 13:15:00',
