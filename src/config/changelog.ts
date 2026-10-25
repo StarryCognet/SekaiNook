@@ -14,10 +14,18 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.9.0';
+export const APP_VERSION = '2.9.1';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.9.1',
+    date: '2026-10-25 11:50:00',
+    title: '弹窗遮罩压住顶栏和底栏',
+    changes: [
+      '底部面板、居中确认这类弹窗的暗色遮罩加深了：顶栏和底部胶囊导航会一起被压暗，不再透在遮罩上面',
+    ],
+  },
   {
     version: '2.9.0',
     date: '2026-10-25 11:30:00',
