@@ -14,10 +14,18 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.9.1';
+export const APP_VERSION = '2.9.2';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.9.2',
+    date: '2026-10-25 12:10:00',
+    title: '所有弹窗的遮罩统一加深',
+    changes: [
+      '居中确认框的遮罩也跟底部面板统一了：确认、删除这类弹窗同样会把顶栏和底部胶囊导航一起压暗',
+    ],
+  },
   {
     version: '2.9.1',
     date: '2026-10-25 11:50:00',
