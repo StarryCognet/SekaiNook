@@ -14,10 +14,22 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.9.7';
+export const APP_VERSION = '2.9.8';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.9.8',
+    date: '2026-10-25 17:00:00',
+    title: '顶栏改成普通通栏：贴边、直角，滚动才出现',
+    changes: [
+      '去掉胶囊形状：顶栏改成左右贴住屏幕边的通栏，直角、52dp 高，和状态栏连成一条',
+      '首屏还是完全透明 —— 没有底色、没有线，页名直接浮在页面底色上；往下滑 8dp 后，白底和底部那条 1px 分隔线一起淡入',
+      '内容左右留白改成 16dp，和页面正文对齐，字不再往屏幕中间挤',
+      '页面顶部那层「底色 → 透明」的渐变跟着调整，正好盖住状态栏加整条顶栏，内容滚上来是淡进去的',
+      '顶栏高度从 48 改成 52，页面内容整体上移 6dp —— 首屏能多看见一点任务',
+    ],
+  },
   {
     version: '2.9.7',
     date: '2026-10-25 16:20:00',

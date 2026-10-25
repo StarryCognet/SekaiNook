@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SekaiNook · 顶栏：不要胶囊了，改成普通通栏</title>
+<style>
+  :root {
+    --doc-bg: #F5F6FA;
+    --doc-surface: #FFFFFF;
+    --doc-text: #1C2333;
+    --doc-text2: #4A5468;
+    --doc-text3: #78839A;
+    --doc-border: #E4E8F1;
+    --doc-accent: #8A5464;
+    --doc-accent-soft: #F7E9ED;
+    --doc-warn: #B4791A;
+    --doc-warn-soft: #FDF4E4;
+    --doc-ok: #22703F;
+    --doc-ok-soft: #EAF6EE;
+    --doc-info: #2A5B8C;
+    --doc-info-soft: #EAF1F9;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--doc-bg);
+    color: var(--doc-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- 文档骨架 ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; gap: 24px;
+    padding: 14px 32px;
+    background: rgba(255,255,255,.86);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--doc-border);
+  }
+  .brand { font-size: 14px; font-weight: 750; letter-spacing: .2px; }
+  .brand span { color: var(--doc-text3); font-weight: 600; }
+  .topnav { display: flex; gap: 20px; margin-left: 8px; }
+  .topnav a {
+    font-size: 13px; color: var(--doc-text2); text-decoration: none;
+    padding: 4px 2px; border-bottom: 2px solid transparent;
+  }
+  .topnav a:hover { color: var(--doc-text); border-bottom-color: var(--doc-accent); }
+  .themes { margin-left: auto; display: flex; gap: 8px; }
+  .themes button {
+    width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--doc-border); cursor: pointer; padding: 0;
+  }
+  .themes button[data-th="rose"] { background: #D8C0C3; }
+  .themes button[data-th="dark"] { background: #22252C; }
+  .themes button[data-th="blue"] { background: #4A90D9; }
+
+  .wrap { max-width: 1360px; margin: 0 auto; padding: 40px 32px 90px; }
+
+  .hero { margin-bottom: 44px; }
+  .kicker {
+    display: inline-block; font-size: 12px; font-weight: 750; letter-spacing: .4px;
+    color: var(--doc-accent); background: var(--doc-accent-soft);
+    padding: 5px 10px; border-radius: 6px; margin-bottom: 14px;
+  }
+  .hero h1 { font-size: 32px; line-height: 1.28; margin: 0 0 14px; letter-spacing: -.4px; }
+  .hero .lead { font-size: 14.5px; line-height: 1.85; color: var(--doc-text2); max-width: 820px; margin: 0; }
+  .vcards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 26px; }
+  .vcard {
+    background: var(--doc-surface); border: 1px solid var(--doc-border);
+    border-radius: 14px; padding: 14px 16px;
+  }
+  .vcard .v { font-size: 15px; font-weight: 750; margin-bottom: 5px; }
+  .vcard .k { font-size: 12.5px; line-height: 1.7; color: var(--doc-text2); }
+  .vcard.is-ok { background: var(--doc-ok-soft); border-color: #CBE6D5; }
+  .vcard.is-ok .v { color: var(--doc-ok); }
+  .vcard.is-warn { background: var(--doc-warn-soft); border-color: #F0DFBE; }
+  .vcard.is-warn .v { color: var(--doc-warn); }
+
+  .sec { margin-bottom: 58px; scroll-margin-top: 70px; }
+  .sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  .sec-num {
+    font-size: 12px; font-weight: 800; color: #fff; background: var(--doc-accent);
+    padding: 3px 8px; border-radius: 6px; letter-spacing: .3px;
+  }
+  .sec-head h2 { font-size: 21px; margin: 0; letter-spacing: -.2px; }
+  .sec-sub { font-size: 13.5px; line-height: 1.85; color: var(--doc-text2); margin: 0 0 22px; max-width: 860px; }
+
+  /* ---------- 形状对比图 ---------- */
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 10px; }
+  .cmp .box {
+    background: var(--doc-surface); border: 1px solid var(--doc-border);
+    border-radius: 14px; padding: 18px;
+  }
+  .cmp .box h4 { margin: 0 0 4px; font-size: 14px; }
+  .cmp .box h4 em { font-style: normal; font-size: 11.5px; font-weight: 600; color: var(--doc-text3); margin-left: 6px; }
+  .cmp .box .note { font-size: 12.5px; color: var(--doc-text2); line-height: 1.7; margin: 0 0 14px; }
+  .mini { position: relative; height: 116px; border-radius: 10px; background: #FFF8F9; overflow: hidden; border: 1px solid #EADCE0; }
+  .mini .row { position: absolute; left: 12px; right: 12px; height: 34px; border-radius: 8px; background: #fff; border: 1px solid #E7D7DB; }
+  .mini .cap { position: absolute; left: 0; right: 0; text-align: center; font-size: 10.5px; color: #8C7B80; letter-spacing: .3px; }
+  /* 胶囊形状 */
+  .mini.pill .b { position: absolute; top: 8px; left: 16px; right: 16px; height: 42px; border-radius: 21px; background: #fff; box-shadow: 0 3px 10px rgba(60,40,45,.10); }
+  .mini.pill .b::before { content: ""; position: absolute; left: 14px; top: 13px; width: 74px; height: 16px; border-radius: 4px; background: #EFE2E6; }
+  /* 通栏 */
+  .mini.flat .b { position: absolute; top: 0; left: 0; right: 0; height: 52px; background: #fff; border-bottom: 1px solid #E7D7DB; }
+  .mini.flat .b::before { content: ""; position: absolute; left: 16px; top: 18px; width: 74px; height: 16px; border-radius: 3px; background: #EFE2E6; }
+
+  /* ---------- 手机壳 ---------- */
+  .grid2 { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 34px 36px; align-items: start; }
+  .col-mock { width: 390px; }
+  .phone {
+    position: relative; width: 390px; height: 844px;
+    border: 10px solid #14161C; border-radius: 38px; overflow: hidden;
+    background: #FFF8F9;
+    --bg: #FFF8F9; --surface: #FFFFFF; --soft: #F6EBEE;
+    --text: #221A1C; --text2: #514347; --text3: #6B5D62;
+    --border: #E7D7DB; --border-strong: #DCC7CD;
+    --primary: #7E5261; --primary-soft: #F8D9E2; --on-primary: #FFFFFF;
+    --success: #2F8B58; --success-ink: #1E6A3C;
+    --danger: #C0394F; --danger-ink: #9E2436;
+    --warning: #A9701A;
+  }
+  .phone[data-theme="dark"] {
+    background: #16181D;
+    --bg: #16181D; --surface: #1E2128; --soft: #24272F;
+    --text: #EFEFF2; --text2: #B9BDC7; --text3: #8E94A1;
+    --border: #2C3038; --border-strong: #3A3F49;
+    --primary: #E9B9C8; --primary-soft: #3A2830; --on-primary: #2A1418;
+    --success: #7FD3A4; --success-ink: #7FD3A4;
+    --danger: #F08493; --danger-ink: #F08493;
+    --warning: #E0B25E;
+  }
+  .phone[data-theme="blue"] {
+    background: #F4F8FF;
+    --bg: #F4F8FF; --surface: #FFFFFF; --soft: #E8F0FC;
+    --text: #16202E; --text2: #42506A; --text3: #6B7891;
+    --border: #D9E4F5; --border-strong: #C4D3EA;
+    --primary: #2F6DB5; --primary-soft: #DCEAFB; --on-primary: #FFFFFF;
+    --success: #23795A; --success-ink: #1A5E45;
+    --danger: #B8384E; --danger-ink: #98263A;
+    --warning: #96661A;
+  }
+  /* 状态栏 */
+  .statusbar {
+    position: absolute; top: 0; left: 0; right: 0; height: 47px; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 26px 0 30px; font-size: 12.5px; font-weight: 700; color: var(--text);
+    pointer-events: none;
+  }
+  .statusbar .icons { display: flex; align-items: center; gap: 5px; }
+  .statusbar .bars { display: flex; align-items: flex-end; gap: 1.5px; height: 9px; }
+  .statusbar .bars i { width: 2.5px; background: var(--text); border-radius: .5px; }
+  .statusbar .bars i:nth-child(1) { height: 4px; opacity: .45; }
+  .statusbar .bars i:nth-child(2) { height: 6px; opacity: .65; }
+  .statusbar .bars i:nth-child(3) { height: 8px; opacity: .85; }
+  .statusbar .bars i:nth-child(4) { height: 9px; }
+  .statusbar .batt { width: 21px; height: 10.5px; border: 1.2px solid var(--text); border-radius: 3px; position: relative; opacity: .9; }
+  .statusbar .batt::after { content: ""; position: absolute; left: 1.5px; top: 1.5px; bottom: 1.5px; width: 12px; background: var(--text); border-radius: 1.5px; }
+
+  /* 屏幕内容区（可滚） */
+  .screen {
+    position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .screen::-webkit-scrollbar { display: none; }
+  .content { padding: 0 16px; }
+  .flow { padding-bottom: 96px; }
+  .flow > * + * { margin-top: 16px; }
+
+  /* ---------- 四种顶栏 ---------- */
+  .fb {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+    padding-top: 47px;
+    transition: background-color .28s cubic-bezier(.2,0,0,1), box-shadow .28s cubic-bezier(.2,0,0,1);
+    background: transparent;
+  }
+  .fb-in {
+    height: 52px; display: flex; align-items: center;
+    padding: 0 16px; gap: 10px;
+  }
+  .fb-ic { display: flex; align-items: center; color: var(--primary); }
+  .fb-ic svg { width: 20px; height: 20px; }
+  .fb-title { font-size: 17px; font-weight: 650; letter-spacing: .2px; color: var(--text); }
+  .fb .sp { flex: 1; }
+  .fb-btn {
+    position: relative; width: 40px; height: 40px; margin-right: -6px;
+    display: flex; align-items: center; justify-content: center;
+    border: 0; background: transparent; color: var(--text2);
+    border-radius: 50%; cursor: pointer; padding: 0;
+  }
+  .fb-btn svg { width: 21px; height: 21px; }
+  .fb-btn .dot {
+    position: absolute; top: 5px; right: 6px; min-width: 15px; height: 15px;
+    padding: 0 4px; border-radius: 8px; background: var(--danger);
+    color: #fff; font-size: 9.5px; font-weight: 800; font-style: normal;
+    display: flex; align-items: center; justify-content: center;
+    border: 1.5px solid var(--surface);
+  }
+  .fb-btn.plain { margin-right: 0; }
+
+  /* A：恒定底色 + 分隔线（最普通） */
+  .fb[data-v="a"] { background: var(--surface); border-bottom: 1px solid var(--border); }
+  /* B：首屏透明，滚动浮现底色 + 分隔线 */
+  .fb[data-v="b"].solid { background: var(--surface); border-bottom: 1px solid var(--border); }
+  .fb[data-v="b"] { border-bottom: 1px solid transparent; }
+  /* C：首屏透明，滚动浮现底色 + 阴影，没有线 */
+  .fb[data-v="c"].solid { background: var(--surface); box-shadow: 0 2px 10px rgba(40,20,25,.10); }
+  /* D：大标题 —— 小条始终透明，滚动后长出底色；标题在内容里 */
+  .fb[data-v="d"].solid { background: var(--surface); border-bottom: 1px solid var(--border); }
+  .fb[data-v="d"] { border-bottom: 1px solid transparent; }
+  .fb[data-v="d"] .fb-title { opacity: 0; transition: opacity .24s ease; }
+  .fb[data-v="d"].solid .fb-title { opacity: 1; }
+  .fb[data-v="d"] .fb-ic { opacity: 0; }
+
+  /* 大标题块（只在 D 版的内容里出现） */
+  .bigtitle { padding: 8px 0 0; }
+  .bigtitle h1 { margin: 0; font-size: 31px; line-height: 1.2; letter-spacing: -.6px; font-weight: 760; color: var(--text); }
+  .bigtitle p { margin: 6px 0 0; font-size: 12.5px; color: var(--text3); }
+
+  /* ---------- 内容元素 ---------- */
+  .strip {
+    background: var(--surface); border-radius: 16px; padding: 14px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .ring {
+    width: 42px; height: 42px; border-radius: 50%; flex: none;
+    background: conic-gradient(var(--success) 0 66%, var(--soft) 66% 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; color: var(--success-ink);
+  }
+  .ring i { width: 33px; height: 33px; border-radius: 50%; background: var(--surface); display: flex; align-items: center; justify-content: center; font-style: normal; }
+  .stxt { min-width: 0; }
+  .stxt b { display: block; font-size: 14px; font-weight: 700; color: var(--text); }
+  .stxt span { display: block; font-size: 11.5px; color: var(--danger-ink); margin-top: 2px; }
+
+  .grp {
+    display: flex; align-items: center; gap: 6px;
+    margin: 4px 0 -6px; font-size: 12px; font-weight: 750; letter-spacing: .2px;
+  }
+  .grp svg { width: 14px; height: 14px; }
+  .grp.red { color: var(--danger-ink); }
+  .grp.dim { color: var(--text3); }
+  .grp.pri { color: var(--primary); }
+  .grp.ok { color: var(--success-ink); }
+
+  .row-task {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border-radius: 12px; padding: 8px;
+    border: 1px solid transparent;
+  }
+  .row-task.must { background: color-mix(in srgb, var(--danger) 7%, var(--surface)); border-color: color-mix(in srgb, var(--danger) 22%, transparent); }
+  .ibox {
+    width: 36px; height: 36px; border-radius: 8px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--success) 12%, var(--surface)); color: var(--success-ink);
+  }
+  .ibox.red { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger-ink); }
+  .ibox svg { width: 20px; height: 20px; }
+  .ttl { flex: 1; min-width: 0; }
+  .ttl .n { font-size: 14px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; }
+  .ttl .n em {
+    font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .2px;
+    color: var(--danger-ink); background: color-mix(in srgb, var(--danger) 13%, var(--surface));
+    padding: 1.5px 4px; border-radius: 4px;
+  }
+  .ttl .m { font-size: 11.5px; color: var(--text3); margin-top: 2px; }
+  .ttl .m.rb { color: var(--danger-ink); }
+  .val { font-size: 14px; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--success-ink); }
+  .chk { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--success) 45%, transparent); flex: none; }
+
+  .fold {
+    display: flex; align-items: center; gap: 8px; padding: 4px 2px;
+    font-size: 12.5px; color: var(--text3);
+  }
+  .fold .sp { flex: 1; }
+
+  /* 说明卡 */
+  .note-card {
+    background: var(--doc-surface); border: 1px solid var(--doc-border);
+    border-radius: 14px; padding: 16px 18px; margin-bottom: 12px;
+  }
+  .note-card > b { display: block; font-size: 13.5px; margin-bottom: 6px; }
+  .note-card p { margin: 0; font-size: 12.8px; line-height: 1.8; color: var(--doc-text2); }
+  .note-card p + p { margin-top: 8px; }
+  .note-card .hl { font-weight: 750; color: var(--doc-text); }
+  .note-card code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11.5px; background: #EFF1F6; padding: 1.5px 5px; border-radius: 4px;
+  }
+  .note-card.warn { background: var(--doc-warn-soft); border-color: #F0DFBE; }
+  .note-card.ok { background: var(--doc-ok-soft); border-color: #CBE6D5; }
+  .note-card.info { background: var(--doc-info-soft); border-color: #CFE0F1; }
+
+  .caption { font-size: 12.5px; line-height: 1.8; color: var(--doc-text3); margin: 12px 0 0; }
+  .caption b { color: var(--doc-text2); }
+
+  .tbl { width: 100%; border-collapse: collapse; font-size: 12.8px; }
+  .tbl th, .tbl td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--doc-border); vertical-align: top; }
+  .tbl th { font-weight: 700; color: var(--doc-text2); background: #F8F9FC; }
+  .tbl td.dim { color: var(--doc-text3); }
+  .tbl code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; }
+
+  .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--doc-border); font-size: 12px; color: var(--doc-text3); line-height: 1.9; }
+
+  @media (max-width: 1180px) {
+    .grid2 { grid-template-columns: 1fr; justify-items: center; }
+    .cmp { grid-template-columns: 1fr; }
+    .vcards { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <g id="g-checklist"><rect x="3.4" y="3.4" width="17.2" height="17.2" rx="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M7.6 12.1l3 2.9 5.6-5.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 17.2h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+  <g id="g-bell"><path d="M12 3.4a5.6 5.6 0 0 0-5.6 5.6v3.4l-1.5 3.1a.7.7 0 0 0 .6 1h13a.7.7 0 0 0 .6-1l-1.5-3.1V9A5.6 5.6 0 0 0 12 3.4Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9.8 19a2.3 2.3 0 0 0 4.4 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+  <g id="g-devices"><rect x="2.6" y="4.4" width="13" height="9.4" rx="1.7" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6.4 17.4h5.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M9.1 13.8v3.6" stroke="currentColor" stroke-width="1.7"/><rect x="16.4" y="9.6" width="5" height="9.6" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/></g>
+  <g id="g-sun"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.8v2.1M12 19.1v2.1M4.5 12H2.4M21.6 12h-2.1M6.6 6.6L5.1 5.1M18.9 18.9l-1.5-1.5M17.4 6.6l1.5-1.5M5.1 18.9l1.5-1.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+  <g id="g-check"><path d="M4.5 12.6l5 4.9L19.5 6.9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <g id="g-broom"><path d="M15.2 3.6l5.2 5.2-3.1 3.1-5.2-5.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12.1 12.9l-6.3 6.3M6 12.6l5.4 5.4M4.2 19.8h7.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+  <g id="g-moon"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.6 8.6 0 1 0 10.2 10.2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></g>
+  <g id="g-book"><path d="M11.2 6.4C9.6 5 7.2 4.6 4.4 4.9v13.4c2.8-.3 5.2.1 6.8 1.5 1.6-1.4 4-1.8 6.8-1.5V4.9c-2.8-.3-5.2.1-6.8 1.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M11.2 6.4v13.4" stroke="currentColor" stroke-width="1.7"/></g>
+  <g id="g-compose"><path d="M4 20l.9-4.2L16 4.7a2 2 0 0 1 2.8 0l.5.5a2 2 0 0 1 0 2.8L8.2 19.1 4 20Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></g>
+  <g id="g-droplet"><path d="M12 3.6s6 6.2 6 10a6 6 0 0 1-12 0c0-3.8 6-10 6-10Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></g>
+  <g id="g-scissors"><circle cx="7" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="7" cy="17" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.2 8.8L19 18M9.2 15.2L19 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+  <g id="g-alert"><path d="M12 4.2l8.4 15.2H3.6L12 4.2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 9.4v4.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="16.6" r="1" fill="currentColor"/></g>
+  <g id="g-chevron"><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></g>
+</defs></svg>
+
+<div class="topbar">
+  <div class="brand">SekaiNook <span>· 顶栏改通栏</span></div>
+  <nav class="topnav">
+    <a href="#s1">为什么不像</a>
+    <a href="#s2">四版并排</a>
+    <a href="#s3">落地数值</a>
+    <a href="#s4">代价</a>
+  </nav>
+  <div class="themes">
+    <button data-th="rose" title="玫瑰（默认）"></button>
+    <button data-th="dark" title="深色"></button>
+    <button data-th="blue" title="蓝色"></button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="hero">
+    <span class="kicker">顶栏 · 第 3 版</span>
+    <h1>不要胶囊了，就是一条普通的通栏</h1>
+    <p class="lead">
+      胶囊那版的问题是它「浮」着 —— 左右各留 16dp、四角全圆，像一颗药丸贴在天花板上，不像大多数 App 顶上那条。
+      这次全部改成通栏：<b>左右贴边、直上直下、高度 52dp</b>。四版的区别只在「底色什么时候出现」和「有没有那条线」。
+      手机壳能滚，滚一下就能看出差别。
+    </p>
+    <div class="vcards">
+      <div class="vcard is-ok">
+        <div class="v">A 通栏 · 恒定底色</div>
+        <div class="k">最常见的做法：顶栏永远是白的，底下一条 1px 分隔线，内容从线下面滚过去。</div>
+      </div>
+      <div class="vcard">
+        <div class="v">B 通栏 · 首屏透明</div>
+        <div class="k">延续你要的「融入背景」：首屏什么都没有，往下滑 8dp 才淡出白底和分隔线。</div>
+      </div>
+      <div class="vcard is-warn">
+        <div class="v">D 大标题式</div>
+        <div class="k">Material 3 的常规做法：首屏是个大标题，滚动后收成普通 52dp 条。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 01 -->
+  <section class="sec" id="s1">
+    <div class="sec-head"><span class="sec-num">01</span><h2>为什么胶囊看着不像顶栏</h2></div>
+    <p class="sec-sub">同样是「图标 + 标题 + 两个按钮」，形状决定它读起来是「一条栏」还是「一颗药丸」。</p>
+
+    <div class="cmp">
+      <div class="box">
+        <h4>现在的胶囊 <em>2.9.7</em></h4>
+        <p class="note">左右各留 16dp，四角 24dp 全圆，再加落影 —— 它和屏幕边框之间有空隙，所以眼睛读到的是「浮在页面上的一块东西」。</p>
+        <div class="mini pill">
+          <div class="b"></div>
+          <div class="row" style="top:62px"></div>
+          <div class="cap" style="bottom:8px">↑ 左右有空隙 · 四角全圆</div>
+        </div>
+      </div>
+      <div class="box">
+        <h4>通栏 <em>这一版</em></h4>
+        <p class="note">左右贴到屏幕边，高度 52dp，底部一条 1px 线把它和内容分开 —— 这才是「顶栏」的形状，和状态栏连成一体。</p>
+        <div class="mini flat">
+          <div class="b"></div>
+          <div class="row" style="top:62px"></div>
+          <div class="cap" style="bottom:8px">↑ 贴边 · 矩形 · 底部一条线</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 -->
+  <section class="sec" id="s2">
+    <div class="sec-head"><span class="sec-num">02</span><h2>四版并排（都能滚）</h2></div>
+    <p class="sec-sub">
+      每个手机壳里往上推一下，看顶栏怎么变。都是 390×844、1px = 1dp、和真机同尺寸。
+      B / C / D 三版首屏是透明的，滚动后才出现底色。
+    </p>
+
+    <div class="grid2">
+
+      <!-- A -->
+      <div class="col-mock">
+        <div class="phone" data-theme="rose" data-fb="a">
+          <div class="statusbar"><span>9:41</span><div class="icons"><div class="bars"><i></i><i></i><i></i><i></i></div><div class="batt"></div></div></div>
+          <div class="fb" data-v="a">
+              <div class="fb-in">
+                <span class="fb-ic"><svg><use href="#g-checklist"/></svg></span>
+                <span class="fb-title">任务</span>
+                <span class="sp"></span>
+                <button class="fb-btn"><svg><use href="#g-bell"/></svg><i class="dot">3</i></button>
+                <button class="fb-btn plain"><svg><use href="#g-devices"/></svg></button>
+              </div>
+          </div>
+          <div class="screen">
+            <div class="content" style="padding-top:99px">
+              <div class="flow">
+                <div class="strip"><div class="ring"><i>2/3</i></div><div class="stxt"><b>必须完成 2/3</b><span>22:00 前没打卡 · 每件 −10</span></div></div>
+                <div class="grp red"><svg><use href="#g-alert"/></svg>今天必须完成</div>
+                <div class="row-task must"><div class="ibox red"><svg><use href="#g-compose"/></svg></div><div class="ttl"><div class="n">按时完成作业 <em>必须</em></div><div class="m rb">21:00 前打卡 · 没做 −10</div></div><div class="val">+20</div><div class="chk"></div></div>
+                <div class="row-task must"><div class="ibox red"><svg><use href="#g-moon"/></svg></div><div class="ttl"><div class="n">按时睡觉 <em>必须</em></div><div class="m rb">19:00 之后可打卡 · 没做 −10</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="grp dim"><svg><use href="#g-check"/></svg>日常任务</div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-broom"/></svg></div><div class="ttl"><div class="n">整理房间</div><div class="m">今天还能做 2 次</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-book"/></svg></div><div class="ttl"><div class="n">课外阅读 30 分钟</div><div class="m">今天还能做 2 次</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="grp pri"><svg><use href="#g-droplet"/></svg>本周任务</div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-droplet"/></svg></div><div class="ttl"><div class="n">洗头 <em>必须</em></div><div class="m">本周 1/3 次 · 缺一次 −10</div></div><div class="val">+5</div><div class="chk"></div></div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-scissors"/></svg></div><div class="ttl"><div class="n">剪指甲 <em>必须</em></div><div class="m">每周一次 · 未做 −10</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="grp" style="color:var(--warning)"><svg><use href="#g-alert"/></svg>特殊加分</div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-compose"/></svg></div><div class="ttl"><div class="n">参加比赛</div><div class="m">每次 +20 · 要传照片</div></div><div class="val">+20</div><div class="chk"></div></div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-compose"/></svg></div><div class="ttl"><div class="n">获奖</div><div class="m">每次 +50 · 要传照片</div></div><div class="val">+50</div><div class="chk"></div></div>
+                <div class="fold"><svg style="width:14px;height:14px;flex:none"><use href="#g-chevron"/></svg><span>今天已经做满 2 项</span><span class="sp"></span><span>展开</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>A 通栏 · 恒定底色</b><br>最常见的顶栏：永远是白的，一条 1px 分隔线。滚不滚都一样，最稳、最不容易被说「怪」。</div>
+      </div>
+
+      <div>
+        <div class="note-card ok">
+          <b>A 的特点：最「普通」</b>
+          <p>你打开任何一个 App，顶上十有八九是这条：<span class="hl">通栏白底 + 底部 1px 线</span>，标题左边 16dp，右侧图标 16dp。</p>
+          <p>好处是没有状态切换 —— 不管你滚不滚、页面是什么颜色，它都长一样，不会突然变。</p>
+        </div>
+        <div class="note-card">
+          <b>代价</b>
+          <p>首屏会占掉 52dp 高，页面内容整体往下让。你之前想要的「首屏完全融入背景」就没有了。</p>
+        </div>
+      </div>
+
+      <!-- B -->
+      <div class="col-mock">
+        <div class="phone" data-theme="rose" data-fb="b">
+          <div class="statusbar"><span>9:41</span><div class="icons"><div class="bars"><i></i><i></i><i></i><i></i></div><div class="batt"></div></div></div>
+          <div class="fb" data-v="b">
+              <div class="fb-in">
+                <span class="fb-ic"><svg><use href="#g-checklist"/></svg></span>
+                <span class="fb-title">任务</span>
+                <span class="sp"></span>
+                <button class="fb-btn"><svg><use href="#g-bell"/></svg><i class="dot">3</i></button>
+                <button class="fb-btn plain"><svg><use href="#g-devices"/></svg></button>
+              </div>
+          </div>
+          <div class="screen">
+            <div class="content" style="padding-top:99px">
+              <div class="flow">
+                <div class="strip"><div class="ring"><i>2/3</i></div><div class="stxt"><b>必须完成 2/3</b><span>22:00 前没打卡 · 每件 −10</span></div></div>
+                <div class="grp red"><svg><use href="#g-alert"/></svg>今天必须完成</div>
+                <div class="row-task must"><div class="ibox red"><svg><use href="#g-compose"/></svg></div><div class="ttl"><div class="n">按时完成作业 <em>必须</em></div><div class="m rb">21:00 前打卡 · 没做 −10</div></div><div class="val">+20</div><div class="chk"></div></div>
+                <div class="row-task must"><div class="ibox red"><svg><use href="#g-moon"/></svg></div><div class="ttl"><div class="n">按时睡觉 <em>必须</em></div><div class="m rb">19:00 之后可打卡 · 没做 −10</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="grp dim"><svg><use href="#g-check"/></svg>日常任务</div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-broom"/></svg></div><div class="ttl"><div class="n">整理房间</div><div class="m">今天还能做 2 次</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-book"/></svg></div><div class="ttl"><div class="n">课外阅读 30 分钟</div><div class="m">今天还能做 2 次</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="grp pri"><svg><use href="#g-droplet"/></svg>本周任务</div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-droplet"/></svg></div><div class="ttl"><div class="n">洗头 <em>必须</em></div><div class="m">本周 1/3 次 · 缺一次 −10</div></div><div class="val">+5</div><div class="chk"></div></div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-scissors"/></svg></div><div class="ttl"><div class="n">剪指甲 <em>必须</em></div><div class="m">每周一次 · 未做 −10</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="grp" style="color:var(--warning)"><svg><use href="#g-alert"/></svg>特殊加分</div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-compose"/></svg></div><div class="ttl"><div class="n">参加比赛</div><div class="m">每次 +20 · 要传照片</div></div><div class="val">+20</div><div class="chk"></div></div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-compose"/></svg></div><div class="ttl"><div class="n">获奖</div><div class="m">每次 +50 · 要传照片</div></div><div class="val">+50</div><div class="chk"></div></div>
+                <div class="fold"><svg style="width:14px;height:14px;flex:none"><use href="#g-chevron"/></svg><span>今天已经做满 2 项</span><span class="sp"></span><span>展开</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>B 通栏 · 首屏透明</b><br>形状是通栏，但首屏不留痕迹；往下滑 8dp，白底和那条线一起淡进来（280ms）。</div>
+      </div>
+
+      <div>
+        <div class="note-card ok">
+          <b>B = 你原来要的效果 + 普通的形状</b>
+          <p>首屏真的什么都没有（无底色、无线、无影），滚起来才长出一条栏。<span class="hl">和 2.9.7 的区别只是形状从胶囊换成通栏</span>，不加左右空隙、不加圆角。</p>
+          <p>这条最可能是你想要的那条。</p>
+        </div>
+        <div class="note-card info">
+          <b>首屏状态</b>
+          <p>内容第一行在 99dp 处开始（47 状态栏 + 52 条），滚动时内容从条下面穿过去。因为形状是通栏，穿过去的时候左右不会露边。</p>
+        </div>
+      </div>
+
+      <!-- C -->
+      <div class="col-mock">
+        <div class="phone" data-theme="rose" data-fb="c">
+          <div class="statusbar"><span>9:41</span><div class="icons"><div class="bars"><i></i><i></i><i></i><i></i></div><div class="batt"></div></div></div>
+          <div class="fb" data-v="c">
+              <div class="fb-in">
+                <span class="fb-ic"><svg><use href="#g-checklist"/></svg></span>
+                <span class="fb-title">任务</span>
+                <span class="sp"></span>
+                <button class="fb-btn"><svg><use href="#g-bell"/></svg><i class="dot">3</i></button>
+                <button class="fb-btn plain"><svg><use href="#g-devices"/></svg></button>
+              </div>
+          </div>
+          <div class="screen">
+            <div class="content" style="padding-top:99px">
+              <div class="flow">
+                <div class="strip"><div class="ring"><i>2/3</i></div><div class="stxt"><b>必须完成 2/3</b><span>22:00 前没打卡 · 每件 −10</span></div></div>
+                <div class="grp red"><svg><use href="#g-alert"/></svg>今天必须完成</div>
+                <div class="row-task must"><div class="ibox red"><svg><use href="#g-compose"/></svg></div><div class="ttl"><div class="n">按时完成作业 <em>必须</em></div><div class="m rb">21:00 前打卡 · 没做 −10</div></div><div class="val">+20</div><div class="chk"></div></div>
+                <div class="row-task must"><div class="ibox red"><svg><use href="#g-moon"/></svg></div><div class="ttl"><div class="n">按时睡觉 <em>必须</em></div><div class="m rb">19:00 之后可打卡 · 没做 −10</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="grp dim"><svg><use href="#g-check"/></svg>日常任务</div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-broom"/></svg></div><div class="ttl"><div class="n">整理房间</div><div class="m">今天还能做 2 次</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-book"/></svg></div><div class="ttl"><div class="n">课外阅读 30 分钟</div><div class="m">今天还能做 2 次</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="grp pri"><svg><use href="#g-droplet"/></svg>本周任务</div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-droplet"/></svg></div><div class="ttl"><div class="n">洗头 <em>必须</em></div><div class="m">本周 1/3 次 · 缺一次 −10</div></div><div class="val">+5</div><div class="chk"></div></div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-scissors"/></svg></div><div class="ttl"><div class="n">剪指甲 <em>必须</em></div><div class="m">每周一次 · 未做 −10</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="grp" style="color:var(--warning)"><svg><use href="#g-alert"/></svg>特殊加分</div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-compose"/></svg></div><div class="ttl"><div class="n">参加比赛</div><div class="m">每次 +20 · 要传照片</div></div><div class="val">+20</div><div class="chk"></div></div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-compose"/></svg></div><div class="ttl"><div class="n">获奖</div><div class="m">每次 +50 · 要传照片</div></div><div class="val">+50</div><div class="chk"></div></div>
+                <div class="fold"><svg style="width:14px;height:14px;flex:none"><use href="#g-chevron"/></svg><span>今天已经做满 2 项</span><span class="sp"></span><span>展开</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>C 通栏 · 只靠阴影</b><br>同上，但滚动后不加那条 1px 线，只用一层淡阴影把它托起来。</div>
+      </div>
+
+      <div>
+        <div class="note-card">
+          <b>C 和 B 的差别只有一处</b>
+          <p>B 滚动后出现 <code>border-bottom: 1px</code>；C 不画线，只加 <code>box-shadow: 0 2px 10px rgba(40,20,25,.10)</code>。</p>
+          <p>有线的版本边界更硬、更「系统」；只有影的版本更软，但深色主题下阴影几乎看不见，容易糊在一起。</p>
+        </div>
+        <div class="note-card warn">
+          <b>深色主题下要注意</b>
+          <p>深色底上黑影不可见，C 版滚动后等于「顶栏突然变白（深灰）」而没有分隔，内容会看着有点脏。深色下建议还是保留那条线 —— 也就是 B。</p>
+        </div>
+      </div>
+
+      <!-- D -->
+      <div class="col-mock">
+        <div class="phone" data-theme="rose" data-fb="d">
+          <div class="statusbar"><span>9:41</span><div class="icons"><div class="bars"><i></i><i></i><i></i><i></i></div><div class="batt"></div></div></div>
+          <div class="fb" data-v="d">
+              <div class="fb-in">
+                <span class="fb-ic"><svg><use href="#g-checklist"/></svg></span>
+                <span class="fb-title">任务</span>
+                <span class="sp"></span>
+                <button class="fb-btn"><svg><use href="#g-bell"/></svg><i class="dot">3</i></button>
+                <button class="fb-btn plain"><svg><use href="#g-devices"/></svg></button>
+              </div>
+          </div>
+          <div class="screen">
+            <div class="content" style="padding-top:99px">
+              <div class="flow">
+                <div class="bigtitle"><h1>任务</h1><p>今天必须完成 2/3 · 22:00 结算</p></div>
+                <div class="strip"><div class="ring"><i>2/3</i></div><div class="stxt"><b>必须完成 2/3</b><span>22:00 前没打卡 · 每件 −10</span></div></div>
+                <div class="grp red"><svg><use href="#g-alert"/></svg>今天必须完成</div>
+                <div class="row-task must"><div class="ibox red"><svg><use href="#g-compose"/></svg></div><div class="ttl"><div class="n">按时完成作业 <em>必须</em></div><div class="m rb">21:00 前打卡 · 没做 −10</div></div><div class="val">+20</div><div class="chk"></div></div>
+                <div class="row-task must"><div class="ibox red"><svg><use href="#g-moon"/></svg></div><div class="ttl"><div class="n">按时睡觉 <em>必须</em></div><div class="m rb">19:00 之后可打卡 · 没做 −10</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="grp dim"><svg><use href="#g-check"/></svg>日常任务</div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-broom"/></svg></div><div class="ttl"><div class="n">整理房间</div><div class="m">今天还能做 2 次</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="grp pri"><svg><use href="#g-droplet"/></svg>本周任务</div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-droplet"/></svg></div><div class="ttl"><div class="n">洗头 <em>必须</em></div><div class="m">本周 1/3 次 · 缺一次 −10</div></div><div class="val">+5</div><div class="chk"></div></div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-scissors"/></svg></div><div class="ttl"><div class="n">剪指甲 <em>必须</em></div><div class="m">每周一次 · 未做 −10</div></div><div class="val">+10</div><div class="chk"></div></div>
+                <div class="grp" style="color:var(--warning)"><svg><use href="#g-alert"/></svg>特殊加分</div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-compose"/></svg></div><div class="ttl"><div class="n">参加比赛</div><div class="m">每次 +20 · 要传照片</div></div><div class="val">+20</div><div class="chk"></div></div>
+                <div class="row-task"><div class="ibox"><svg><use href="#g-compose"/></svg></div><div class="ttl"><div class="n">获奖</div><div class="m">每次 +50 · 要传照片</div></div><div class="val">+50</div><div class="chk"></div></div>
+                <div class="fold"><svg style="width:14px;height:14px;flex:none"><use href="#g-chevron"/></svg><span>今天已经做满 2 项</span><span class="sp"></span><span>展开</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>D 大标题式（Material 3）</b><br>首屏是个 31px 的大标题贴在内容里，顶上那条只剩两个按钮；滚上去后大标题收起、小标题出现、底色长出。</div>
+      </div>
+
+      <div>
+        <div class="note-card info">
+          <b>D 的代价</b>
+          <p>最「现代」，但要改的地方最多：每个页面都得单独摆大标题，还要算大标题和滚动条的联动。<span class="hl">而且这个项目没多少页面适合大标题</span>（任务页、设置页还行，花园页和计划页很难摆）。</p>
+        </div>
+        <div class="note-card warn">
+          <b>我的建议</b>
+          <p>如果你要的是「看着普通、别搞花样」，<span class="hl">选 B</span> —— 形状是通栏，首屏还是干净的，改动也只是把 2.9.7 的胶囊换成矩形条。</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 03 -->
+  <section class="sec" id="s3">
+    <div class="sec-head"><span class="sec-num">03</span><h2>落地数值（选哪版都按这套）</h2></div>
+    <p class="sec-sub">和 2.9.7 的胶囊相比，几何只有三处变化。</p>
+
+    <table class="tbl">
+      <thead><tr><th style="width:180px">项</th><th style="width:150px">2.9.7 胶囊</th><th style="width:150px">通栏（新版）</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>左右外边距</td><td><code>edgeMargin 16</code></td><td><b>0</b></td><td>贴到屏幕边；内容自己的左右 16dp 留白保持不变</td></tr>
+        <tr><td>圆角</td><td><code>AppShape.pill()</code></td><td><b>0</b></td><td>矩形。只在底部画线或加影</td></tr>
+        <tr><td>高度</td><td>48dp</td><td><b>52dp</b></td><td>通栏没有内壁，52 是「52 - 0 = 52」，图标与文字都居中</td></tr>
+        <tr><td>底部边界</td><td>落影</td><td><b>1px 分隔线</b>（B / D）或阴影（C）</td><td>线用 <code>palette.border</code></td></tr>
+        <tr><td>内容内壁</td><td>上下 6 / 左右 18</td><td><b>上下 0 / 左右 16</b></td><td>内容离屏幕边 = 16 + 0 = 16dp（和页面正文对齐）</td></tr>
+        <tr><td>滚动阈值</td><td>8dp</td><td>8dp（B / C / D）</td><td>A 版不需要这个逻辑</td></tr>
+        <tr><td>过渡</td><td>240ms</td><td><b>280ms</b></td><td>底色和线一起淡入</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note-card ok" style="margin-top:16px">
+      <b>改动量（选 B 的话）</b>
+      <p>只动 <code>app/lib/ui/shell/app_top_bar.dart</code> 一个文件：把 <code>Padding(horizontal: edgeMargin)</code> 去掉、<code>AppShape.pill()</code> 换成 <code>BoxDecoration</code> 矩形 + <code>Border(bottom: ...)</code>、<code>innerHeight</code> 48→52、内壁改成 <code>EdgeInsets.symmetric(horizontal: 16)</code>。外壳的滚动监听、明暗三档按钮、顶部渐隐层全部复用，不用动。</p>
+    </div>
+  </section>
+
+  <!-- 04 -->
+  <section class="sec" id="s4">
+    <div class="sec-head"><span class="sec-num">04</span><h2>四版代价</h2></div>
+    <table class="tbl">
+      <thead><tr><th style="width:150px">版本</th><th style="width:110px">首屏观感</th><th style="width:130px">改动量</th><th>风险</th></tr></thead>
+      <tbody>
+        <tr><td><b>A 恒定底色</b></td><td class="dim">普通、稳</td><td class="dim">最小</td><td>首屏内容整体下移 52dp；「融入背景」这个诉求没了</td></tr>
+        <tr><td><b>B 首屏透明</b></td><td class="dim">先干净后出现</td><td class="dim">小（只改形状）</td><td>滚动中内容从条下穿过时，要看顶部渐隐层够不够；深色下要检查那条线</td></tr>
+        <tr><td><b>C 只用阴影</b></td><td class="dim">最软</td><td class="dim">小</td><td>深色主题下阴影不可见，边界会糊</td></tr>
+        <tr><td><b>D 大标题</b></td><td class="dim">最现代</td><td class="dim">大</td><td>每页都要单独摆大标题；花园/计划页不好做；滚动联动要新写一套</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="footer">
+    SekaiNook · 顶栏通栏验证稿（2026-10-25）· 手机壳 390×844，1px = 1dp，与 Flutter 实际尺寸一致。<br>
+    本页只做验证，仓库里没有改任何代码。手机壳里的滚动是真的，滚一下就能看到顶栏变化。
+  </div>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---- 主题切换 ----
+  function applyDocTheme(name) {
+    var phones = document.querySelectorAll('.phone');
+    for (var i = 0; i < phones.length; i++) {
+      phones[i].setAttribute('data-theme', name);
+    }
+  }
+  var btns = document.querySelectorAll('.themes button');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener('click', function () {
+      applyDocTheme(this.getAttribute('data-th'));
+    });
+  }
+  var qs = new URLSearchParams(location.search);
+  if (qs.get('theme')) applyDocTheme(qs.get('theme'));
+
+  // ---- 每个手机壳：滚动驱动顶栏状态 ----
+  var phones = document.querySelectorAll('.phone');
+  for (var p = 0; p < phones.length; p++) {
+    (function (phone) {
+      var screen = phone.querySelector('.screen');
+      var bar = phone.querySelector('.fb');
+      if (!screen || !bar) return;
+      function sync() {
+        var on = screen.scrollTop > 8;
+        if (on) bar.classList.add('solid');
+        else bar.classList.remove('solid');
+      }
+      screen.addEventListener('scroll', sync, { passive: true });
+      sync();
+      // ?scroll=70 直接停在滚动后的样子（截图 / 对比用）
+      var st = Number(qs.get('scroll') || 0);
+      if (st > 0) {
+        setTimeout(function () {
+          screen.scrollTop = st;
+          sync();
+          setTimeout(sync, 60);
+        }, 30);
+      }
+    })(phones[p]);
+  }
+})();
+</script>
+</body>
+</html>

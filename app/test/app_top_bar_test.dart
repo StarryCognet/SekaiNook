@@ -9,7 +9,6 @@ import 'package:sekainook_app/data/api/settings_api.dart';
 import 'package:sekainook_app/state/notification_state.dart';
 import 'package:sekainook_app/state/theme_state.dart';
 import 'package:sekainook_app/theme/app_theme.dart';
-import 'package:sekainook_app/theme/tokens.dart';
 import 'package:sekainook_app/ui/shell/app_top_bar.dart';
 import 'package:sekainook_app/ui/icons/icons.dart';
 
@@ -173,10 +172,10 @@ void main() {
     // 悬浮的关键：body 的 padding.top 被抹掉，正文从屏幕最顶开始 ——
     // 顶栏是盖在它上面的一层，不是把它推下去
     expect(tester.getTopLeft(find.text('正文')).dy, moreOrLessEquals(0));
-    // 各页要自己让的高度 = 状态栏 + 条自身高 + 一道气口（与 AppNavBar.contentInset 对称）
+    // 各页要自己让的高度 = 状态栏 + 条自身高（2.9.8 起通栏贴死状态栏，不再多留气口）
     expect(
       AppTopBar.contentInset(tester.element(find.byType(AppTopBar))),
-      moreOrLessEquals(44 + AppTopBar.topMargin + AppTopBar.innerHeight + AppSpacing.sm),
+      moreOrLessEquals(44 + AppTopBar.innerHeight),
     );
   });
 
@@ -210,36 +209,39 @@ void main() {
 
   // ---- B 版：首屏通透 / 滚下去才浮现 ----
 
-  /// 顶栏那颗胶囊当前的底色与落影（AnimatedContainer 的 decoration 就是目标值）
-  ShapeDecoration barDecoration(WidgetTester tester) {
+  /// 顶栏当前的底色与那条底边线（AnimatedContainer 的 decoration 就是目标值）
+  BoxDecoration barDecoration(WidgetTester tester) {
     final AnimatedContainer container = tester.widget<AnimatedContainer>(
       find.descendant(
         of: find.byType(AppTopBar),
         matching: find.byType(AnimatedContainer),
       ),
     );
-    return container.decoration! as ShapeDecoration;
+    return container.decoration! as BoxDecoration;
   }
 
-  testWidgets('B 版首屏：没有胶囊底、没有落影，页名直接浮在底色上', (WidgetTester tester) async {
+  /// 底部那条 1px 分隔线（通栏靠它和内容分开；胶囊那版用落影）
+  Color barBottomLine(WidgetTester tester) {
+    final BoxBorder border = barDecoration(tester).border!;
+    return (border as Border).bottom.color;
+  }
+
+  testWidgets('B 版首屏：没有底色、没有分隔线，页名直接浮在底色上', (WidgetTester tester) async {
     await pumpTopBar(tester);
-    final ShapeDecoration decoration = barDecoration(tester);
-    expect(decoration.color, Colors.transparent, reason: '首屏不该有那条白胶囊');
-    expect(decoration.shadows, isEmpty, reason: '首屏不该有落影');
+    expect(barDecoration(tester).color, Colors.transparent, reason: '首屏不该有那条通栏底');
+    expect(barBottomLine(tester), Colors.transparent, reason: '首屏不该有分隔线');
   });
 
-  testWidgets('B 版滚动后：底色与落影都浮现出来', (WidgetTester tester) async {
+  testWidgets('B 版滚动后：底色与分隔线都浮现出来', (WidgetTester tester) async {
     await pumpTopBar(tester, elevated: true);
-    final ShapeDecoration decoration = barDecoration(tester);
-    expect(decoration.color, isNot(Colors.transparent));
-    expect(decoration.shadows, isNotEmpty);
+    expect(barDecoration(tester).color, isNot(Colors.transparent));
+    expect(barBottomLine(tester), isNot(Colors.transparent));
   });
 
   testWidgets('设了自定义背景图：即使首屏也要有底，不然照片从底下过会吃掉文字', (WidgetTester tester) async {
     await pumpTopBar(tester, hasBackground: true);
-    final ShapeDecoration decoration = barDecoration(tester);
-    expect(decoration.color, isNot(Colors.transparent));
-    expect(decoration.shadows, isNotEmpty);
+    expect(barDecoration(tester).color, isNot(Colors.transparent));
+    expect(barBottomLine(tester), isNot(Colors.transparent));
   });
 
   group('接线层（AppTopBarHost）', () {

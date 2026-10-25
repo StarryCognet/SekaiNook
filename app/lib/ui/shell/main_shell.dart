@@ -344,17 +344,19 @@ class _TopBarFade extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final double top = MediaQuery.viewPaddingOf(context).top;
+    // 纯底色这一段要正好盖住「状态栏 + 条身」；2.9.8 起顶栏是贴死状态栏的通栏，
+    // 这一段占整个渐变的绝大部分（以前是悬空胶囊，46% 就够）。
+    final double solid = top + AppTopBar.topMargin + AppTopBar.innerHeight;
+    final double total = solid + _tail;
     return IgnorePointer(
       child: SizedBox(
-        height: top + AppTopBar.topMargin + AppTopBar.innerHeight + _tail,
+        height: total,
         child: DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              // 从 0 到 46% 保持纯底色（这一段正好盖住状态栏 + 胶囊本体），
-              // 之后化到全透明。
-              stops: const <double>[0, 0.46, 1],
+              stops: <double>[0, solid / total, 1],
               colors: <Color>[
                 palette.bg,
                 palette.bg,

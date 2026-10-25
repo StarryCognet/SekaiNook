@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 
 import '../../state/notification_state.dart';
 import '../../state/theme_state.dart';
-import '../../theme/app_shape.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
@@ -58,11 +57,16 @@ class AppTopBarPage {
 /// （见 [ThemeState.cycleBrightness]）。PC 端那颗「余额/积分小胶囊」不做：
 /// 手机端首页与账本本来就有更大的余额卡，顶栏再塞会把页面名挤没。
 ///
-/// 形态与 [AppNavBar] 同一套语言：整条是浮在页面之上的圆角胶囊（两侧留白 + 柔和
-/// 落影），不是顶到屏幕边缘的横杠。**但不透明、没有毛玻璃** —— 1.31.6 试过卡片模糊，
-/// 真机实测太卡、1.31.8 已整体回滚，这里不再引入 `BackdropFilter`；用户设了自定义
-/// 背景图时底色走 [AppPalette.cardColor]（半透明玻璃底），与卡片、底栏一个口径。
-/// 设置页的「底栏不透明度」只管底栏，顶栏不跟它变。
+/// 形态：**普通通栏** —— 左右贴住屏幕边、直角、52dp 高，底部一条 1px 分隔线。
+/// 2.9.7 之前是浮在页面上的圆角胶囊（两侧留白 + 落影），真机上被说「像一颗药丸
+/// 贴在天花板上」，2.9.8 按验证稿改回通栏。
+///
+/// 首屏**不留痕**：无底色、无线，页名直接浮在页面底色上；内容滚到顶栏下面时，
+/// 底色与那条线一起淡入（[AnimatedContainer] + [AppMotion.normal]）。**不透明、
+/// 没有毛玻璃** —— 1.31.6 试过卡片模糊，真机实测太卡、1.31.8 已整体回滚，这里
+/// 不再引入 `BackdropFilter`；用户设了自定义背景图时底色走 [AppPalette.cardColor]
+/// （半透明玻璃底），与卡片、底栏一个口径。设置页的「底栏不透明度」只管底栏，
+/// 顶栏不跟它变。
 ///
 /// 纯展示组件：**不读 Provider**（接线在 [AppTopBarHost]）—— 这样它能在没有
 /// Provider 的裸 pump 测试里跑。
@@ -89,8 +93,8 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
 
   /// 内容是否已经滚到顶栏下面。
   ///
-  /// `false`（首屏）= 没有胶囊底、没有落影，页名直接浮在页面底色上；
-  /// `true` = 淡入胶囊底与落影，内容和顶栏重新分开。由外壳监听页面滚动决定，
+  /// `false`（首屏）= 没有底色、没有分隔线，页名直接浮在页面底色上；
+  /// `true` = 淡入底色与那条 1px 线，内容和顶栏重新分开。由外壳监听页面滚动决定，
   /// 过渡交给 [AnimatedContainer]（[AppMotion.normal]）。设了背景图时始终为真
   /// —— 照片从底下过会把文字吃掉。
   final bool elevated;
@@ -107,24 +111,24 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
 
   // ---- 几何（跟 AppNavBar 一样公开：外壳与测试要拿它算高度） ----
 
-  /// 条内可用高度（不含上下留白）。
+  /// 条内可用高度（不含状态栏）。
   ///
-  /// 2.9.7 定稿 48：2.9.6 试过收到 42，真机上太窄 —— 胶囊矮了一截、内容又贴着
-  /// 屏幕边，看着不像一颗胶囊而像一条色带。48 高 + 18 的内壁，内容离屏幕边
-  /// 正好 34dp（16 外边距 + 18 内壁），和「C 宽松」那版验证稿一致。
-  static const double innerHeight = 48;
+  /// 2.9.7 的胶囊是 48；改成通栏后定 52 —— 通栏没有上下的内壁留白，52 全部
+  /// 是内容区，比 48 的胶囊只高 4，但第一行文字看着不挤。Material 标准是 56、
+  /// iOS 是 44，52 落在中间；再高首屏就要多让一截。
+  static const double innerHeight = 52;
 
-  /// 与屏幕两侧 / 状态栏下方的留白 —— 让它浮起来，而不是贴住边框
-  static const double edgeMargin = AppSpacing.md;
-  static const double topMargin = AppSpacing.sm;
+  /// 通栏直接贴住屏幕两侧，不再留外边距（2.9.7 的 16 是胶囊的留白）。
+  static const double edgeMargin = 0;
 
-  /// 胶囊内壁留白。48 - 2×6 = 36，正好是一个小件的点按区。
-  static const double barPadding = 6;
+  /// 通栏从屏幕顶（安全区以下）开始长，不再和状态栏留缝。
+  static const double topMargin = 0;
 
-  /// 胶囊内壁的左右留白 —— 比上下多一点，让「任务」两个字不贴胶囊边。
-  ///
-  /// 内容离屏幕边 = [edgeMargin] 16 + 这 18 = 34dp（2.9.6 是 16+3=19，太贴边）。
-  static const double barHorizontalPadding = 18;
+  /// 条内上下留白。通栏的高度就是内容高度，不再有「内壁」这个概念。
+  static const double barPadding = 0;
+
+  /// 内容左右内壁 —— 与页面正文的 16dp 对齐，「任务」两个字不贴屏幕边。
+  static const double barHorizontalPadding = AppSpacing.md;
 
   /// 右边小件的点按区域
   static const double chipHeight = 36;
@@ -143,78 +147,64 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => preferredBarSize;
 
-  /// 页面顶部要为悬浮顶栏让出的高度 —— 与 [AppNavBar.contentInset] 对称。
+  /// 页面顶部要为顶栏让出的高度 —— 与 [AppNavBar.contentInset] 对称。
   ///
-  /// 顶栏是浮在内容之上的一层（不再占 `Scaffold.appBar` 槽），内容从屏幕顶铺下来，
-  /// 不让位的话首屏第一条会被胶囊压住。用 `viewPadding` 而不是 `padding`：
+  /// 顶栏是盖在内容之上的一层（不占 `Scaffold.appBar` 槽），内容从屏幕顶铺下来，
+  /// 不让位的话首屏第一条会被顶栏压住。用 `viewPadding` 而不是 `padding`：
   /// 外壳会把 body 的 `padding.top` 抹掉（跟底栏那侧同一个道理），
   /// 只有 `viewPadding` 始终是屏幕自己的安全区原值。
-  static double contentInset(BuildContext context) =>
-      MediaQuery.viewPaddingOf(context).top + topMargin + innerHeight + AppSpacing.sm;
-
-  /// 胶囊落影 —— **只一层**。
   ///
-  /// 以前叠了两层（blur 20 + blur 4），浅色底上会糊出一圈灰雾，看着发脏；
-  /// 现在整条在「首屏透明 → 滚动浮现」之间切换，阴影跟着一起淡入淡出，
-  /// 一层就够把胶囊从内容里托起来了。
-  static List<BoxShadow> _shadows(BuildContext context) {
-    final Color shadow = Theme.of(context).colorScheme.shadow;
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
-    return <BoxShadow>[
-      BoxShadow(
-        color: shadow.withValues(alpha: dark ? 0.30 : 0.09),
-        blurRadius: 10,
-        spreadRadius: -2,
-        offset: const Offset(0, 3),
-      ),
-    ];
-  }
+  /// 通栏贴死状态栏，所以这里只剩「状态栏 + 条高」，不再多加留白。
+  static double contentInset(BuildContext context) =>
+      MediaQuery.viewPaddingOf(context).top + innerHeight;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     final bool reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
 
-    // 首屏不给底：页名直接浮在页面底色上，只有内容滚到顶栏下面时才淡入胶囊底。
-    // 用户滚动时外壳把 [elevated] 置 true，动画由 AnimatedContainer 负责。
+    // 首屏不留痕：无底色、无线，页名直接浮在页面底色上；内容滚到顶栏下面时
+    // 外壳把 [elevated] 置 true，底色与底部那条 1px 线一起淡入。
     final bool lifted = elevated || hasBackground;
 
     // 挂在 `Scaffold.appBar` 上时高度由 preferredSize 给（不含状态栏），
     // 状态栏那一条由这里自己让 —— 这样参数里不用再传 MediaQuery.padding。
     return SafeArea(
       bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(edgeMargin, topMargin, edgeMargin, 0),
-        child: SizedBox(
-          height: innerHeight,
-          child: AnimatedContainer(
-            duration: reduceMotion ? Duration.zero : AppMotion.normal,
-            curve: AppMotion.standard,
-            decoration: ShapeDecoration(
-              color: lifted
-                  ? palette.cardColor(hasBackground: hasBackground)
-                  : Colors.transparent,
-              shape: AppShape.pill(),
-              shadows: lifted ? _shadows(context) : const <BoxShadow>[],
+      child: SizedBox(
+        height: innerHeight,
+        child: AnimatedContainer(
+          duration: reduceMotion ? Duration.zero : AppMotion.normal,
+          curve: AppMotion.standard,
+          decoration: BoxDecoration(
+            color: lifted
+                ? palette.cardColor(hasBackground: hasBackground)
+                : Colors.transparent,
+            // 通栏靠底部一条 1px 线和内容分开（胶囊那版用的是落影）。
+            // 首屏这条线是透明的 —— 跟底色一起淡入，不会先冒出一条白边。
+            border: Border(
+              bottom: BorderSide(
+                color: lifted ? palette.border : Colors.transparent,
+              ),
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: barHorizontalPadding,
-                vertical: barPadding,
-              ),
-              child: Row(
-                children: <Widget>[
-                  Expanded(child: _PageChip(page: page)),
-                  const SizedBox(width: AppSpacing.sm),
-                  _BellChip(unread: unread, onTap: onNotifications),
-                  const SizedBox(width: AppSpacing.xs),
-                  _BrightnessButton(
-                    mode: brightness,
-                    reduceMotion: reduceMotion,
-                    onTap: onToggleBrightness,
-                  ),
-                ],
-              ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: barHorizontalPadding,
+              vertical: barPadding,
+            ),
+            child: Row(
+              children: <Widget>[
+                Expanded(child: _PageChip(page: page)),
+                const SizedBox(width: AppSpacing.sm),
+                _BellChip(unread: unread, onTap: onNotifications),
+                const SizedBox(width: AppSpacing.xs),
+                _BrightnessButton(
+                  mode: brightness,
+                  reduceMotion: reduceMotion,
+                  onTap: onToggleBrightness,
+                ),
+              ],
             ),
           ),
         ),
@@ -223,7 +213,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-/// 左边那颗胶囊：页面图标 + 页面名。纯展示，不可点。
+/// 左边的页面图标 + 页面名。纯展示，不可点。
 ///
 /// 2.9.6 去掉了图标底下那块 28dp 的 `primarySoft` 方块 —— 它比文字还重，
 /// 视线先落在方块上而不是页名。现在图标直接用主色画，和文字左对齐。
