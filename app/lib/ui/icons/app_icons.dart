@@ -26,6 +26,7 @@ abstract final class AppIcons {
   static const checkDouble = AppGlyphs.checkDouble;
   static const checkCircle = AppGlyphs.checkCircle;
   static const delete = AppGlyphs.delete;
+  static const cut = AppGlyphs.cut;
   static const edit = AppGlyphs.edit;
   static const compose = AppGlyphs.compose;
   static const copy = AppGlyphs.copy;

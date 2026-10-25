@@ -4,11 +4,12 @@
  *
  * ## 为什么要有这个接口
  * Cloudflare Pages 没有 scheduled handler（本项目只有 functions/api/maintenance/orphans.ts
- * 这类手动维护接口），所以「每天不足 5 个任务扣 10」与「22:00 还没打卡睡觉扣 20」不可能在半夜
- * 自动执行，只能在**下次打开页面时补记**（需求方案「风险」一节）。补记有两个硬要求：
+ * 这类手动维护接口），所以「必须任务没做扣 10」「本周任务缺次扣 10」与「22:00 还没打卡睡觉扣 20」
+ * 不可能在半夜自动执行，只能在**下次打开页面时补记**（需求方案「风险」一节）。补记有两个硬要求：
  *
- *  1. **幂等靠固定 id，不靠任何额外状态**：三条系统记录的 id 固定为
- *     `seed_welcome_bonus` / `daily_penalty_<东八区 YYYY-MM-DD>` / `sleep_penalty_<同左>`，
+ *  1. **幂等靠固定 id，不靠任何额外状态**：系统记录的 id 全部固定 ——
+ *     `seed_welcome_bonus` / `sleep_penalty_<东八区 YYYY-MM-DD>` /
+ *     `must_miss_<taskId>_<日期>` / `weekly_miss_<taskId>_<周一日期>_<第几次>`，
  *     一律 INSERT OR IGNORE —— 同一天调多少次都只落一条，并发/重试天然安全。
  *  2. **created_at 回填到被结算那一天的正午**（东八区）：罚款若按真实时间落库，
  *     隔天补记的记录会落在第二天，污染按 created_at 过滤的「当日完成数」。
@@ -17,9 +18,9 @@
  *  - 现在 ≥ 22:00（SLEEP_DEADLINE）→ **今天**（这一天已经过完，可以判罚款）
  *  - 否则 → **昨天**（最近一个已经过完的东八区日）
  *
- * 关键点：**只有「确实已经过完的那一天」才判罚款**。若按字面「当日完成数 < 5 就扣」，
- * 早上首次打开页面时今天必然还没有流水（完成数恒为 0），等于每天无条件扣 10 ——
- * 那是把需求 2「至少完成 5 个任务否则扣 10」做反了。此语义已与 Lead 确认（选 C）。
+ * 关键点：**只有「确实已经过完的那一天」才判罚款**。若按字面「今天没打卡就扣」，
+ * 早上首次打开页面时今天必然还没打卡（打卡数恒为 0），等于每天无条件扣 10 ——
+ * 那是把「没做完当天的事要扣分」做反了。此语义已与 Lead 确认（选 C，v2.10 沿用）。
  *
  * 请求体的 `date`（'YYYY-MM-DD'）是**测试用**覆盖项：显式指定「被结算的那一天」。
  *
@@ -36,15 +37,21 @@
 
 import {
   COMPLETION_EXCLUDED_SQL_LIST,
-  DAILY_MIN_TASKS,
+  DAILY_MUST_TASK_IDS,
   LEDGER_TASK_RULES,
+  MUST_PENALTY_SINCE_DAY,
+  MUST_PENALTY_SINCE_WEEK,
   SLEEP_DEADLINE,
+  WEEKLY_TASK_RULES,
   beijingClock,
   beijingDayBoundsOf,
-  countDayCompletions,
-  dailyPenaltyRecordId,
+  beijingWeekdayOf,
+  countTaskRecords,
   isPastBeijingTime,
+  mustMissRecordId,
   sleepPenaltyRecordId,
+  weekBoundsOf,
+  weeklyMissRecordId,
 } from '../../_lib/rules';
 import { LEDGER_SUMMARY_SQL } from './summary';
 
@@ -58,8 +65,10 @@ const SEED_TASK_ID = 'seed_welcome_bonus';
 const SLEEP_TASK_ID = 'sleep_on_time';
 /** 睡觉罚款 */
 const SLEEP_PENALTY_TASK_ID = 'sleep_penalty';
-/** 每日不足任务数罚款 */
-const DAILY_PENALTY_TASK_ID = 'daily_min_tasks_penalty';
+/** v2.10 必须任务没做（每件一条记录，逐件 −10） */
+const MUST_MISS_TASK_ID = 'must_task_miss_penalty';
+/** v2.10 周任务缺次（缺一次一条记录，−10/次） */
+const WEEKLY_MISS_TASK_ID = 'weekly_task_miss_penalty';
 
 const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const CN_OFFSET_MS = 8 * 60 * 60 * 1000;
@@ -240,25 +249,59 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         }
       }
 
-      /* ③ 每日不足任务数罚款：结算日去重完成数 < DAILY_MIN_TASKS → -10（口径见契约 §3） */
-      const done = await countDayCompletions(env.DB, startIso, endIso);
-      const hasDailyPenalty = await hasRecordForDay(
-        env.DB,
-        DAILY_PENALTY_TASK_ID,
-        startIso,
-        endIso,
-        false
-      );
-      if (done < DAILY_MIN_TASKS && !hasDailyPenalty) {
-        if (
-          await insertSystemRecord(env.DB, {
-            id: dailyPenaltyRecordId(settleDay),
-            taskId: DAILY_PENALTY_TASK_ID,
-            createdAt: noonIso,
-            note: `结算日 ${settleDay}：当日完成 ${done}/${DAILY_MIN_TASKS} 个任务`,
-          })
-        ) {
-          applied.push(dailyPenaltyRecordId(settleDay));
+      /* ③ v2.10 必须任务没做 → 逐件 −10。
+         判定口径与睡觉罚款一致：结算日没有「已通过」的打卡就算没做。
+         sleep_on_time **不在这里** —— 它由上面的 sleep_penalty（−20）负责，
+         两边都算就成了「一晚扣两次」。
+         老口径「当日完成数不足 5 件扣 10」从 v2.10 起不再结算（家长反馈会和新规则重复扣），
+         规则与历史记录仍保留在 rules.ts 里。
+         ⚠️ 生效日之前的日子一律跳过：补结算「规则上线前的那一天」时，新任务在账本里
+         必然一条记录都没有 —— 不设这道门就是无差别误扣。 */
+      if (settleDay >= MUST_PENALTY_SINCE_DAY) {
+        for (const mustTaskId of DAILY_MUST_TASK_IDS) {
+          const didIt = await hasRecordForDay(env.DB, mustTaskId, startIso, endIso, true);
+          if (didIt) continue;
+          const recordId = mustMissRecordId(mustTaskId, settleDay);
+          const taskName = LEDGER_TASK_RULES[mustTaskId]?.name ?? mustTaskId;
+          if (
+            await insertSystemRecord(env.DB, {
+              id: recordId,
+              taskId: MUST_MISS_TASK_ID,
+              createdAt: noonIso,
+              note: `结算日 ${settleDay}：没做「${taskName}」`,
+            })
+          ) {
+            applied.push(recordId);
+          }
+        }
+      }
+
+      /* ④ v2.10 本周任务缺次 → −10/次，只在**这一周过完**时结算（settleDay 是周日）。
+         洗头一周 3 次、剪指甲一周 1 次；数这一周里「已通过」的记录条数，缺几次记几笔。
+         补记边界与日结算一致：只结算最近一个过完的日子 —— 周一打开 App 会补上周日，
+         覆盖绝大部分情况；连着一周不打开 App 就补不上那几周的周任务，这是现有
+         「开页面才补记」机制的固有局限，不是本次引入的。 */
+      if (beijingWeekdayOf(settleDay) === 0) {
+        const week = weekBoundsOf(settleDay);
+        if (week.weekStartKey >= MUST_PENALTY_SINCE_WEEK) {
+          for (const { taskId, target } of WEEKLY_TASK_RULES) {
+            const done = await countTaskRecords(env.DB, taskId, week.startIso, week.endIso);
+            const miss = Math.max(0, target - done);
+            const taskName = LEDGER_TASK_RULES[taskId]?.name ?? taskId;
+            for (let nth = 1; nth <= miss; nth++) {
+              const recordId = weeklyMissRecordId(taskId, week.weekStartKey, nth);
+              if (
+                await insertSystemRecord(env.DB, {
+                  id: recordId,
+                  taskId: WEEKLY_MISS_TASK_ID,
+                  createdAt: noonIso,
+                  note: `本周（${week.weekStartKey} 起）「${taskName}」只做了 ${done}/${target} 次`,
+                })
+              ) {
+                applied.push(recordId);
+              }
+            }
+          }
         }
       }
     }

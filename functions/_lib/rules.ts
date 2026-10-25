@@ -68,6 +68,24 @@ const FAMILY_TASK_RULES: Record<string, ServerTaskRule> = {
     window: { start: '19:00', end: '22:00' },
   },
 
+  /* ===== v2.10 新增（见 docs/family-final.html 01 节规则表） =====
+     分三类：必须任务（没做日结算扣分）/ 本周任务（按自然周结算）/ 特殊加分（不限次）。
+     这几条都**不设 autoApprove** —— 和现有家庭任务一样走家长审批（pending），
+     孩子点了只进待审批，家长确认后才入账。 */
+
+  /** 洗脸刷牙：每天必须，没做日结算 −10 */
+  wash_face: { name: '洗脸刷牙', type: 'earning', value: 5, dailyLimit: 1 },
+  /** 洗头：每周 3 次，每次 +5；周日结算缺次 −10/次 */
+  wash_hair: { name: '洗头', type: 'earning', value: 5, dailyLimit: 1 },
+  /** 剪指甲：手指甲/脚指甲算同一次，每周 1 次 +10；周日结算没做 −10 */
+  trim_nails: { name: '剪指甲', type: 'earning', value: 10, dailyLimit: 1 },
+  /** 上班一天：每周 1 次，孩子上班赚的 +500，打卡后由家长审批 */
+  work_one_day: { name: '上班一天', type: 'earning', value: 500, dailyLimit: 1 },
+  /** 特殊加分：不限次（一次比赛可能既参赛又获奖，两条各记一次 = 同日 +70） */
+  competition: { name: '参加比赛', type: 'earning', value: 20 },
+  award: { name: '获奖', type: 'earning', value: 50 },
+  school_cert: { name: '学校奖状', type: 'earning', value: 20 },
+
   ipad_time: { name: '看iPad 30分钟', type: 'spending', value: -10, dailyLimit: 4 },
   phone_time: { name: '玩手机 30分钟', type: 'spending', value: -10, dailyLimit: 4 },
 
@@ -185,6 +203,48 @@ export const DAILY_MIN_TASKS = 5;
 export const DAILY_MIN_TASKS_PENALTY = 10;
 
 /**
+ * v2.10「必须任务」：每天必须做，结算日没有「已通过」的打卡就**逐件**扣分。
+ *
+ * 与 DAILY_MIN_TASKS 的区别：后者是「今天完成不足 5 件就扣 10」的粗口径，
+ * v2.10 起**不再结算**（家长反馈会和必须任务重复扣）；这条是点名到具体任务的新口径。
+ *
+ * ⚠️ sleep_on_time 刻意不在里面：它没做已经由 sleep_penalty（−20）负责，
+ *    再记一笔必须任务罚款就变成一晚 −30。前端仍然给它挂「必须」角标，
+ *    但角标文案写的是 −20（那条真的会扣的钱）。
+ */
+export const DAILY_MUST_TASK_IDS: readonly string[] = ['finish_homework', 'wash_face'];
+
+/** 必须任务每缺一件扣多少分（正数，实际记账为负） */
+export const MUST_TASK_MISS_PENALTY = 10;
+
+/**
+ * v2.10「本周任务」：按东八区自然周（周一 00:00 – 周日 24:00）结算，
+ * 周日过完（22:00 后）补记缺次罚款。target = 一周要做几次。
+ */
+export const WEEKLY_TASK_RULES: readonly { taskId: string; target: number }[] = [
+  { taskId: 'wash_hair', target: 3 },
+  { taskId: 'trim_nails', target: 1 },
+];
+
+/** 周任务缺一次扣多少分（正数，实际记账为负） */
+export const WEEKLY_MISS_PENALTY = 10;
+
+/**
+ * 必须任务 / 周任务罚款的**生效日**（东八区日期串）。
+ *
+ * 为什么需要这道门：日结算会补记「最近一个过完的日子」，而 v2.10 之前的账本里
+ * 根本没有「洗脸刷牙」这类新任务的记录 —— 不设生效日的话，上线第一天补结算昨天，
+ * 会把「历史上从来没记过」直接判成「没做」而误扣钱。同理周任务要等**一个完整的周**
+ * 过完才结算（10-25 上线 → 第一个可结算是 10-26 开始的那一周，11-01 周日补记）。
+ *
+ * 以后再加必须任务时，这两个常量不用改 —— 门针对的是「规则从哪天开始生效」。
+ */
+export const MUST_PENALTY_SINCE_DAY = '2026-10-25';
+
+/** 周任务罚款生效的**第一个完整自然周**（周一日期串）。 */
+export const MUST_PENALTY_SINCE_WEEK = '2026-10-26';
+
+/**
  * 自定义任务每天最多能拿多少分（**按总额封顶，不是按次数封顶**）。
  * 两个理由，缺一不可：
  *  1. 防刷分：日限从「按 task_id」放宽成「按任务名判重」之后，换个名字就能再打一次
@@ -208,6 +268,8 @@ export const COMPLETION_EXCLUDED_IDS: readonly string[] = [
   'seed_welcome_bonus',
   'daily_min_tasks_penalty',
   'sleep_penalty',
+  'must_task_miss_penalty',
+  'weekly_task_miss_penalty',
   'admin_adjust',
   'garden:admin_adjust',
 ];
@@ -232,11 +294,31 @@ const SYSTEM_TASK_RULES: Record<string, ServerTaskRule> = {
     serverOnly: true,
   },
   // 日结算罚款：当日去重完成数 < DAILY_MIN_TASKS 时 -10（记录 id 为 daily_penalty_<日期>）
+  // ⚠️ v2.10 起 settle.ts 不再写这条（改由「必须任务逐件扣」负责），规则保留只为
+  //    老账本里已有的记录还能正常显示与统计，别删。
   daily_min_tasks_penalty: {
     name: '今日完成不足 5 个任务',
     type: 'spending',
     value: -DAILY_MIN_TASKS_PENALTY,
     dailyLimit: 1,
+    autoApprove: true,
+    serverOnly: true,
+  },
+  // v2.10：必须任务没做（finish_homework / wash_face 各一条记录，逐件 -10）
+  must_task_miss_penalty: {
+    name: '必须任务没完成',
+    type: 'spending',
+    value: -MUST_TASK_MISS_PENALTY,
+    dailyLimit: 4,
+    autoApprove: true,
+    serverOnly: true,
+  },
+  // v2.10：周任务缺次（洗头 3 次 / 剪指甲 1 次，缺一次 -10）
+  weekly_task_miss_penalty: {
+    name: '本周任务没完成',
+    type: 'spending',
+    value: -WEEKLY_MISS_PENALTY,
+    dailyLimit: 8,
     autoApprove: true,
     serverOnly: true,
   },
@@ -282,6 +364,67 @@ export function dailyPenaltyRecordId(dayKey: string): string {
 /** 睡觉罚款的固定记录 id（东八区日期）：一天只有一条，靠 INSERT OR IGNORE 天然幂等 */
 export function sleepPenaltyRecordId(dayKey: string): string {
   return `sleep_penalty_${dayKey}`;
+}
+
+/** v2.10 必须任务没做的固定记录 id：结算日 × 任务，一件一天一条 */
+export function mustMissRecordId(taskId: string, dayKey: string): string {
+  return `must_miss_${taskId}_${dayKey}`;
+}
+
+/** v2.10 周任务缺次的固定记录 id：周起始日 × 任务 × 第几次缺 */
+export function weeklyMissRecordId(taskId: string, weekStartKey: string, nth: number): string {
+  return `weekly_miss_${taskId}_${weekStartKey}_${nth}`;
+}
+
+/** 东八区某天的星期几（0 = 周日，1 = 周一 … 6 = 周六） */
+export function beijingWeekdayOf(dayKey: string): number {
+  const ms = Date.parse(`${dayKey}T00:00:00.000+08:00`);
+  // 1970-01-01 是周四：floor 出天数后 +4 即偏移，再模 7
+  const days = Math.floor(ms / 86_400_000);
+  return (((days + 4) % 7) + 7) % 7;
+}
+
+/**
+ * 东八区某天所在**自然周**的周一 key，与整周 [周一 00:00, 下周一 00:00) 的 UTC ISO 边界。
+ * 周日结算时用它圈出「这一周」去数洗头做了几次。
+ */
+export function weekBoundsOf(dayKey: string): {
+  weekStartKey: string;
+  startIso: string;
+  endIso: string;
+} {
+  const weekday = beijingWeekdayOf(dayKey);
+  const backDays = weekday === 0 ? 6 : weekday - 1; // 周日要回退 6 天到周一
+  const startMs = Date.parse(`${dayKey}T00:00:00.000+08:00`) - backDays * 86_400_000;
+  return {
+    weekStartKey: new Date(startMs + 8 * 3_600_000).toISOString().slice(0, 10),
+    startIso: new Date(startMs).toISOString(),
+    endIso: new Date(startMs + 7 * 86_400_000).toISOString(),
+  };
+}
+
+/**
+ * 某个 task_id 在一段时间内「已通过」的记录**条数**。
+ *
+ * 与 countDayCompletions 的区别：那个按 task_id 去重，数的是「做了几个不同任务」；
+ * 这个数「同一个任务做了几遍」—— 家庭任务日限都是 1，所以条数就等于次数
+ * （洗头一周 3 次 = 3 条 approved 记录）。
+ */
+export async function countTaskRecords(
+  db: D1Database,
+  taskId: string,
+  startIso: string,
+  endIso: string
+): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS c FROM family_ledger
+       WHERE task_id = ? AND (status IS NULL OR status = 'approved')
+         AND created_at >= ? AND created_at < ?`
+    )
+    .bind(taskId, startIso, endIso)
+    .first<{ c: number }>();
+  return row?.c ?? 0;
 }
 
 /**

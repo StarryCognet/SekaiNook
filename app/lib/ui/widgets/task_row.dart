@@ -41,6 +41,10 @@ class TaskRow extends StatelessWidget {
     this.metaIcon,
     this.onTap,
     this.compact = false,
+    this.mustBadge = false,
+    this.metaDanger = false,
+    this.weekDone,
+    this.weekTarget,
   });
 
   /// 任务名（一行，放不下就省略号）
@@ -67,6 +71,16 @@ class TaskRow extends StatelessWidget {
 
   /// 紧凑版：家长端管理列表里用，行高矮一点
   final bool compact;
+
+  /// 名称旁挂一个红色「必须」角标（只有「没做会扣分」的任务才挂）
+  final bool mustBadge;
+
+  /// 元信息用危险色（用于「未打卡 −10」这类罚分提示）
+  final bool metaDanger;
+
+  /// 周任务进度：本周已做几次 / 目标几次。给了 [weekTarget] 才在 meta 行尾画圆点。
+  final int? weekDone;
+  final int? weekTarget;
 
   @override
   Widget build(BuildContext context) {
@@ -139,15 +153,25 @@ class TaskRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: AppFontSize.sm,
-                        fontWeight: FontWeight.w600,
-                        color: titleColor,
-                      ),
+                    Row(
+                      children: <Widget>[
+                        Flexible(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: AppFontSize.sm,
+                              fontWeight: FontWeight.w600,
+                              color: titleColor,
+                            ),
+                          ),
+                        ),
+                        if (mustBadge) ...<Widget>[
+                          const SizedBox(width: AppSpacing.xs),
+                          _mustBadge(palette, fill),
+                        ],
+                      ],
                     ),
                     if (meta != null && meta!.isNotEmpty)
                       Padding(
@@ -155,7 +179,13 @@ class TaskRow extends StatelessWidget {
                         child: Row(
                           children: <Widget>[
                             if (metaIcon != null) ...<Widget>[
-                              GlyphIcon(metaIcon!, size: 12, color: palette.textTertiary),
+                              GlyphIcon(
+                                metaIcon!,
+                                size: 12,
+                                color: metaDanger
+                                    ? palette.ink(palette.danger, fill)
+                                    : palette.textTertiary,
+                              ),
                               const SizedBox(width: AppSpacing.xs),
                             ],
                             Flexible(
@@ -165,11 +195,17 @@ class TaskRow extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: AppFontSize.xs,
-                                  color: palette.textTertiary,
+                                  color: metaDanger
+                                      ? palette.ink(palette.danger, fill)
+                                      : palette.textTertiary,
                                   fontFeatures: kTabularNumbers,
                                 ),
                               ),
                             ),
+                            if (weekTarget != null) ...<Widget>[
+                              const SizedBox(width: 6),
+                              _weekDots(palette, weekDone: weekDone ?? 0, target: weekTarget!),
+                            ],
                           ],
                         ),
                       ),
@@ -194,6 +230,48 @@ class TaskRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// 名称旁的「必须」小标：只有没做会扣分的任务才挂它。
+  ///
+  /// 挂太多就等于没挂 —— 所以它不表示「重要」，只表示「忘了要付钱」。
+  Widget _mustBadge(AppPalette palette, Color fill) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: ShapeDecoration(
+        color: Color.alphaBlend(palette.danger.withValues(alpha: 0.12), fill),
+        shape: AppShape.all(4),
+      ),
+      child: Text(
+        '必须',
+        style: TextStyle(
+          fontSize: 10,
+          height: 1.2,
+          fontWeight: FontWeight.w700,
+          color: palette.ink(palette.danger, fill),
+        ),
+      ),
+    );
+  }
+
+  /// 周任务的次数圆点：做满几次就填几个（最多画 5 个，再多点就挤了）
+  Widget _weekDots(AppPalette palette, {required int weekDone, required int target}) {
+    final int count = target.clamp(1, 5);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (int i = 0; i < count; i++)
+          Container(
+            width: 5,
+            height: 5,
+            margin: EdgeInsets.only(left: i == 0 ? 0 : 3),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: i < weekDone ? palette.ink(palette.success) : palette.border,
+            ),
+          ),
+      ],
     );
   }
 
@@ -274,6 +352,21 @@ Glyph taskIconFor(String taskId, {bool earning = true}) {
       return AppIcons.alarmOff;
     case 'homework_incomplete':
       return AppIcons.assignment;
+    // v2.10 新增任务
+    case 'wash_face':
+      return AppIcons.sparkle;
+    case 'wash_hair':
+      return AppIcons.flower;
+    case 'trim_nails':
+      return AppIcons.cut;
+    case 'work_one_day':
+      return AppIcons.store;
+    case 'competition':
+      return AppIcons.target;
+    case 'award':
+      return AppIcons.trophy;
+    case 'school_cert':
+      return AppIcons.verified;
     default:
       return earning ? AppIcons.star : AppIcons.removeCircle;
   }

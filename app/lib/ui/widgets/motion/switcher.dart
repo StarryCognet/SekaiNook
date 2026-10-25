@@ -24,6 +24,7 @@ class SlideFadeSwitcher extends StatelessWidget {
     this.duration = AppMotion.fast,
     this.axis = Axis.horizontal,
     this.alignment = Alignment.topCenter,
+    this.direction = 1,
   });
 
   final Key childKey;
@@ -39,14 +40,23 @@ class SlideFadeSwitcher extends StatelessWidget {
   /// 切换时两层的对齐方式，默认顶部对齐，避免高度不同时上下跳
   final Alignment alignment;
 
+  /// 方向感：`1` = 新内容从右（横）/从下滑入、旧内容往左/上走（默认）；
+  /// `-1` 则反过来。
+  ///
+  /// 调用方按「目标 tab 在当前 tab 的左边还是右边」算出来传，切换才有空间感 ——
+  /// 从「任务区」点到「历史记录」应该往左翻页，而不是每次都从右边挤进来。
+  final int direction;
+
   @override
   Widget build(BuildContext context) {
     if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
       return KeyedSubtree(key: childKey, child: child);
     }
 
-    final Offset begin = axis == Axis.horizontal ? Offset(offset, 0) : Offset(0, offset);
-    final Offset end = axis == Axis.horizontal ? Offset(-offset, 0) : Offset(0, -offset);
+    final double sign = direction >= 0 ? 1 : -1;
+    final Offset base = axis == Axis.horizontal ? Offset(offset * sign, 0) : Offset(0, offset * sign);
+    final Offset begin = base;
+    final Offset end = -base;
 
     return AnimatedSwitcher(
       duration: duration,

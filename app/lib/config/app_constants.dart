@@ -76,6 +76,9 @@ abstract final class AppConstants {
   /// 自定义任务（家长新增的任务）本地列表
   static const String keyCustomTasks = 'sekainook_custom_tasks_v1';
 
+  /// 家庭页首屏卡片的排列顺序（本机偏好：孩子和家长各拖各的）
+  static const String keyFamilyCardOrder = 'sekainook_family_card_order_v1';
+
   /// 上一次用的浅色主题（切到深色时记住，切回来用）
   static const String keyThemeLight = 'sekainook_theme_light';
 

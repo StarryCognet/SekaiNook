@@ -14,6 +14,22 @@ extension TaskTypeX on TaskType {
   String get label => this == TaskType.earning ? '赚积分' : '扣积分';
 }
 
+/// 任务在「赚积分」区里的展示分组（纯前端概念，服务端不关心）。
+///
+/// 为什么要有它：任务区原来只有「赚钱 / 消费」一刀切，12 条任务平铺成一张清单。
+/// 加了「每天必须完成」「每周 N 次」「参赛获奖」之后，平铺会把「今天不做要扣分的事」
+/// 和「一周只发生一次的事」混在同一个音量上，所以按频率分三组。
+enum TaskGroup {
+  /// 每天要做（含必须任务）
+  daily,
+
+  /// 每周 N 次（洗头 3 次、剪指甲 1 次、上班 1 天）
+  weekly,
+
+  /// 特殊加分：参赛 / 获奖 / 学校奖状，不限次数、不算进「今日进度」
+  special,
+}
+
 /// 打卡时间窗（24 小时制 "HH:mm"，闭区间，不支持跨零点）。
 class TaskWindow {
   const TaskWindow({required this.start, required this.end});
@@ -59,6 +75,10 @@ class TaskConfig {
     this.dailyLimit,
     this.window,
     this.requirePhoto,
+    this.group = TaskGroup.daily,
+    this.mandatory = false,
+    this.weeklyTarget,
+    this.missPenalty,
   });
 
   final String id;
@@ -80,6 +100,29 @@ class TaskConfig {
   /// `core/task_rules.dart` 的 `taskRequiresPhoto`；自定义任务由家长在
   /// 「添加任务」里勾选，原样带到这里。
   final bool? requirePhoto;
+
+  /// 展示分组（见 [TaskGroup]）
+  final TaskGroup group;
+
+  /// 必须完成：当天/本周没做要扣 [missPenalty] 分。
+  ///
+  /// 目前只有「今天必须完成」那几件与周任务挂它 —— 消费罚款类永远 false，
+  /// 它们本身就是「已经发生的事」，不存在「没做」。
+  final bool mandatory;
+
+  /// 每周目标次数（[TaskGroup.weekly] 用）：洗头 3、剪指甲 1、上班 1。
+  final int? weeklyTarget;
+
+  /// 没完成时扣多少分（负数，如 -10）；null = 不扣分。
+  ///
+  /// 前端只拿它做文案（「未做 −10」），真正扣分由服务端日结算执行。
+  final int? missPenalty;
+
+  /// 这条任务是不是「按周结算」的（周任务用自然周，日任务按天）
+  bool get isWeekly => group == TaskGroup.weekly;
+
+  /// 每周要做满几次；非周任务返回 null
+  int? get weeklyGoal => isWeekly ? (weeklyTarget ?? 1) : null;
 
   factory TaskConfig.fromJson(Map<String, dynamic> json) => TaskConfig(
         id: (json['id'] ?? '') as String,
@@ -111,6 +154,10 @@ class TaskConfig {
     int? dailyLimit,
     TaskWindow? window,
     bool? requirePhoto,
+    TaskGroup? group,
+    bool? mandatory,
+    int? weeklyTarget,
+    int? missPenalty,
   }) =>
       TaskConfig(
         id: id ?? this.id,
@@ -122,6 +169,10 @@ class TaskConfig {
         dailyLimit: dailyLimit ?? this.dailyLimit,
         window: window ?? this.window,
         requirePhoto: requirePhoto ?? this.requirePhoto,
+        group: group ?? this.group,
+        mandatory: mandatory ?? this.mandatory,
+        weeklyTarget: weeklyTarget ?? this.weeklyTarget,
+        missPenalty: missPenalty ?? this.missPenalty,
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
