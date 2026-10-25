@@ -14,10 +14,21 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.9.6';
+export const APP_VERSION = '2.9.7';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.9.7',
+    date: '2026-10-25 16:20:00',
+    title: '顶栏定了：首屏完全透明，下滑才长成胶囊',
+    changes: [
+      '顶栏高度定在 48dp，左右内壁加到 18：页名和图标不再贴着屏幕边，一整条看着像胶囊而不是色带',
+      '首屏时顶栏真的什么都没有 —— 没有底色、没有阴影、没有描边，和页面底同一个颜色；往下滑 8dp 才用 280ms 把白底和落影淡进来',
+      '页面顶部加了一层「底色 → 透明」的渐变，内容滚上来时是淡进顶栏，不会和页名叠成两行字',
+      '弹窗打开时这层渐变跟着顶栏一起退场，不会留在面板背后',
+    ],
+  },
   {
     version: '2.9.6',
     date: '2026-10-25 15:45:00',

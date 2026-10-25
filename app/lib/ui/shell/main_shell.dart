@@ -15,6 +15,7 @@ import '../../state/family_state.dart';
 import '../../state/garden_state.dart';
 import '../../state/notification_state.dart';
 import '../../state/update_state.dart';
+import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
 import '../widgets/motion_widgets.dart';
 import '../widgets/update_dialog.dart';
@@ -130,7 +131,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   bool _topBarElevated = false;
 
   /// 判定阈值：小于它算「还在顶部」，避免列表轻微回弹就让顶栏忽明忽暗
-  static const double _topBarElevatedAt = 6;
+  /// 内容往上走这么多就认为「已经盖到条下面了」。8dp 比 6 稳一点：
+  /// 首屏那点回弹不会被误判成滚动。
+  static const double _topBarElevatedAt = 8;
 
   bool _handleScroll(ScrollNotification notification) {
     // 只认最外层那条列表；卡片里的横向列表、聊天流之类的内层滚动不该摇顶栏
@@ -243,6 +246,22 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   ),
                 ),
               ),
+              // 顶部渐隐：首屏顶栏是纯透明的，内容从它下面滚过去时会跟页名叠字。
+              // 这一层从页面底色渐变到透明，把「撞上去」的那一段化掉 —— 只在
+              // 视觉上起作用（IgnorePointer），并且跟顶栏一起在弹窗时退场。
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: ListenableBuilder(
+                  listenable: cover,
+                  builder: (BuildContext context, Widget? child) => _CoveredBar(
+                    covered: cover.covered,
+                    slideUp: true,
+                    child: const _TopBarFade(),
+                  ),
+                ),
+              ),
               // 全局顶栏（Web 版 MainLayout 的 Header）：浮在内容之上的一层，
               // 左边当前页、右边铃铛与明暗按钮。
               Positioned(
@@ -306,6 +325,49 @@ NotifyAudience audienceOf(FamilyRole? role) =>
 ///
 /// [covered] 来自 [RouteCoverState]：弹窗打开时顶栏往上收、底栏往下收，
 /// 同时淡出，关掉再回来。退场期间禁用点击，免得隔着遮罩点到下面的胶囊。
+/// 顶栏背后那条「页面底色 → 透明」的竖向渐变。
+///
+/// 顶栏本身在首屏是**完全透明**的（不加底、不加影、不加描边，融进页面底色），
+/// 这带来一个问题：内容往上滚的时候，第一行字会从页名底下穿过去，两行字叠在
+/// 一起。这一层把顶部那一段渐变回页面底色（顶栏高度再往下多 10dp 让渐变收尾），
+/// 看上去就像内容「淡进」了顶栏，而不是硬撞上去。
+///
+/// 高度 = 状态栏 + 上留白 + 条高 + 10。用 `viewPadding` 拿状态栏（外壳把 body
+/// 的 `padding.top` 抹掉了，见上面那段注释）。
+class _TopBarFade extends StatelessWidget {
+  const _TopBarFade();
+
+  /// 渐变在顶栏下沿再拖出来这么多，免得末端出现一条硬边。
+  static const double _tail = 10;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final double top = MediaQuery.viewPaddingOf(context).top;
+    return IgnorePointer(
+      child: SizedBox(
+        height: top + AppTopBar.topMargin + AppTopBar.innerHeight + _tail,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              // 从 0 到 46% 保持纯底色（这一段正好盖住状态栏 + 胶囊本体），
+              // 之后化到全透明。
+              stops: const <double>[0, 0.46, 1],
+              colors: <Color>[
+                palette.bg,
+                palette.bg,
+                palette.bg.withValues(alpha: 0),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CoveredBar extends StatelessWidget {
   const _CoveredBar({
     required this.covered,

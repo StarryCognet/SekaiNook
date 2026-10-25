@@ -109,16 +109,22 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
 
   /// 条内可用高度（不含上下留白）。
   ///
-  /// 2.9.6 从 52 收到 42：顶栏只是一条「你现在在哪一格」的提示，不需要 52dp
-  /// 的胶囊去占位。收掉这 10dp，首屏第一行任务跟着往上提一截。
-  static const double innerHeight = 42;
+  /// 2.9.7 定稿 48：2.9.6 试过收到 42，真机上太窄 —— 胶囊矮了一截、内容又贴着
+  /// 屏幕边，看着不像一颗胶囊而像一条色带。48 高 + 18 的内壁，内容离屏幕边
+  /// 正好 34dp（16 外边距 + 18 内壁），和「C 宽松」那版验证稿一致。
+  static const double innerHeight = 48;
 
   /// 与屏幕两侧 / 状态栏下方的留白 —— 让它浮起来，而不是贴住边框
   static const double edgeMargin = AppSpacing.md;
   static const double topMargin = AppSpacing.sm;
 
-  /// 胶囊内壁留白（42 - 2×3 = 36，正好是一个小件的点按区）
-  static const double barPadding = 3;
+  /// 胶囊内壁留白。48 - 2×6 = 36，正好是一个小件的点按区。
+  static const double barPadding = 6;
+
+  /// 胶囊内壁的左右留白 —— 比上下多一点，让「任务」两个字不贴胶囊边。
+  ///
+  /// 内容离屏幕边 = [edgeMargin] 16 + 这 18 = 34dp（2.9.6 是 16+3=19，太贴边）。
+  static const double barHorizontalPadding = 18;
 
   /// 右边小件的点按区域
   static const double chipHeight = 36;
@@ -192,7 +198,10 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
               shadows: lifted ? _shadows(context) : const <BoxShadow>[],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(barPadding),
+              padding: const EdgeInsets.symmetric(
+                horizontal: barHorizontalPadding,
+                vertical: barPadding,
+              ),
               child: Row(
                 children: <Widget>[
                   Expanded(child: _PageChip(page: page)),
