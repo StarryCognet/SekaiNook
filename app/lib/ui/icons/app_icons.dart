@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart' show Offset;
 import 'package:sekainook_app/fl_ui/icons/app_glyphs.dart';
 import 'package:sekainook_app/fl_ui/icons/glyph.dart';
 
