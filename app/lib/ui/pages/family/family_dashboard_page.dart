@@ -1,11 +1,8 @@
 import 'package:sekainook_app/fl_ui/dialog.dart';
 import 'package:sekainook_app/fl_ui/null_status.dart';
-import 'package:sekainook_app/fl_ui/segmented_control.dart';
 import 'package:sekainook_app/ui/icons/icons.dart';
 import 'dart:async';
-import 'dart:math' as math;
 
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:sekainook_app/ui/widgets/app_toast.dart';
 import 'package:sekainook_app/ui/widgets/app_loading.dart';
@@ -13,9 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../config/app_constants.dart';
 import '../../../config/family_rules.dart';
 import '../../../core/api_client.dart';
 import '../../../core/api_exception.dart';
@@ -28,7 +23,6 @@ import '../../../data/models/custom_task.dart';
 import '../../../data/models/ledger_record.dart';
 import '../../../data/models/task_config.dart';
 import '../../../state/custom_tasks_state.dart';
-import '../../../state/family_card_order.dart';
 import '../../../state/family_state.dart';
 import '../../../state/theme_state.dart';
 import '../../../theme/app_shape.dart';
@@ -113,10 +107,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   /// 每秒钟刷新一次「现在」，用于作息判断（22:00 之后提示罚款）
   late DateTime _now;
 
-  /// 只负责 TabBar 的高亮动画；**分区状态的唯一真相是地址栏的 `tab` 查询参数**
-  /// （见 `build` 里的派生逻辑），因此这里不再存「当前分页」字段。
-  TabController? _tabController;
-
   // ---- 驳回弹窗 ----
   bool _rejecting = false;
 
@@ -129,9 +119,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   // ---- 打卡弹窗 ----
   /// 正在提交的任务 id（防止手机连点重复入账）
   String? _submittingId;
-
-  /// 兑换区输入框里的积分数（null = 还没填，视为 0）
-  int? _exchangePoints;
 
   /// 历史记录状态筛选 + 已渲染条数（分页）
   _RecordFilter _recordFilter = _RecordFilter.all;
@@ -149,25 +136,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   /// 「特殊加分」（参赛 / 获奖 / 奖状）是否展开 —— 一周才一两次，默认收起不占首屏
   bool _specialExpanded = false;
 
-  /// 近 14 天趋势是否展开 —— 默认收起，一周才看一次
-  bool _trendExpanded = false;
-
-  /// 上一次切 tab 时算出的滑动方向（`1` = 新内容从右进，`-1` = 从左进）。
-  /// 由 [_goTab] 写、[_buildTabs] 读 —— 让「任务区 → 历史记录」是往左翻页而不是每次都从右边挤进来。
-  int _tabDirection = 1;
-
-  /// 首屏卡片顺序（本机偏好，孩子家长各一份）
-  FamilyCardOrderData _cardOrder = FamilyCardOrderData.defaults;
-
-  /// 卡片编辑态：卡片轻微抖动 + 可长按拖动 + 右上角叉号
-  bool _cardEditing = false;
-
-  /// 抖动控制器：编辑态循环 3.6 秒（FlClash 的 _shakeDuration）
-  late final AnimationController _shakeController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 3600),
-  );
-
   /// 家长端「自定义任务」管理区是否展开（默认收起，避免常驻表单压住任务列表）
   bool _customManagerExpanded = false;
 
@@ -184,7 +152,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<CustomTasksState>().ensurePresets();
-      unawaited(_loadCardOrder());
       void reload() => unawaited(_reloadLedger());
       reload();
     });
@@ -203,11 +170,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   @override
   void dispose() {
-    _shakeController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _clockTimer?.cancel();
     _pollTimer?.cancel();
-    _tabController?.dispose();
     super.dispose();
   }
 
@@ -231,28 +196,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   /// 分区键 → 地址栏口径（反向映射，用于切换时导航）
   static String _tabParamFor(String area) => area == 'records' ? 'history' : area;
-
-  List<String> _tabsFor(bool isParent) => <String>[
-        'tasks',
-        if (isParent) 'pending',
-        'records',
-      ];
-
-  /// 分页控制器：随身份变化重建（孩子端没有「待审批」页），
-  /// 并把索引对齐到 URL 派生出来的分区 —— TabBar 的高亮和内容分支都用同一个值，
-  /// 不会出现「高亮在 A、内容显示 B」。
-  void _ensureTabController(bool isParent, int index) {
-    final keys = _tabsFor(isParent);
-    final current = _tabController;
-    if (current == null || current.length != keys.length) {
-      current?.dispose();
-      _tabController = TabController(length: keys.length, vsync: this, initialIndex: index);
-      return;
-    }
-    // TabBar 是本页面的子孙：在 build 里改索引只会把子孙标脏，
-    // 同一帧内 TabBar 就会按新索引重画，不会残留一帧的错位。
-    if (current.index != index) current.index = index;
-  }
 
   /// 轮询：家长 10s 刷待审批（角标实时性），孩子 15s 刷流水（感知审批结果）。
   /// 身份切换时按新间隔重建 —— 与 Web 版两个 useEffect 的分工一致。
@@ -584,45 +527,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     }
   }
 
-  // ---- 兑换现金 ----
-
-  /// 兑换现金（仅家长）：把指定积分数按 100 积分 = 10 元换成钱，
-  /// 记一条「现金兑现」支出 —— 积分→钱的闭环留在同一本流水里。
-  Future<void> _settle(int points) async {
-    final amount = points;
-    final state = context.read<FamilyState>();
-    final balance = state.balance;
-    if (amount <= 0 || amount > balance) return;
-    final yuan = FamilyRules.pointsToYuan(amount);
-    final task = TaskConfig(
-      id: 'payout',
-      name: '现金兑现',
-      type: TaskType.spending,
-      value: -amount,
-    );
-    try {
-      await state.api.addLedgerRecord(
-            task,
-            note: '积分兑换现金：$amount 积分 = $yuan 元',
-            autoApprove: true,
-          );
-      await state.loadLedger();
-      if (!mounted) return;
-      setState(() => _exchangePoints = null);
-      _toast('已兑换 $yuan 元，扣掉 $amount 积分');
-      _burst();
-    } catch (e) {
-      // 账记上了但自动审批失败：积分没扣掉，那笔在待审批里 —— 不能说「已兑换」
-      if (e is LedgerApprovalException) {
-        await state.loadLedger().catchError((Object _) {});
-        _toast('已记账，但审批没成功 —— $amount 积分还没扣掉，记录在待审批里，去点一下通过',
-            warning: true);
-      } else {
-        _toast(e is ApiException ? e.message : '兑换失败，请重试', warning: true);
-      }
-    }
-  }
-
   // ---- 导出 CSV ----
 
   /// 导出 CSV（仅家长）：按当前筛选导出全部记录。
@@ -667,8 +571,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final String tab =
         const <String>{'tasks', 'pending', 'history'}.contains(rawTab) ? rawTab : 'tasks';
     final String area = _areaFor(tab, isParent: isParent);
-    final int tabIndex = math.max(0, _tabsFor(isParent).indexOf(area));
-    _ensureTabController(isParent, tabIndex);
     _ensurePolling(isParent);
 
     if (_error != null) {
@@ -704,344 +606,12 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   // ---- ① 余额大卡片 ----
 
 
-  // ---- ① 状态条：积分 + 今日必须任务 + 快捷打卡 ----
 
-  /// 原「余额卡 + 今日卡」合并成一张状态条。
+  /// 页面主体：任务（默认）/ 待审批 / 历史记录。
   ///
-  /// 两张卡加起来孩子端 350dp、家长端 530dp，而 390×844 屏首屏可用只有 598dp ——
-  /// 任务区永远被挤到第二屏。今日卡里每天真正要用的只有「作业 / 睡觉」两个按钮
-  /// 和一条作息提示，大时钟和日期抬眼就有，不值得占 226dp。
-  Widget _buildStatusCard(FamilyState state, bool isParent) {
-    final palette = context.palette;
-    final balance = state.balance;
-    final isPositive = balance >= 0;
-    final balanceColor = isPositive ? palette.success : palette.danger;
-    final exchangeValue = _exchangePoints ?? 0;
-    final exchangeYuan = FamilyRules.pointsToYuan(exchangeValue);
-    final canExchange = exchangeValue > 0 && exchangeValue <= balance;
-
-    final records = state.records;
-    // 22:00 后仍未打卡睡觉：服务端会按 settleDay 自动记一笔 -20「未按时作息(晚于22:00)」
-    final isLate = _now.hour >= 22;
-    final earningTasks = FamilyRules.tasksByType(TaskType.earning);
-    TaskConfig? byId(String id) {
-      for (final task in earningTasks) {
-        if (task.id == id) return task;
-      }
-      return null;
-    }
-
-    final homeworkTask = byId('finish_homework');
-    final sleepTask = byId('sleep_on_time');
-    // 今天必须完成 = 日常任务里挂了 mandatory 的（作业 / 睡觉 / 洗脸刷牙）
-    final mustTasks = earningTasks
-        .where((task) => task.group == TaskGroup.daily && task.mandatory)
-        .toList(growable: false);
-    final mustTotal = mustTasks.length;
-    final mustDone = mustTasks.where((task) => _isDone(task, records)).length;
-    final todayDelta = _todayDelta(records);
-
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              GlyphIcon(AppIcons.wallet, size: 16, color: palette.primary),
-              const SizedBox(width: AppSpacing.xs),
-              Text(
-                '当前总积分',
-                style: TextStyle(fontSize: AppFontSize.sm, color: palette.textSecondary),
-              ),
-              const Spacer(),
-              if (todayDelta != 0) ...<Widget>[
-                _pill(
-                  text: '${todayDelta > 0 ? '+' : ''}$todayDelta 今天',
-                  color: todayDelta > 0 ? palette.success : palette.danger,
-                ),
-                const SizedBox(width: AppSpacing.xs),
-              ],
-              _pill(
-                text: isPositive ? '盈余' : '透支',
-                color: isPositive ? palette.success : palette.danger,
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              // 进入 / 退出卡片编辑态（抖动 + 可拖 + 叉号）。
-              // 入口放在状态条右上角而不是顶栏：家庭页没有自己的 Scaffold，
-              // 顶栏是 MainShell 的 AppTopBar，不为一个按钮去改全局壳。
-              PressInkWell(
-                onTap: () => _setCardEditing(!_cardEditing),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.xs),
-                  child: GlyphIcon(
-                    _cardEditing ? AppIcons.check : AppIcons.edit,
-                    size: 16,
-                    color: _cardEditing ? palette.primary : palette.textTertiary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: <Widget>[
-              AnimatedCount(
-                value: balance,
-                style: TextStyle(
-                  fontSize: AppFontSize.num,
-                  fontWeight: FontWeight.w700,
-                  color: balanceColor,
-                  fontFeatures: kTabularNumbers,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Text(
-                '分',
-                style: TextStyle(fontSize: AppFontSize.sm, color: palette.textTertiary),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: <Widget>[
-              _mustRing(palette, done: mustDone, total: mustTotal),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      mustTotal == 0
-                          ? '今天没有必须任务'
-                          : '今天必须完成 ${mustDone.clamp(0, mustTotal)}/$mustTotal',
-                      style: TextStyle(
-                        fontSize: AppFontSize.sm,
-                        fontWeight: FontWeight.w600,
-                        color: palette.text,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isLate
-                          ? '已过 22:00 · 没做完要扣分了'
-                          : '22:00 前打卡 · 没做完每件 −${FamilyRules.mandatoryPenaltyPerTask}',
-                      style: TextStyle(
-                        fontSize: AppFontSize.xs,
-                        color: isLate ? palette.ink(palette.danger) : palette.textTertiary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (homeworkTask != null || sleepTask != null) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: <Widget>[
-                if (homeworkTask != null)
-                  Expanded(
-                    child: AppFilledButton.icon(
-                      // 实色底上的字 / 图标要按这层底色取，不能沿用主题给「主色」配的 onPrimary
-                      style: FilledButton.styleFrom(
-                        backgroundColor: palette.success,
-                        foregroundColor: palette.onColor(palette.success),
-                      ),
-                      onPressed: _isDone(homeworkTask, records)
-                          ? null
-                          : () => _startCheckIn(homeworkTask, records: records),
-                      icon: const GlyphIcon(AppIcons.checkCircle, size: 18),
-                      label: const Text('作业'),
-                    ),
-                  ),
-                if (homeworkTask != null && sleepTask != null)
-                  const SizedBox(width: AppSpacing.sm),
-                if (sleepTask != null)
-                  Expanded(
-                    child: AppFilledButton.icon(
-                      style: FilledButton.styleFrom(backgroundColor: palette.primary),
-                      onPressed: _isDone(sleepTask, records)
-                          ? null
-                          : () => _startCheckIn(sleepTask, records: records),
-                      icon: const GlyphIcon(AppIcons.moon, size: 18),
-                      label: const Text('睡觉'),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-          if (isParent && state.pendingCount > 0) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: <Widget>[
-                GlyphIcon(AppIcons.checklist, size: 14, color: palette.primary),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  '待审批 ${state.pendingCount} 项',
-                  style: TextStyle(
-                    fontSize: AppFontSize.sm,
-                    color: palette.primary,
-                    fontFeatures: kTabularNumbers,
-                  ),
-                ),
-              ],
-            ),
-          ],
-          // 积分兑换现金：100 积分 = 10 元，可以只兑换一部分（仅家长、余额为正时）
-          if (isParent && balance > 0) ...<Widget>[
-            const SizedBox(height: AppSpacing.md),
-            Divider(height: 1, color: palette.border),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              '积分兑换现金 · ${FamilyRules.exchangeRateText}',
-              style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextField(
-              keyboardType: TextInputType.number,
-              inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-              onChanged: (value) {
-                setState(() => _exchangePoints = int.tryParse(value));
-              },
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: '想兑换多少积分（最多 $balance）',
-                suffixText: '积分',
-                hintStyle: TextStyle(fontSize: AppFontSize.sm, color: palette.textTertiary),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            SizedBox(
-              width: double.infinity,
-              child: AppFilledButton.icon(
-                onPressed: canExchange
-                    ? () => _confirmExchange(exchangeValue, exchangeYuan)
-                    : null,
-                icon: const GlyphIcon(AppIcons.wallet, size: 18),
-                label: Text('兑换 $exchangeYuan 元现金'),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  /// 状态条左侧的小圆环：今天必须任务做完了几个。
-  ///
-  /// 用原生 [CircularProgressIndicator] 而不是自绘 —— 只 40dp、圆环端点要圆头，
-  /// 参数化绘制没有额外收益。
-  Widget _mustRing(AppPalette palette, {required int done, required int total}) {
-    final double progress = total == 0 ? 0 : done.clamp(0, total) / total;
-    final bool allDone = total > 0 && done >= total;
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: Stack(
-        alignment: Alignment.center,
-        children: <Widget>[
-          SizedBox(
-            width: 40,
-            height: 40,
-            child: CircularProgressIndicator(
-              value: progress,
-              strokeWidth: 3.5,
-              backgroundColor: palette.surfaceSoft,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                allDone ? palette.success : palette.primary,
-              ),
-              strokeCap: StrokeCap.round,
-            ),
-          ),
-          Text(
-            '$done/$total',
-            style: TextStyle(
-              fontSize: AppFontSize.xs,
-              fontWeight: FontWeight.w700,
-              color: palette.text,
-              fontFeatures: kTabularNumbers,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 今天一整天的净积分（已批准记录求和），状态条上显示「+50 今天」。
-  int _todayDelta(List<LedgerRecord> records) {
-    var sum = 0;
-    for (final record in records) {
-      if (record.status != null && record.status != LedgerStatus.approved) continue;
-      final at = record.createdAt.toLocal();
-      if (at.year == _now.year && at.month == _now.month && at.day == _now.day) {
-        sum += record.amount;
-      }
-    }
-    return sum;
-  }
-
-  // ---- ①-b 首屏卡片顺序（本机偏好）----
-
-  Future<void> _loadCardOrder() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final data = FamilyCardOrderData.decode(prefs.getString(AppConstants.keyFamilyCardOrder));
-      if (!mounted) return;
-      setState(() => _cardOrder = data);
-    } catch (_) {
-      // 本机存储不可用：用默认顺序即可，不影响页面
-    }
-  }
-
-  void _saveCardOrder() {
-    unawaited(() async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(AppConstants.keyFamilyCardOrder, _cardOrder.encode());
-      } catch (_) {
-        // 存不下就只在本次会话里生效
-      }
-    }());
-  }
-
-  /// 进出编辑态：抖动只在编辑态跑（收起时立刻停，别让整页一直动）
-  void _setCardEditing(bool editing) {
-    setState(() => _cardEditing = editing);
-    if (editing) {
-      _shakeController.repeat();
-    } else {
-      _shakeController
-        ..stop()
-        ..value = 0;
-    }
-  }
-
-  void _onReorderCards(int oldIndex, int newIndex) {
-    // ReorderableListView 的 newIndex 是「插入位置」，往下拖时要先减一
-    final int target = newIndex > oldIndex ? newIndex - 1 : newIndex;
-    setState(() => _cardOrder = _cardOrder.moved(oldIndex, target));
-    _saveCardOrder();
-  }
-
-  void _toggleCard(FamilyCard card) {
-    setState(() => _cardOrder = _cardOrder.toggled(card));
-    _saveCardOrder();
-  }
-
-  /// 单张卡片的实际内容
-  Widget _cardBody(FamilyCard card, FamilyState state, bool isParent, String area) =>
-      switch (card) {
-        FamilyCard.status => _buildStatusCard(state, isParent),
-        FamilyCard.trend => _buildTrendFoldRow(state.records),
-        FamilyCard.tasks => _buildTabs(state, isParent, area),
-      };
-
-  /// 首屏卡片列表：平时是普通 ListView；编辑态换成可拖的 ReorderableListView。
-  ///
-  /// 编辑态只在顶部状态条的铅笔按钮里进 —— 不动 MainShell 的 AppTopBar。
+  /// 2.9.4 起这里不再有「余额 / 趋势」卡片 —— 钱的部分全部搬到首页，
+  /// 任务页只留「今天要干的活」：顶部一条必须任务细条 + 任务列表，
+  /// 第一个任务行从 456dp 提到 ~200dp，打开 App 抬手就能点。
   Widget _buildCardList(FamilyState state, bool isParent, String area) {
     final EdgeInsets padding = EdgeInsets.fromLTRB(
       AppSpacing.md,
@@ -1049,446 +619,230 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       AppSpacing.md,
       AppSpacing.xl + AppNavBar.contentInset(context),
     );
-    final List<FamilyCard> visible = _cardOrder.visibleOrder;
-    final bool canRestore = _cardOrder.order.any(
-      (card) => card.removable && _cardOrder.hidden.contains(card),
-    );
-
-    if (!_cardEditing) {
-      return ListView(
-        padding: padding,
-        children: <Widget>[
-          for (var index = 0; index < visible.length; index += 1) ...<Widget>[
-            EnterBox(
-              index: index,
-              child: _cardBody(visible[index], state, isParent, area),
-            ),
-            if (index != visible.length - 1) const SizedBox(height: AppSpacing.md),
-          ],
-        ],
-      );
-    }
-
-    return ReorderableListView(
-      padding: padding,
-      onReorder: _onReorderCards,
-      // 自己包 ReorderableDragStartListener：编辑态按住卡就拖，不用先点手柄
-      buildDefaultDragHandles: false,
-      proxyDecorator: (Widget child, int index, Animation<double> animation) => Material(
-        color: Colors.transparent,
-        child: child,
-      ),
-      children: <Widget>[
-        for (var index = 0; index < visible.length; index += 1)
-          ReorderableDelayedDragStartListener(
-            key: ValueKey<String>('family-card-${visible[index].id}'),
-            index: index,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: _ShakeCard(
-                animation: _shakeController,
-                index: index,
-                child: _editableCard(visible[index], state, isParent, area),
-              ),
-            ),
-          ),
-        if (canRestore)
-          // 删掉的卡从这里加回来（目前只有趋势卡允许删）
-          _restoreCardRow(visible),
-      ],
-    );
-  }
-
-  /// 编辑态的单卡：右上角叉号（只有可删的卡才有）
-  Widget _editableCard(FamilyCard card, FamilyState state, bool isParent, String area) {
-    final Widget body = _cardBody(card, state, isParent, area);
-    if (!card.removable) return body;
-    final palette = context.palette;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: <Widget>[
-        body,
-        Positioned(
-          top: -8,
-          right: -8,
-          child: PressInkWell(
-            onTap: () => _toggleCard(card),
-            child: Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                color: palette.danger,
-                shape: BoxShape.circle,
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.18),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: GlyphIcon(
-                AppIcons.close,
-                size: 15,
-                color: palette.onColor(palette.danger),
-              ),
-            ),
-          ),
+    final Widget body = switch (area) {
+      'pending' => _buildLedgerSubPage(
+          title: '待审批',
+          count: state.pendingCount,
+          child: _buildPendingArea(state),
         ),
-      ],
-    );
-  }
-
-  /// 编辑态的「加回来」行
-  Widget _restoreCardRow(List<FamilyCard> visible) {
-    final palette = context.palette;
-    final List<FamilyCard> restorable = _cardOrder.order
-        .where((card) => card.removable && _cardOrder.hidden.contains(card))
-        .toList(growable: false);
-    return Padding(
-      key: const ValueKey<String>('family-card-restore'),
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: AppCard(
-        onTap: () {
-          for (final card in restorable) {
-            _toggleCard(card);
-          }
-        },
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            GlyphIcon(AppIcons.add, size: 16, color: palette.primary),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              '加回${restorable.map((card) => card.label).join('、')}',
-              style: TextStyle(fontSize: AppFontSize.sm, color: palette.primary),
-            ),
-          ],
+      'records' => _buildLedgerSubPage(
+          title: '历史记录',
+          child: _buildRecordsArea(state, isParent),
         ),
-      ),
-    );
-  }
-
-  void _confirmExchange(int points, double yuan) {
-    showFloatingDialog<void>(
-      context: context,
-      child: AlertDialog(
-        title: Text('兑换 $points 积分 = $yuan 元？'),
-        content: const Text('会记一条「现金兑现」支出，剩下的积分留在账上；如需回退请删除该记录'),
-        actions: <Widget>[
-          AppTextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          AppFilledButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              unawaited(_settle(points));
-            },
-            child: const Text('确认兑换'),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  // ---- ③ 近 14 天积分趋势 ----
-
-  static const int _trendDays = 14;
-
-  List<LedgerRecord>? _trendFrom;
-  String? _trendDay;
-  List<String> _trendLabels = const <String>[];
-  List<int> _trendValues = const <int>[];
-
-  /// 近 [_trendDays] 天趋势原本是「14 天 × 全量流水」的双层循环，页面每次重建
-  /// 都会重跑；账本实例没变、也没跨天时就复用上次结果。
-  ({List<String> labels, List<int> values}) _trendFor(List<LedgerRecord> records) {
-    final String day = '${_now.year}-${_now.month}-${_now.day}';
-    if (identical(records, _trendFrom) && day == _trendDay) {
-      return (labels: _trendLabels, values: _trendValues);
-    }
-    final today = DateTime(_now.year, _now.month, _now.day);
-    final labels = <String>[];
-    final values = <int>[];
-    for (var offset = _trendDays - 1; offset >= 0; offset -= 1) {
-      final dayAt = today.subtract(Duration(days: offset));
-      labels.add('${dayAt.month}/${dayAt.day}');
-      var sum = 0;
-      for (final record in records) {
-        if (record.status != null && record.status != LedgerStatus.approved) continue;
-        final at = record.createdAt.toLocal();
-        if (at.year == dayAt.year && at.month == dayAt.month && at.day == dayAt.day) {
-          sum += record.amount;
-        }
-      }
-      values.add(sum);
-    }
-    _trendFrom = records;
-    _trendDay = day;
-    _trendLabels = labels;
-    _trendValues = values;
-    return (labels: labels, values: values);
-  }
-
-  /// 近 14 天趋势：默认折成一行，点开才画图。
-  ///
-  /// 原来常驻 224dp，但它一周只需要看一次 —— 折起来首屏能多放两行任务，
-  /// 想看时点一下展开（图表本身一行没改）。
-  Widget _buildTrendFoldRow(List<LedgerRecord> records) {
-    final palette = context.palette;
-    final trend = _trendFor(records);
-    final labels = trend.labels;
-    final values = trend.values;
-    final hasData = values.any((value) => value != 0);
-    var total = 0;
-    for (final value in values) {
-      total += value;
-    }
-
-    return AppCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          PressInkWell(
-            onTap: () => setState(() => _trendExpanded = !_trendExpanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.md,
-              ),
-              child: Row(
-                children: <Widget>[
-                  GlyphIcon(AppIcons.trendUp, size: 18, color: palette.primary),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    '近 $_trendDays 天趋势',
-                    style: TextStyle(
-                      fontSize: AppFontSize.sm,
-                      fontWeight: FontWeight.w600,
-                      color: palette.text,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (hasData)
-                    Text(
-                      '${total >= 0 ? '+' : ''}$total',
-                      style: TextStyle(
-                        fontSize: AppFontSize.sm,
-                        fontWeight: FontWeight.w700,
-                        color: total >= 0 ? palette.success : palette.danger,
-                        fontFeatures: kTabularNumbers,
-                      ),
-                    ),
-                  const SizedBox(width: AppSpacing.xs),
-                  AnimatedRotation(
-                    turns: _trendExpanded ? 0.5 : 0,
-                    duration: AppMotion.fast,
-                    curve: AppMotion.standard,
-                    child: GlyphIcon(
-                      AppIcons.chevronDown,
-                      size: 18,
-                      color: palette.textTertiary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          AnimatedSize(
-            duration: AppMotion.normal,
-            curve: AppMotion.standard,
-            alignment: Alignment.topCenter,
-            child: !_trendExpanded
-                ? const SizedBox.shrink()
-                : Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.md,
-                      0,
-                      AppSpacing.md,
-                      AppSpacing.md,
-                    ),
-                    child: !hasData
-                        ? Padding(
-                            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                            child: Center(
-                              child: Text(
-                                '最近 $_trendDays 天还没有积分记录',
-                                style: TextStyle(
-                                  fontSize: AppFontSize.sm,
-                                  color: palette.textTertiary,
-                                ),
-                              ),
-                            ),
-                          )
-                        : SizedBox(
-                            height: 160,
-                            child: BarChart(
-                              BarChartData(
-                                alignment: BarChartAlignment.spaceAround,
-                                barTouchData: BarTouchData(
-                                  touchTooltipData: BarTouchTooltipData(
-                                    // fl_chart 的 tooltip 底色默认是写死的深蓝灰（不是 palette 派生的），
-                                    // 深色主题下 palette.surface 也是深色，字会埋进底里。这里按全站
-                                    // tooltipTheme 的同一口径反着来：底 = 正文色，字 = 它的 onColor。
-                                    getTooltipColor: (BarChartGroupData group) => palette.text,
-                                    getTooltipItem: (group, groupIndex, rod, rodIndex) =>
-                                        BarTooltipItem(
-                                      '${labels[group.x]}\n${rod.toY.toInt()} 积分',
-                                      TextStyle(
-                                        color: palette.onColor(palette.text),
-                                        fontSize: AppFontSize.xs,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                gridData: FlGridData(
-                                  drawVerticalLine: false,
-                                  getDrawingHorizontalLine: (value) =>
-                                      FlLine(color: palette.border, strokeWidth: 1),
-                                ),
-                                borderData: FlBorderData(show: false),
-                                titlesData: FlTitlesData(
-                                  topTitles: const AxisTitles(),
-                                  rightTitles: const AxisTitles(),
-                                  leftTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      reservedSize: 28,
-                                      getTitlesWidget: (value, meta) => SideTitleWidget(
-                                        meta: meta,
-                                        child: Text(
-                                          value.toInt().toString(),
-                                          style: TextStyle(
-                                            fontSize: AppFontSize.xs,
-                                            color: palette.textSecondary,
-                                            fontFeatures: kTabularNumbers,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  bottomTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      reservedSize: 24,
-                                      // 对应 Web 版的 axisLabel.interval = 1（隔一个显示一个）
-                                      getTitlesWidget: (value, meta) {
-                                        final index = value.toInt();
-                                        if (index < 0 ||
-                                            index >= labels.length ||
-                                            index.isOdd) {
-                                          return const SizedBox.shrink();
-                                        }
-                                        return SideTitleWidget(
-                                          meta: meta,
-                                          child: Text(
-                                            labels[index],
-                                            style: TextStyle(
-                                              fontSize: AppFontSize.xs,
-                                              color: palette.textSecondary,
-                                              fontFeatures: kTabularNumbers,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                                barGroups: <BarChartGroupData>[
-                                  for (var index = 0; index < values.length; index += 1)
-                                    BarChartGroupData(
-                                      x: index,
-                                      barRods: <BarChartRodData>[
-                                        BarChartRodData(
-                                          toY: values[index].toDouble(),
-                                          width: 18,
-                                          color: values[index] >= 0
-                                              ? palette.success
-                                              : palette.danger,
-                                          borderRadius: values[index] >= 0
-                                              ? const BorderRadius.vertical(
-                                                  top: Radius.circular(AppRadius.sm),
-                                                )
-                                              : const BorderRadius.vertical(
-                                                  bottom: Radius.circular(AppRadius.sm),
-                                                ),
-                                        ),
-                                      ],
-                                    ),
-                                ],
-                              ),
-                              duration: AppMotion.slower,
-                              curve: AppMotion.emphasized,
-                            ),
-                          ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---- ④ 分页：任务区 / 待审批 / 历史记录 ----
-
-  /// 页面内切换分区：写回地址栏（`context.go` 是 replace 语义，不堆历史），
-  /// 页面内容由 URL 派生，所以这里不再 setState。
-  ///
-  /// 同时记下「往左还是往右切」，给 [SlideFadeSwitcher] 定方向感：
-  /// 点右边的 tab 新内容从右进，点左边的从左进 —— 手指点的位置就是内容来的方向。
-  void _goTab(String area) {
-    final bool isParent = _isParent;
-    final String currentTab = GoRouterState.of(context).uri.queryParameters['tab'] ?? 'tasks';
-    final String current = _areaFor(currentTab, isParent: isParent);
-    final List<String> labels = _tabsFor(isParent);
-    final int from = labels.indexOf(current);
-    final int to = labels.indexOf(area);
-    if (from >= 0 && to >= 0 && from != to) {
-      _tabDirection = to > from ? 1 : -1;
-    }
-    context.go('/family?tab=${_tabParamFor(area)}');
-  }
-
-  Widget _buildTabs(FamilyState state, bool isParent, String area) {
-    final labels = _tabsFor(isParent);
-    // 内容分支跟着 URL 派生出来的分区走（不是 TabController.index）
-    final index = math.max(0, labels.indexOf(area));
-    // 只构建当前分区：三个 area 各有全量流水/14 天统计/待审批列表，
-    // 之前三个都建（哪怕只显示一个），切一次 tab 就白跑两份重活。
-    final Widget currentArea = switch (labels[index]) {
-      'tasks' => _buildTasksArea(state, isParent),
-      'pending' => _buildPendingArea(state),
-      _ => _buildRecordsArea(state, isParent),
+      _ => _buildTasksArea(state, isParent),
     };
-    // 分区标题与角标：待审批带数字（原来的红色小徽章塞不进胶囊里，改成文末数字）
-    String labelFor(String key) => switch (key) {
-          'tasks' => '任务区',
-          'pending' => state.pendingCount > 0 ? '待审批 ${state.pendingCount}' : '待审批',
-          _ => '历史记录',
-        };
+    return ListView(
+      padding: padding,
+      children: <Widget>[body],
+    );
+  }
+
+  /// 「待审批 / 历史记录」现在是独立页（入口在任务页细条右侧那两颗图标），
+  /// 顶部给一条返回，避免进来之后找不到回头路。
+  Widget _buildLedgerSubPage({
+    required String title,
+    required Widget child,
+    int count = 0,
+  }) {
+    final palette = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        // FlClash 的胶囊分段控件：滑块在选项之间滑动，高亮仍由 URL 派生
-        SegmentedControl<String>(
-          segments: <(String, String)>[for (final String key in labels) (key, labelFor(key))],
-          value: labels[index],
-          onChanged: _goTab,
+        PressInkWell(
+          onTap: () => context.go('/family'),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical: AppSpacing.sm,
+              horizontal: AppSpacing.xs,
+            ),
+            child: Row(
+              children: <Widget>[
+                GlyphIcon(AppIcons.chevronBack, size: 18, color: palette.textSecondary),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: AppFontSize.md,
+                    fontWeight: FontWeight.w700,
+                    color: palette.text,
+                  ),
+                ),
+                if (count > 0) ...<Widget>[
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    '$count',
+                    style: TextStyle(fontSize: AppFontSize.sm, color: palette.textTertiary),
+                  ),
+                ],
+                const Spacer(),
+                Text(
+                  '返回任务',
+                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                ),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: AppSpacing.md),
-        // 内容切换：V2 方向感 —— 240ms / 32dp，按点击方向决定从哪边滑入。
-        // 原来是 160ms / 12dp，在 390 宽的屏上只有 3% 位移，「翻了一页」和「瞬间切换」几乎没差别。
-        SlideFadeSwitcher(
-          childKey: ValueKey<String>(_tabParamFor(area)),
-          axis: Axis.horizontal,
-          offset: 32,
-          duration: AppMotion.normal,
-          direction: _tabDirection,
-          child: currentArea,
+        const SizedBox(height: AppSpacing.sm),
+        child,
+      ],
+    );
+  }
+
+
+  // ---- ④ 分页：任务区 / 待审批 / 历史记录 ----
+
+  /// 跳到「待审批 / 历史记录」子页（入口在任务页细条右侧的两颗图标）。
+  ///
+  /// `context.go` 是 replace 语义，不堆历史；页面内容由 URL 派生，不再 setState。
+  void _goTab(String area) => context.go('/family?tab=${_tabParamFor(area)}');
+
+  // ---- ④-0 必须任务细条（任务页顶部，约 28dp）----
+
+  /// 任务页顶部那条细条：必须任务进度 + 倒计时 + 待审批/历史两个入口。
+  ///
+  /// 原「状态条」200dp 里每天真正要看的只有这一行 —— 积分和兑换搬去首页后，
+  /// 这里只剩「今天还剩几件必须任务」和「没做要扣多少」。
+  Widget _mustStrip({
+    required TaskProgress progress,
+    required int pendingCount,
+  }) {
+    final palette = context.palette;
+    final int total = progress.total;
+    final int done = progress.done;
+    final bool allDone = total > 0 && done >= total;
+    final Color accent = allDone ? palette.success : palette.danger;
+    final String hint = allDone ? '今天必须的都做完了' : _mustCountdownHint();
+    return Row(
+      children: <Widget>[
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+            value: total == 0 ? 0 : (done / total).clamp(0.0, 1.0),
+            strokeWidth: 2.4,
+            strokeCap: StrokeCap.round,
+            backgroundColor: palette.border,
+            valueColor: AlwaysStoppedAnimation<Color>(accent),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Text(
+          '必须 $done/$total',
+          style: TextStyle(
+            fontSize: AppFontSize.sm,
+            fontWeight: FontWeight.w700,
+            color: accent,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            hint,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: AppFontSize.xs,
+              color: allDone ? palette.textTertiary : palette.ink(palette.danger),
+            ),
+          ),
+        ),
+        _ledgerEntryIcon(
+          glyph: AppIcons.inbox,
+          count: pendingCount,
+          tooltip: '待审批',
+          onTap: () => _goTab('pending'),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        _ledgerEntryIcon(
+          glyph: AppIcons.history,
+          tooltip: '历史记录',
+          onTap: () => _goTab('history'),
         ),
       ],
+    );
+  }
+
+  /// 必须任务的「正在发生」文案（优化 4）。
+  ///
+  /// 21:00 前说规则（`22:00 前没打卡 · 每件 −10`），21:00 之后改说剩余时间，
+  /// 22:00 之后改说已经发生 —— 同一句话在不同时刻给的信息不一样，
+  /// 才有「现在该动手」的紧迫感，而不是一条永远不动的说明书。
+  String _mustCountdownHint() {
+    const int deadlineMinutes = 22 * 60;
+    final int nowMinutes = _now.hour * 60 + _now.minute;
+    final int perTask = FamilyRules.mandatoryPenaltyPerTask;
+    if (nowMinutes >= deadlineMinutes) {
+      return '已过 22:00 · 每件 −$perTask';
+    }
+    if (nowMinutes >= 21 * 60) {
+      final int left = deadlineMinutes - nowMinutes;
+      final int hour = left ~/ 60;
+      final int minute = left % 60;
+      final String text = hour > 0 ? '$hour 小时 $minute 分' : '$minute 分钟';
+      return '还剩 $text · 每件 −$perTask';
+    }
+    return '22:00 前没打卡 · 每件 −$perTask';
+  }
+
+  /// 任务页右上角的小圆图标（待审批 / 历史记录）。
+  Widget _ledgerEntryIcon({
+    required Glyph glyph,
+    required VoidCallback onTap,
+    required String tooltip,
+    int count = 0,
+  }) {
+    final palette = context.palette;
+    return Tooltip(
+      message: tooltip,
+      child: PressInkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.full),
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: <Widget>[
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: palette.surfaceSoft,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: GlyphIcon(glyph, size: 16, color: palette.textSecondary),
+              ),
+              if (count > 0)
+                Positioned(
+                  top: -2,
+                  right: -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    constraints: const BoxConstraints(minWidth: 15),
+                    decoration: BoxDecoration(
+                      color: palette.danger,
+                      borderRadius: BorderRadius.circular(AppRadius.full),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      count > 9 ? '9+' : '$count',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        height: 1.1,
+                        fontWeight: FontWeight.w700,
+                        color: palette.onColor(palette.danger),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1529,16 +883,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final progress = todayProgress(FamilyRules.taskRules, records, now: _now);
     final bool busy = _submittingId != null;
 
-    // 「还没到时间」里最早的那个开始时间，用作头部摘要（如「19:00 之后还能打卡 1 件」）
-    TaskWindow? earliestWindow;
-    for (final entry in later) {
-      final window = entry.config.window;
-      if (window == null) continue;
-      if (earliestWindow == null || window.startMinutes < earliestWindow.startMinutes) {
-        earliestWindow = window;
-      }
-    }
-
     // v2.10 分类：赚钱任务按「今天必须完成 / 日常任务 / 本周任务 / 特殊加分」四组渲染。
     // 分组只作用于赚钱任务 —— 消费罚款那边是「花掉多少」的流水，分类只会让罚款更难找。
     // 已完成的不进任何一组，统一收进底部「今天已经做满」折叠。
@@ -1563,13 +907,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              _taskProgressHeader(
-                progress: progress,
-                ready: ready.length,
-                later: later.length,
-                completed: completed.length,
-                laterHint: earliestWindow?.start,
-              ),
+              _mustStrip(progress: progress, pendingCount: state.pendingCount),
               const SizedBox(height: AppSpacing.md),
               _taskTypeSegment(),
               const SizedBox(height: AppSpacing.md),
@@ -1735,85 +1073,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     );
   }
 
-  /// 任务区头部（方案 C）：左边今日进度环，右边三行「今天什么能做」的节奏摘要。
-  ///
-  /// 环的口径是有日限的任务（= 首页「今日任务」），右侧三行是全部分区的实时计数 ——
-  /// 一个是「今天还剩多少总量」，一个是「此刻该做什么」，分工不同所以分开写。
-  Widget _taskProgressHeader({
-    required TaskProgress progress,
-    required int ready,
-    required int later,
-    required int completed,
-    required String? laterHint,
-  }) {
-    final palette = context.palette;
-    final bool hasBackground =
-        context.select<ThemeState, bool>((state) => state.background.isNotEmpty);
-    final Color track = palette.softColor(hasBackground: hasBackground);
-    final TextStyle lineStyle = TextStyle(
-      fontSize: AppFontSize.sm,
-      color: palette.textSecondary,
-    );
-    return Row(
-      children: <Widget>[
-        SizedBox(
-          width: 52,
-          height: 52,
-          child: Stack(
-            alignment: Alignment.center,
-            children: <Widget>[
-              SizedBox(
-                width: 52,
-                height: 52,
-                child: CircularProgressIndicator(
-                  value: progress.total == 0 ? 0 : progress.done / progress.total,
-                  strokeWidth: 5,
-                  strokeCap: StrokeCap.round,
-                  backgroundColor: track,
-                  valueColor: AlwaysStoppedAnimation<Color>(palette.success),
-                ),
-              ),
-              Text(
-                '${progress.done}/${progress.total}',
-                style: TextStyle(
-                  fontSize: AppFontSize.sm,
-                  fontWeight: FontWeight.w700,
-                  color: palette.text,
-                  fontFeatures: kTabularNumbers,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              if (ready > 0)
-                Text(
-                  '现在能做 $ready 件',
-                  style: TextStyle(
-                    fontSize: AppFontSize.sm,
-                    fontWeight: FontWeight.w600,
-                    color: palette.ink(palette.success),
-                  ),
-                ),
-              if (later > 0)
-                Text(
-                  laterHint == null ? '之后还能打卡 $later 件' : '$laterHint 之后还能打卡 $later 件',
-                  style: lineStyle,
-                ),
-              if (completed > 0) Text('今天已经做满 $completed 件', style: lineStyle),
-              if (ready == 0 && later == 0 && completed == 0)
-                Text('今天没有任务', style: lineStyle),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   /// 任务类型切换（赚钱任务 / 消费·罚款）。
   ///
   /// 视觉与上面 TabBar 的高亮一致：选中项是 `segmentedSelected` 实底 + 主色细边，
@@ -1947,7 +1206,10 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: EnterBox(
         index: index,
-        child: TaskRow(
+        // 长按看这条的规则（分值 / 频率 / 时间窗 / 没做扣多少）—— 规则变复杂后需要一个不占版面的出口
+        child: GestureDetector(
+          onLongPress: entry.custom != null ? null : () => unawaited(_showTaskRule(entry)),
+          child: TaskRow(
           name: task.name,
           icon: taskIconFor(task.id, earning: earning),
           earning: earning,
@@ -1966,7 +1228,66 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                     records: records,
                   )
               : null,
+          ),
         ),
+      ),
+    );
+  }
+
+  /// 长按任务行：把这件的规则摊开说清楚。
+  ///
+  /// 列点：分值 / 频率 / 时间窗 / 必须完成与扣分 / 说明。
+  /// 自定义任务没有固定规则，长按时不弹（`custom` 为 true 时 onLongPress 直接是 null）。
+  Future<void> _showTaskRule(_TaskEntry entry) async {
+    final task = entry.config;
+    final palette = context.palette;
+    final lines = <String>[
+      task.value >= 0 ? '+${task.value} 分' : '${task.value} 分',
+      if (task.isWeekly)
+        '本周 ${task.weeklyGoal} 次'
+      else if (task.dailyLimit != null)
+        '每天最多 ${task.dailyLimit} 次'
+      else
+        '不限次数',
+      if (task.window != null) '${task.window!.start}–${task.window!.end} 之间打卡',
+      if (task.mandatory)
+        '必须完成 · 22:00 结算，没做 −${_missPenaltyOf(task)}',
+      if (task.description != null) task.description!,
+    ];
+    await showFloatingDialog<void>(
+      context: context,
+      child: AlertDialog(
+        title: Row(
+          children: <Widget>[
+            GlyphIcon(taskIconFor(task.id), size: 20, color: task.value >= 0 ? palette.success : palette.danger),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(child: Text(task.name)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            for (final line in lines)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '· $line',
+                  style: TextStyle(
+                    fontSize: AppFontSize.sm,
+                    height: 1.4,
+                    color: palette.textSecondary,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        actions: <Widget>[
+          AppTextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
       ),
     );
   }
@@ -2469,12 +1790,8 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      // index 取模：首屏 0..19 错峰，之后「加载更多」追加的条目也从头错峰
-                      for (final (i, record) in visible.indexed)
-                        EnterBox(
-                          index: i % _recordsPageSize,
-                          child: _recordRow(record, isParent),
-                        ),
+                      // 按周分组：同周记录归到一个标题下，翻历史时先看「这周花了多少」
+                      ..._groupedRecordRows(visible, isParent),
                       if (remaining > 0)
                         Padding(
                           padding: const EdgeInsets.only(top: AppSpacing.sm),
@@ -2498,6 +1815,82 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
         ],
       ),
     );
+  }
+
+  // ---- 历史记录：按周分组 ----
+
+  /// 把流水按「自然周（周一 00:00 起）」切成若干段，每段前面插一行周标题 + 本周合计。
+  ///
+  /// 流水本身按时间倒序返回，所以同一周的记录一定连续，只需比较上一周即可；
+  /// 万一后端换了排序口径，最坏情况也只是同一个周标题出现两次（不会串周）。
+  List<Widget> _groupedRecordRows(List<LedgerRecord> records, bool isParent) {
+    final rows = <Widget>[];
+    DateTime? lastWeek;
+    for (final (i, record) in records.indexed) {
+      final week = _weekStartOf(record.createdAt);
+      if (lastWeek == null || week != lastWeek) {
+        rows.add(
+          Padding(
+            padding: EdgeInsets.only(
+              top: i == 0 ? 0 : AppSpacing.md,
+              bottom: AppSpacing.xs,
+            ),
+            child: _weekHeader(week, records),
+          ),
+        );
+        lastWeek = week;
+      }
+      // index 取模：首屏 0..19 错峰，之后「加载更多」追加的条目也从头错峰
+      rows.add(EnterBox(index: i % _recordsPageSize, child: _recordRow(record, isParent)));
+    }
+    return rows;
+  }
+
+  /// 周标题：左边「本周 / 上周 / M月d日那周」，右边本周净变化。
+  Widget _weekHeader(DateTime week, List<LedgerRecord> records) {
+    final palette = context.palette;
+    var total = 0;
+    for (final record in records) {
+      if (_weekStartOf(record.createdAt) == week && record.status != LedgerStatus.rejected) {
+        total += record.amount;
+      }
+    }
+    return Row(
+      children: <Widget>[
+        Text(
+          _weekLabel(week),
+          style: TextStyle(
+            fontSize: AppFontSize.xs,
+            fontWeight: FontWeight.w600,
+            color: palette.textSecondary,
+          ),
+        ),
+        const Spacer(),
+        Text(
+          '${total >= 0 ? '+' : ''}$total',
+          style: TextStyle(
+            fontSize: AppFontSize.xs,
+            fontWeight: FontWeight.w600,
+            fontFeatures: kTabularNumbers,
+            color: total >= 0 ? palette.success : palette.danger,
+          ),
+        ),
+      ],
+    );
+  }
+
+  static DateTime _weekStartOf(DateTime at) {
+    final day = DateTime(at.year, at.month, at.day);
+    return day.subtract(Duration(days: day.weekday - 1));
+  }
+
+  String _weekLabel(DateTime week) {
+    final now = _now;
+    final thisWeek = _weekStartOf(now);
+    final diff = thisWeek.difference(week).inDays;
+    if (diff == 0) return '本周';
+    if (diff == 7) return '上周';
+    return '${week.month} 月 ${week.day} 日那周';
   }
 
   /// 切换筛选条件后回到第一页，避免出现「筛完还剩 40 条已渲染」
@@ -3346,39 +2739,4 @@ Widget _skeletonCard(AppPalette palette, List<Widget> children) {
       children: children,
     ),
   );
-}
-
-/// 编辑态的单卡抖动（照 FlClash `SuperGrid._buildShake`）。
-///
-/// - 一个循环 3.6 秒；摆动次数按 `[6, 7, 5]` 轮换，相邻卡节奏不同，不会整屏一起晃
-/// - **位移用 cos、旋转用 sin**（两者相差 90°），叠起来是「一边上下轻晃一边转」
-/// - 相位按 index 错开 1.7 rad：两张卡永远不同步
-class _ShakeCard extends StatelessWidget {
-  const _ShakeCard({required this.animation, required this.index, required this.child});
-
-  final Animation<double> animation;
-  final int index;
-  final Widget child;
-
-  static const List<int> _swingsPerLoop = <int>[6, 7, 5];
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (BuildContext context, Widget? building) {
-        final double turn =
-            animation.value * math.pi * 2 * _swingsPerLoop[index % _swingsPerLoop.length] +
-                index * 1.7;
-        return Transform.translate(
-          offset: Offset(0, math.cos(turn) * 1.25),
-          child: Transform.rotate(
-            angle: math.sin(turn) * 0.012,
-            child: building,
-          ),
-        );
-      },
-      child: child,
-    );
-  }
 }

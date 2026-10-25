@@ -1,0 +1,988 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SekaiNook · 任务页改版预览（底栏改任务 / 积分进首页 / 任务置顶）</title>
+<style>
+/* ============================================================
+   SekaiNook 任务页改版预览 · 本页 1px = 1dp（手机壳内）
+   文档外壳 = 浅色说明页；.phone 内 = App 真实配色（默认玫瑰）
+   ============================================================ */
+:root{
+  --doc-bg:#F5F6FA; --doc-surface:#FFF; --doc-text:#1C2333; --doc-text2:#4A5468;
+  --doc-text3:#78839A; --doc-border:#E4E8F1; --doc-accent:#8A5464;
+  --doc-accent-soft:#F7E9ED; --doc-warn:#B4791A; --doc-ok:#22703F; --doc-info:#2A5B8C;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--doc-bg); color:var(--doc-text);
+  font:400 14px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  padding-bottom:80px;
+}
+code,.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;font-size:.92em}
+code{background:#EEF1F7;border-radius:4px;padding:1px 5px;color:#2C3A55;word-break:break-word}
+
+/* ---------- 文档外壳 ---------- */
+.topbar{
+  position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:20px;
+  padding:12px 32px;background:rgba(245,246,250,.86);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--doc-border);
+}
+.brand{font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--doc-accent)}
+.brand span{color:var(--doc-text3);font-weight:600;font-size:12px;margin-left:8px}
+.topnav{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+.topnav a{
+  text-decoration:none;color:var(--doc-text2);font-size:12.5px;font-weight:600;
+  padding:5px 10px;border-radius:8px;
+}
+.topnav a:hover{background:var(--doc-accent-soft);color:var(--doc-accent)}
+.themes{display:flex;gap:6px}
+.themes button{
+  border:1px solid var(--doc-border);background:#fff;border-radius:8px;
+  font-size:12px;font-weight:600;color:var(--doc-text2);padding:5px 9px;cursor:pointer;
+}
+.themes button.on{background:var(--doc-accent);border-color:var(--doc-accent);color:#fff}
+.wrap{max-width:1360px;margin:0 auto;padding:0 32px}
+
+.hero{padding:40px 0 8px}
+.kicker{font-size:12px;font-weight:700;letter-spacing:1.4px;color:var(--doc-accent);text-transform:uppercase}
+.hero h1{font-size:30px;line-height:1.32;font-weight:800;margin:8px 0 10px;letter-spacing:-.3px}
+.hero .lead{font-size:14.5px;color:var(--doc-text2);max-width:820px}
+.vcards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:22px 0 6px}
+.vcard{
+  background:var(--doc-surface);border:1px solid var(--doc-border);border-radius:14px;
+  padding:14px 16px;
+}
+.vcard .t{font-size:12px;font-weight:700;color:var(--doc-text3);letter-spacing:.4px}
+.vcard .d{font-size:15px;font-weight:700;margin-top:4px}
+.vcard .s{font-size:12.5px;color:var(--doc-text2);margin-top:3px}
+.vcard.is-warn{border-color:#F0D6A8;background:#FFFBF2}
+.vcard.is-ok{border-color:#CBE6D4;background:#F5FCF7}
+
+.sec{padding:44px 0 6px}
+.sec-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.sec-num{
+  width:26px;height:26px;border-radius:8px;background:var(--doc-accent);color:#fff;
+  font-size:12.5px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+}
+.sec-head h2{font-size:20px;font-weight:800;letter-spacing:-.2px}
+.sec-sub{font-size:13.5px;color:var(--doc-text2);margin-bottom:22px;max-width:900px}
+h3{font-size:15px;font-weight:800;margin:26px 0 8px}
+p{margin:8px 0}
+p.small{font-size:12.5px;color:var(--doc-text3)}
+
+/* ---------- 手机壳 ---------- */
+.gallery{display:flex;gap:34px;align-items:flex-start;flex-wrap:wrap}
+.col-mock{flex:0 0 auto}
+.col-info{flex:1 1 320px;min-width:300px}
+.caption{font-size:12px;color:var(--doc-text3);margin-top:12px;line-height:1.65;max-width:390px}
+.caption b{color:var(--doc-text2)}
+
+.phone{
+  position:relative;width:390px;border:10px solid #14161C;border-radius:40px;
+  background:var(--bg);overflow:hidden;box-shadow:0 18px 40px rgba(20,22,28,.16);
+  display:flex;flex-direction:column;
+  --bg:#FFF8F9; --surface:#FFF; --soft:#F6EBEE; --text:#221A1C; --text2:#514347;
+  --text3:#6B5D62; --border:#E7D7DB; --primary:#7E5261; --primary-soft:#F8D9E2;
+  --on-primary:#FFF; --success:#2F8B58; --success-ink:#1E6A3C; --danger:#C0394F;
+  --danger-ink:#9E2436; --warning:#A9701A; --warning-ink:#84560B;
+  color:var(--text);
+}
+.phone[data-theme="dark"]{
+  --bg:#161315; --surface:#211C1E; --soft:#2A2426; --text:#F3EBED; --text2:#C3B5BA;
+  --text3:#95868C; --border:#3A3134; --primary:#C9A3B0; --primary-soft:#4A3238;
+  --on-primary:#231A1C; --success:#7FD3A4; --success-ink:#9FE0BC; --danger:#F08FA0;
+  --danger-ink:#FFB3BF; --warning:#E0B56A; --warning-ink:#F2CD8E;
+}
+.phone.tall{height:844px}
+.phone.auto{height:auto}
+.slot{flex:0 0 auto}
+.slot.top{height:108px}
+.list{flex:1 1 auto;overflow:hidden;padding:0 16px}
+.list>*+*{margin-top:16px}
+
+/* 顶栏（模拟 AppTopBar） */
+.appbar{
+  position:absolute;top:0;left:0;right:0;height:108px;z-index:3;pointer-events:none;
+  display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 16px 10px;background:linear-gradient(var(--bg) 62%,transparent);
+}
+.appbar .title{font-size:17px;font-weight:800;letter-spacing:-.2px}
+.appbar .acts{display:flex;gap:8px;pointer-events:auto}
+.iconbtn{
+  width:32px;height:32px;border-radius:10px;background:var(--soft);display:flex;
+  align-items:center;justify-content:center;position:relative;
+}
+.iconbtn .badge{
+  position:absolute;top:-4px;right:-5px;min-width:15px;height:15px;padding:0 4px;
+  border-radius:999px;background:var(--danger);color:#fff;font-size:9.5px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;
+}
+/* 底栏（模拟 NavigationDock 胶囊） */
+.dockwrap{position:absolute;left:0;right:0;bottom:0;height:138px;z-index:4;
+  display:flex;align-items:flex-end;justify-content:center;padding-bottom:21px;
+  background:linear-gradient(transparent,var(--bg) 46%);}
+.dock{
+  display:flex;align-items:center;gap:2px;height:58px;padding:4px;
+  background:var(--surface);border:1px solid var(--border);border-radius:999px;
+  box-shadow:0 8px 22px rgba(20,22,28,.12);
+}
+.dock .di{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  width:60px;height:50px;border-radius:999px;color:var(--text3);
+}
+.dock .di .lb{font-size:9.5px;font-weight:700;letter-spacing:.2px}
+.dock .di.on{background:var(--primary);color:var(--on-primary)}
+.dock .di.on .lb{font-weight:800}
+
+/* ---------- App 内通用 ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px}
+.card.flat{padding:0;overflow:hidden}
+.row{display:flex;align-items:center;gap:8px}
+.spacer{flex:1 1 auto}
+.h16{font-size:16px;font-weight:700;letter-spacing:-.1px}
+.h14{font-size:14px;font-weight:600}
+.xs12{font-size:12px;color:var(--text2)}
+.xs11{font-size:11px;color:var(--text3)}
+.tn{font-variant-numeric:tabular-nums}
+.pill{
+  display:inline-flex;align-items:center;gap:3px;height:20px;padding:0 7px;border-radius:999px;
+  font-size:10.5px;font-weight:800;
+}
+.pill.ok{background:color-mix(in srgb,var(--success) 14%,transparent);color:var(--success-ink)}
+.pill.bad{background:color-mix(in srgb,var(--danger) 13%,transparent);color:var(--danger-ink)}
+.pill.warnp{background:color-mix(in srgb,var(--warning) 15%,transparent);color:var(--warning-ink)}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;height:40px;
+  padding:0 16px;border-radius:999px;font-size:13.5px;font-weight:700;border:1px solid transparent;
+}
+.btn.ok{background:color-mix(in srgb,var(--success) 16%,transparent);color:var(--success-ink);border-color:color-mix(in srgb,var(--success) 32%,transparent)}
+.btn.pri{background:var(--primary);color:var(--on-primary)}
+.btn.ghost{background:var(--soft);color:var(--text2);border-color:var(--border)}
+.divider{height:1px;background:var(--border)}
+
+/* 分段控件 */
+.seg{position:relative;display:flex;height:44px;padding:4px;border-radius:999px;background:var(--soft)}
+.seg .sb{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:5px;border-radius:999px;
+  font-size:13px;font-weight:600;color:var(--text2);position:relative;z-index:1;
+}
+.seg .sb.on{background:var(--primary);color:var(--on-primary);font-weight:700}
+.seg .sb .cnt{
+  min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--danger);
+  color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;
+}
+
+/* ---- 任务页新首屏 ---- */
+.progressline{padding:2px 2px 0}
+.pl-top{display:flex;align-items:baseline;gap:6px;margin-bottom:7px}
+.pl-top .n{font-size:15px;font-weight:800}
+.pl-top .sub{font-size:11.5px;color:var(--text3)}
+.pl-bar{height:5px;border-radius:999px;background:var(--soft);overflow:hidden}
+.pl-fill{height:100%;border-radius:999px;background:var(--success)}
+
+.grp-hd{display:flex;align-items:center;gap:6px;padding:0 4px 6px}
+.grp-hd .t{font-size:12.5px;font-weight:800;letter-spacing:.2px}
+.grp-hd .c{font-size:11px;color:var(--text3);font-weight:700}
+.must-hd{color:var(--danger-ink)}
+.must-tip{
+  display:flex;align-items:center;gap:6px;margin:0 0 8px;padding:6px 8px;border-radius:8px;
+  background:color-mix(in srgb,var(--danger) 8%,var(--surface));font-size:11px;
+  font-weight:600;color:var(--danger-ink);
+}
+.trow{
+  display:flex;align-items:center;gap:8px;min-height:56px;padding:8px;border-radius:12px;
+  border:1px solid transparent;
+}
+.trow.ready{background:color-mix(in srgb,var(--success) 7%,var(--surface));border-color:color-mix(in srgb,var(--success) 32%,transparent)}
+.trow.spend{background:color-mix(in srgb,var(--danger) 7%,var(--surface));border-color:color-mix(in srgb,var(--danger) 30%,transparent)}
+.trow.must{background:color-mix(in srgb,var(--danger) 6%,var(--surface));border-color:color-mix(in srgb,var(--danger) 24%,transparent)}
+.trow.done{background:var(--soft);border-color:transparent;opacity:.72}
+.ibox{
+  width:36px;height:36px;border-radius:8px;flex:0 0 auto;display:flex;align-items:center;
+  justify-content:center;background:color-mix(in srgb,var(--success) 13%,var(--surface));
+  color:var(--success-ink);
+}
+.ibox.red{background:color-mix(in srgb,var(--danger) 12%,var(--surface));color:var(--danger-ink)}
+.ibox.gray{background:color-mix(in srgb,var(--text3) 12%,var(--surface));color:var(--text3)}
+.ttl{font-size:14px;font-weight:600;display:flex;align-items:center;gap:5px}
+.tag-must{
+  font-size:10px;font-weight:800;padding:1px 5px;border-radius:4px;
+  background:color-mix(in srgb,var(--danger) 13%,transparent);color:var(--danger-ink);
+}
+.meta{font-size:11.5px;color:var(--text3);margin-top:2px;display:flex;align-items:center;gap:4px}
+.meta.red{color:var(--danger-ink);font-weight:700}
+.val{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--success-ink)}
+.val.red{color:var(--danger-ink)}
+.chk{
+  width:24px;height:24px;border-radius:999px;border:1.5px solid color-mix(in srgb,var(--success) 52%,transparent);
+  flex:0 0 auto;
+}
+.chk.done{background:var(--success);border-color:var(--success);display:flex;align-items:center;justify-content:center}
+.wdots{display:flex;gap:3px;margin-left:2px}
+.wdots i{width:5px;height:5px;border-radius:999px;background:var(--border)}
+.wdots i.f{background:var(--success)}
+.foldrow{
+  display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border-radius:12px;
+  background:var(--soft);color:var(--text2);font-size:12.5px;font-weight:600;
+}
+.quick2{display:flex;gap:8px}
+.quick2 .q{flex:1;height:38px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:700}
+.q.ok{background:color-mix(in srgb,var(--success) 16%,transparent);color:var(--success-ink);border:1px solid color-mix(in srgb,var(--success) 30%,transparent)}
+.q.pri{background:var(--primary);color:var(--on-primary)}
+
+/* 首页 hero */
+.hero-card{
+  border-radius:16px;padding:16px;color:var(--on-primary);
+  background:linear-gradient(135deg,var(--primary),var(--primary-soft));
+  border:1px solid var(--primary);
+}
+.hero-card .greet{font-size:18px;font-weight:800;letter-spacing:-.2px}
+.hero-card .date{font-size:11.5px;opacity:.78;margin-top:2px}
+.hero-card .bignum{display:flex;align-items:baseline;gap:6px;margin-top:14px}
+.hero-card .bignum .n{font-size:38px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.05}
+.hero-card .bignum .u{font-size:13px;font-weight:700;opacity:.85}
+.hero-card .note{font-size:11px;opacity:.75;margin-top:4px}
+.chips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.chip{
+  display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:999px;
+  background:rgba(255,255,255,.22);font-size:11px;font-weight:700;
+}
+.kv{display:flex;align-items:center;gap:8px;padding:8px 0}
+.kv .k{font-size:12.5px;color:var(--text2)}
+.kv .v{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+
+/* 积分卡 */
+.money-hd{display:flex;align-items:baseline;gap:6px}
+.money-num{font-size:40px;font-weight:800;line-height:1.05;color:var(--primary);font-variant-numeric:tabular-nums}
+.week-stats{display:flex;gap:14px;margin-top:8px}
+.week-stats .s{font-size:11.5px;color:var(--text2)}
+.week-stats .s b{font-weight:800}
+.inp{
+  height:40px;border-radius:12px;background:var(--soft);border:1px solid var(--border);
+  display:flex;align-items:center;padding:0 12px;font-size:13px;color:var(--text3);
+}
+
+/* 对比用的切断线 */
+.cut{
+  position:absolute;left:0;right:0;height:0;border-top:2px dashed #C0394F;z-index:6;
+}
+.cut::after{
+  content:"首屏可见底线";position:absolute;right:8px;top:-11px;background:#C0394F;color:#fff;
+  font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:999px;
+}
+.beyond{
+  position:absolute;left:0;right:0;bottom:0;height:66px;z-index:5;
+  background:repeating-linear-gradient(135deg,rgba(192,57,79,.10) 0 6px,transparent 6px 12px);
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#9E2436;
+}
+
+/* 表格 */
+.tblwrap{overflow-x:auto;border:1px solid var(--doc-border);border-radius:12px;background:#fff}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px}
+table.tbl th{
+  text-align:left;padding:10px 12px;background:#F7F8FC;font-size:11.5px;color:var(--doc-text3);
+  font-weight:700;letter-spacing:.3px;border-bottom:1px solid var(--doc-border);white-space:nowrap;
+}
+table.tbl td{padding:10px 12px;border-bottom:1px solid #EEF1F7;vertical-align:top}
+table.tbl tr:last-child td{border-bottom:0}
+table.tbl td.dim{color:var(--doc-text3);font-size:12px}
+table.tbl code{font-size:11.5px}
+
+.tag{display:inline-block;font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:5px;white-space:nowrap}
+.tag.ok{background:#E4F5EA;color:#22703F}
+.tag.new{background:#E7F0FB;color:#2A5B8C}
+.tag.warn{background:#FDF1DC;color:#8A5A11}
+
+.note-card{
+  border:1px solid var(--doc-border);border-radius:12px;background:#fff;padding:13px 15px;font-size:13px;
+}
+.note-card+.note-card{margin-top:10px}
+.note-card.warn{background:#FFFBF2;border-color:#F0D6A8}
+.note-card.ok{background:#F5FCF7;border-color:#CBE6D4}
+.note-card.info{background:#F6FAFF;border-color:#CFE1F5}
+.note-card .nt{font-size:12.5px;font-weight:800;margin-bottom:4px;color:var(--doc-text)}
+.note-card .nb{color:var(--doc-text2);font-size:12.5px;line-height:1.72}
+
+.qa{border:1px solid var(--doc-border);border-radius:12px;background:#fff;padding:14px 16px}
+.qa+.qa{margin-top:10px}
+.qa > b{display:block;font-size:14px;margin-bottom:5px}
+.qa .a{font-size:13px;color:var(--doc-text2);line-height:1.72}
+.qa .a b{color:var(--doc-ok)}
+.qa .cost{font-size:11px;font-weight:700;color:var(--doc-text3);margin-top:8px;letter-spacing:.3px}
+.qa .cost i{font-style:normal;color:var(--doc-accent);font-weight:800}
+
+.footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--doc-border);font-size:12px;color:var(--doc-text3)}
+
+@media(max-width:1180px){
+  .vcards{grid-template-columns:1fr}
+  .gallery{gap:24px}
+  .wrap{padding:0 18px}
+  .topbar{padding:10px 18px}
+  .topnav{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">SekaiNook<span>任务页改版预览</span></div>
+  <nav class="topnav">
+    <a href="#s1">01 底栏</a>
+    <a href="#s2">02 任务页</a>
+    <a href="#s3">03 积分进首页</a>
+    <a href="#s4">04 还能优化</a>
+  </nav>
+  <div class="themes">
+    <button data-th="rose" class="on">玫瑰</button>
+    <button data-th="dark">深色</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="kicker">SekaiNook · 家庭页改版</div>
+    <h1>底栏叫「任务」，打开就是任务<br>积分搬回首页</h1>
+    <p class="lead">
+      三件事：① 底部导航「家庭」改名「任务」；② 首页原本分开的积分和兑换合成一张卡；
+      ③ 任务页把任务列表提到最上面 —— 现在打开 App 要滑 350dp 才看到第一个任务，改完第一眼就是。
+    </p>
+    <div class="vcards">
+      <div class="vcard is-ok">
+        <div class="t">改动 1</div>
+        <div class="d">底栏：家庭 → 任务</div>
+        <div class="s">图标换 checklist，语义从「一整个家」收窄成「今天要干的活」</div>
+      </div>
+      <div class="vcard is-ok">
+        <div class="t">改动 2</div>
+        <div class="d">任务列表置顶</div>
+        <div class="s">第一个任务从第 456dp 提到第 196dp，打开就能点</div>
+      </div>
+      <div class="vcard is-ok">
+        <div class="t">改动 3</div>
+        <div class="d">积分整合进首页</div>
+        <div class="s">余额 + 本周收支 + 兑换合成一张卡，家庭页不再显示积分</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ 01 ============================ -->
+  <section class="sec" id="s1">
+    <div class="sec-head"><div class="sec-num">01</div><h2>底部导航：家庭 → 任务</h2></div>
+    <p class="sec-sub">
+      只有两个字和图标的变化，但含义变了：原来点进去是「家里的事」（积分、审批、历史堆在一页），
+      现在点进去就是「我今天要干的活」。积分与兑换的责任交回首页。
+    </p>
+
+    <div class="gallery">
+      <div class="col-mock">
+        <div class="phone" style="height:132px">
+          <div class="slot" style="height:0"></div>
+          <div class="dockwrap" style="height:132px;padding-bottom:8px">
+            <div class="dock">
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lb">首页</span></div>
+              <div class="di on"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><circle cx="17" cy="9" r="2.6"/><path d="M14.5 19.5c0-2.4 1.6-4 3.6-4 1.6 0 3 1 3.4 2.6"/></svg><span class="lb">家庭</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><span class="lb">计划</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l2.1 5.2 5.6.5-4.2 3.7 1.3 5.5L12 15l-4.8 2.9 1.3-5.5-4.2-3.7 5.6-.5z"/></svg><span class="lb">花园</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h5M14 7h6M4 17h9M18 17h2"/><circle cx="11.5" cy="7" r="2.3"/><circle cx="15.5" cy="17" r="2.3"/></svg><span class="lb">设置</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>现在</b>：第 2 格是「家庭」，进去是一整页家的事 —— 积分、趋势、任务、审批、历史全在里面。</div>
+      </div>
+
+      <div class="col-mock">
+        <div class="phone" style="height:132px">
+          <div class="dockwrap" style="height:132px;padding-bottom:8px">
+            <div class="dock">
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lb">首页</span></div>
+              <div class="di on"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1.5"/><path d="M8.5 12.5l2 2 4-4.5"/></svg><span class="lb">任务</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><span class="lb">计划</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l2.1 5.2 5.6.5-4.2 3.7 1.3 5.5L12 15l-4.8 2.9 1.3-5.5-4.2-3.7 5.6-.5z"/></svg><span class="lb">花园</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h5M14 7h6M4 17h9M18 17h2"/><circle cx="11.5" cy="7" r="2.3"/><circle cx="15.5" cy="17" r="2.3"/></svg><span class="lb">设置</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>改后</b>：第 2 格叫「任务」，图标换成 checklist。点它就是今天要干的活，别的都收进右上角。</div>
+      </div>
+
+      <div class="col-info">
+        <div class="note-card ok">
+          <div class="nt">为什么值得改</div>
+          <div class="nb">
+            「家庭」这个词对谁都很含糊 —— 妹妹点进去想打卡，妈妈点进去想审批和看钱，两个人要的东西不一样，
+            全塞一页就只能堆卡片。拆成「首页管钱、任务页管事」，每个格子只有一个动词。
+          </div>
+        </div>
+        <div class="note-card">
+          <div class="nt">顺带解决的两件事</div>
+          <div class="nb">
+            ① 任务页不再需要「卡片拖拽排序」那一套 —— 首页才有多张卡，任务页就一条任务列表，顺序天然固定。
+            上一版加进 App 的拖拽只留在首页，正好。<br>
+            ② 底栏 5 格不变，不加新 Tab，谁都不用重新学。
+          </div>
+        </div>
+        <div class="note-card info">
+          <div class="nt">图标来源</div>
+          <div class="nb">
+            图标库里现有 <code>appsList</code>（清单）/ <code>checkCircle</code>（完成）/ <code>checkDouble</code>（双勾）/ <code>listAdd</code>，
+            <b>没有叫「checklist」的那条</b> —— 图里画的方框加勾是新路径，落地时在 <code>app_glyphs.dart</code> 补一条就行（十几个节点，不用走 <code>.icon-work</code>）。
+            不想加就直接用 <code>appsList</code>，语义也够。
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ 02 ============================ -->
+  <section class="sec" id="s2">
+    <div class="sec-head"><div class="sec-num">02</div><h2>任务页：打开就能打卡</h2></div>
+    <p class="sec-sub">
+      现在家庭页顶部压着三张卡（积分 / 必须任务环 / 趋势），390×844 的屏要滑掉 350dp 才见到第一个任务行。
+      改完：顶上只留一条 28dp 的进度条，任务从第 196dp 开始。
+    </p>
+
+    <div class="gallery">
+      <!-- 旧 -->
+      <div class="col-mock">
+        <div class="phone tall">
+          <div class="appbar"><div class="title">家庭</div><div class="acts"><div class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 2"/></svg></div></div></div>
+          <div class="slot top"></div>
+          <div class="list">
+            <!-- 状态条卡 -->
+            <div class="card">
+              <div class="row" style="align-items:flex-start">
+                <div class="spacer">
+                  <div class="row" style="gap:6px">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="6" width="19" height="13" rx="3"/><path d="M2.5 10h19"/></svg>
+                    <span class="xs12" style="font-weight:600">当前总积分</span>
+                    <span class="pill ok">+50 今天</span>
+                  </div>
+                  <div class="row" style="align-items:baseline;gap:4px;margin-top:6px">
+                    <span style="font-size:40px;font-weight:800;color:var(--success-ink);font-variant-numeric:tabular-nums;line-height:1.05">1,286</span>
+                    <span class="xs12">分</span>
+                  </div>
+                  <div class="row" style="gap:8px;margin-top:10px">
+                    <div style="width:40px;height:40px;border-radius:999px;background:conic-gradient(var(--success) 0 33%, var(--soft) 0);display:flex;align-items:center;justify-content:center">
+                      <div style="width:30px;height:30px;border-radius:999px;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800">1/3</div>
+                    </div>
+                    <div>
+                      <div class="h14">今天必须完成 1/3</div>
+                      <div class="xs11" style="margin-top:1px">22:00 前打卡 · 没做完每件 −10</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="quick2" style="margin-top:14px">
+                <div class="q ok">按时完成作业</div>
+                <div class="q pri">按时睡觉</div>
+              </div>
+            </div>
+            <!-- 趋势折叠 -->
+            <div class="card flat">
+              <div class="row" style="padding:14px 16px">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 18l5-6 4 3 7-9"/><path d="M14 6h6v6"/></svg>
+                <span class="h14">近 14 天趋势</span>
+                <div class="spacer"></div>
+                <span class="val" style="font-size:13px">+320</span>
+              </div>
+            </div>
+            <!-- tabs -->
+            <div class="seg">
+              <div class="sb on">任务区</div>
+              <div class="sb">待审批 <span class="cnt">3</span></div>
+              <div class="sb">历史记录</div>
+            </div>
+            <!-- 任务从这里才开始 -->
+            <div class="grp-hd must-hd"><span class="t">今天必须完成</span><span class="c">2 件</span></div>
+            <div class="trow must">
+              <div class="ibox red"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h11l3 3v13H5z"/><path d="M8 11h8M8 15h5"/></svg></div>
+              <div style="flex:1"><div class="ttl">按时完成作业<span class="tag-must">必须</span></div><div class="meta red">21:00 前打卡 · 没做 −10</div></div>
+              <div class="val">+20</div><div class="chk"></div>
+            </div>
+            <div class="grp-hd" style="margin-top:14px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.4"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.6" fill="var(--success)" stroke="none"/></svg><span class="t" style="color:var(--success-ink)">日常任务</span><span class="c">4 件</span></div>
+            <div class="trow ready">
+              <div class="ibox"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20l3-1 11-11-2-2L5 17z"/><path d="M16 6l2 2"/></svg></div>
+              <div style="flex:1"><div class="ttl">整理房间</div><div class="meta">今天还能做 2 次</div></div>
+              <div class="val">+10</div><div class="chk"></div>
+            </div>
+          </div>
+          <div class="cut" style="top:706px"></div>
+          <div class="dockwrap">
+            <div class="dock">
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lb">首页</span></div>
+              <div class="di on"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1.5"/><path d="M8.5 12.5l2 2 4-4.5"/></svg><span class="lb">任务</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><span class="lb">计划</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l2.1 5.2 5.6.5-4.2 3.7 1.3 5.5L12 15l-4.8 2.9 1.3-5.5-4.2-3.7 5.6-.5z"/></svg><span class="lb">花园</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h5M14 7h6M4 17h9M18 17h2"/><circle cx="11.5" cy="7" r="2.3"/><circle cx="15.5" cy="17" r="2.3"/></svg><span class="lb">设置</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <b>现在</b>：红虚线以上塞了积分卡 + 趋势 + 三段 tab，首屏只露出「按时完成作业」一行。
+          打卡这种每天做 5 次的事，要先滑一下。
+        </div>
+      </div>
+
+      <!-- 新 -->
+      <div class="col-mock">
+        <div class="phone tall">
+          <div class="appbar">
+            <div class="title">任务</div>
+            <div class="acts">
+              <div class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1.5"/><path d="M9 13h6M9 17h4"/></svg><span class="badge">3</span></div>
+              <div class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 2"/></svg></div>
+            </div>
+          </div>
+          <div class="slot top"></div>
+          <div class="list">
+            <!-- 细进度条 -->
+            <div class="progressline">
+              <div class="pl-top">
+                <span class="n">今天必须完成 1/3</span>
+                <span class="sub">22:00 前 · 没做完每件 −10</span>
+              </div>
+              <div class="pl-bar"><div class="pl-fill" style="width:33%"></div></div>
+            </div>
+
+            <!-- 必须 -->
+            <div>
+              <div class="grp-hd must-hd">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l9 16H3z"/><path d="M12 9v4M12 16h.01"/></svg>
+                <span class="t">今天必须完成</span><span class="c">2 件</span>
+              </div>
+              <div class="trow must">
+                <div class="ibox red"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h11l3 3v13H5z"/><path d="M8 11h8M8 15h5"/></svg></div>
+                <div style="flex:1"><div class="ttl">按时完成作业<span class="tag-must">必须</span></div><div class="meta red">21:00 前打卡 · 没做 −10</div></div>
+                <div class="val">+20</div><div class="chk"></div>
+              </div>
+              <div class="trow must" style="margin-top:8px">
+                <div class="ibox red"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 14.5A8.5 8.5 0 019.5 4 8.5 8.5 0 1020 14.5z"/></svg></div>
+                <div style="flex:1"><div class="ttl">按时睡觉<span class="tag-must">必须</span></div><div class="meta red">19:00 之后可打卡 · 没做 −20</div></div>
+                <div class="val">+10</div><div class="chk"></div>
+              </div>
+              <div class="trow done" style="margin-top:8px">
+                <div class="ibox gray"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3M12 18v3M5.5 12H3M21 12h-3"/><circle cx="12" cy="12" r="3.5"/></svg></div>
+                <div style="flex:1"><div class="ttl">洗脸刷牙<span class="tag-must">必须</span></div><div class="meta">今天做过 · 21:40</div></div>
+                <div class="val" style="color:var(--text3)">+5</div>
+                <div class="chk done"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>
+              </div>
+            </div>
+
+            <!-- 日常 -->
+            <div>
+              <div class="grp-hd"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.4"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.6" fill="var(--success)" stroke="none"/></svg><span class="t" style="color:var(--success-ink)">日常任务</span><span class="c">4 件</span></div>
+              <div class="trow ready">
+                <div class="ibox"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20l3-1 11-11-2-2L5 17z"/><path d="M16 6l2 2"/></svg></div>
+                <div style="flex:1"><div class="ttl">整理房间</div><div class="meta">今天还能做 2 次</div></div>
+                <div class="val">+10</div><div class="chk"></div>
+              </div>
+              <div class="trow ready" style="margin-top:8px">
+                <div class="ibox"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M8 12h8"/></svg></div>
+                <div style="flex:1"><div class="ttl">洗碗</div><div class="meta">今天还能做 2 次</div></div>
+                <div class="val">+5</div><div class="chk"></div>
+              </div>
+              <div class="trow ready" style="margin-top:8px">
+                <div class="ibox"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v4H4z"/><path d="M6 9v11h12V9"/></svg></div>
+                <div style="flex:1"><div class="ttl">洗衣服</div><div class="meta">每天 1 次</div></div>
+                <div class="val">+15</div><div class="chk"></div>
+              </div>
+            </div>
+
+            <!-- 本周 -->
+            <div>
+              <div class="grp-hd"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.2"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg><span class="t" style="color:var(--primary)">本周任务</span><span class="c">3 件</span></div>
+              <div class="trow ready">
+                <div class="ibox"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3c3 3 4.5 5 4.5 7a4.5 4.5 0 01-9 0c0-2 1.5-4 4.5-7z"/></svg></div>
+                <div style="flex:1">
+                  <div class="ttl">洗头<span class="tag-must">必须</span></div>
+                  <div class="meta">本周 1/3 次<span class="wdots"><i class="f"></i><i></i><i></i></span></div>
+                </div>
+                <div class="val">+5</div><div class="chk"></div>
+              </div>
+              <div class="trow ready" style="margin-top:8px">
+                <div class="ibox"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="7" r="2"/><circle cx="16" cy="7" r="2"/><path d="M5 20l5-9 3 4 4-6"/></svg></div>
+                <div style="flex:1">
+                  <div class="ttl">剪指甲<span class="tag-must">必须</span></div>
+                  <div class="meta">每周一次 · 缺一次 −10</div>
+                </div>
+                <div class="val">+10</div><div class="chk"></div>
+              </div>
+              <div class="trow ready" style="margin-top:8px;background:color-mix(in srgb,var(--primary) 8%,var(--surface));border-color:color-mix(in srgb,var(--primary) 26%,transparent)">
+                <div class="ibox" style="background:color-mix(in srgb,var(--primary) 12%,var(--surface));color:var(--primary)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h16l-1.5 11h-13z"/><path d="M8 9V6a4 4 0 018 0v3"/></svg></div>
+                <div style="flex:1"><div class="ttl">上班一天</div><div class="meta">每周一次 · 家长确认</div></div>
+                <div class="val">+500</div><div class="chk"></div>
+              </div>
+            </div>
+
+            <!-- 特殊加分 -->
+            <div class="foldrow">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4h8v5a4 4 0 01-8 0z"/><path d="M8 5H5v2a3 3 0 003 3M16 5h3v2a3 3 0 01-3 3M12 13v4M9 20h6"/></svg>
+              <span>特殊加分</span>
+              <span class="pill warnp" style="margin-left:2px">参赛 +20 / 获奖 +50</span>
+              <div class="spacer"></div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+
+            <div class="foldrow">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7"/></svg>
+              <span>今日已完成 2 项</span>
+              <div class="spacer"></div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+          </div>
+          <div class="cut" style="top:706px"></div>
+          <div class="dockwrap">
+            <div class="dock">
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lb">首页</span></div>
+              <div class="di on"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1.5"/><path d="M8.5 12.5l2 2 4-4.5"/></svg><span class="lb">任务</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><span class="lb">计划</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l2.1 5.2 5.6.5-4.2 3.7 1.3 5.5L12 15l-4.8 2.9 1.3-5.5-4.2-3.7 5.6-.5z"/></svg><span class="lb">花园</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h5M14 7h6M4 17h9M18 17h2"/><circle cx="11.5" cy="7" r="2.3"/><circle cx="15.5" cy="17" r="2.3"/></svg><span class="lb">设置</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <b>改后</b>：一条 28dp 进度条 + 任务列表。首屏（红虚线以上）能看到：必须任务 3 件全部 + 日常任务 3 件 + 本周任务第 1 件。
+          第一个任务行从 456dp 提到 196dp，省掉一次滑动。
+        </div>
+      </div>
+
+      <div class="col-info">
+        <h3 style="margin-top:0">首屏高度账本</h3>
+        <div class="tblwrap">
+          <table class="tbl">
+            <thead><tr><th>位置</th><th>现在</th><th>改后</th></tr></thead>
+            <tbody>
+              <tr><td>顶栏让位</td><td class="dim">108dp</td><td class="dim">108dp</td></tr>
+              <tr><td>积分 / 状态条</td><td class="dim">≈200dp</td><td class="dim">—（搬去首页）</td></tr>
+              <tr><td>趋势折叠行</td><td class="dim">56dp</td><td class="dim">—（搬去首页）</td></tr>
+              <tr><td>三段 tab</td><td class="dim">44dp</td><td class="dim">—（收进右上角）</td></tr>
+              <tr><td>今日进度条</td><td class="dim">0</td><td class="dim">28dp</td></tr>
+              <tr><td><b>第一个任务行的 y</b></td><td class="dim"><b>≈456dp</b></td><td class="dim"><b>≈196dp</b></td></tr>
+              <tr><td>首屏能看到的任务</td><td class="dim">1 行</td><td class="dim">7 行（含 3 件必须）</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small">数据按当前代码里 <code>_buildStatusCard</code> ≈ 200dp、<code>_buildTrendFoldRow</code> 56dp、<code>SegmentedControl</code> 44dp 估的，误差 ±10dp。</p>
+
+        <h3>待审批 / 历史 去哪了</h3>
+        <div class="note-card">
+          <div class="nt">右上角两个图标</div>
+          <div class="nb">
+            <b>家长</b>：待审批带红色角标（3），点进去是审批列表；时钟图标是历史记录。<br>
+            <b>孩子</b>：只有历史记录一个图标 —— 孩子没有待审批要看，那是妈妈的事。<br><br>
+            为什么不做成 tab：三段 tab 占 44dp 而且一进去默认就是任务区，等于白占一行。
+            待审批对家长是每天 5–10 次的操作，右上角固定位置 + 角标比藏在 tab 里更快。
+          </div>
+        </div>
+        <div class="note-card ok">
+          <div class="nt">保留的动效</div>
+          <div class="nb">
+            上一版做的「按方向翻页」动效不浪费 —— 点右上角图标进待审批 / 历史时照样用（往右进、往左回），
+            只是触发物从 tab 换成了图标按钮。
+          </div>
+        </div>
+        <div class="note-card warn">
+          <div class="nt">要改的代码</div>
+          <div class="nb">
+            <code>family_dashboard_page.dart</code>：去掉 status / trend 两张卡，砍掉 <code>_buildTabs</code> 的三段切换，
+            右上角加两个图标（走 <code>AppTopBar</code> 的 actions 或页面内自绘）。<br>
+            <code>main_shell.dart</code>：第 2 个 destination 的 label / glyph 改掉，路由 <code>/family</code> 可保留（地址不用动）。
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ 03 ============================ -->
+  <section class="sec" id="s3">
+    <div class="sec-head"><div class="sec-num">03</div><h2>积分整合进首页</h2></div>
+    <p class="sec-sub">
+      家庭页原来那张「当前总积分 / 必须任务环 / 兑换现金」的状态条，拆成两半：
+      <b>钱的部分</b>（余额、本周收支、兑换）进首页，<b>任务的部分</b>（必须任务进度）留在任务页顶上那条 28dp 细条。
+    </p>
+
+    <div class="gallery">
+      <!-- 孩子首页 -->
+      <div class="col-mock">
+        <div class="phone tall">
+          <div class="appbar"><div class="title">首页</div><div class="acts"><div class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg></div></div></div>
+          <div class="slot top"></div>
+          <div class="list">
+            <!-- hero（不变） -->
+            <div class="hero-card">
+              <div class="row" style="align-items:flex-start">
+                <div class="spacer">
+                  <div class="greet">下午好，妹妹</div>
+                  <div class="date">10月25日 星期六</div>
+                </div>
+                <div style="width:44px;height:44px;border-radius:999px;background:rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;font-size:18px">🏅</div>
+              </div>
+              <div class="bignum">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.9"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.2 5.2l1.8 1.8M17 17l1.8 1.8M18.8 5.2L17 7M7 17l-1.8 1.8"/></svg>
+                <span class="n">320</span><span class="u">阳光</span>
+              </div>
+              <div class="note">花园里的阳光，会存进家里的账本，换手机也在</div>
+              <div class="chips"><span class="chip">🔥 连续 12 天</span><span class="chip">🏆 勋章 7/18</span></div>
+            </div>
+
+            <!-- 新增：积分卡（从家庭页搬来的钱部分 + 原有本周小结） -->
+            <div class="card" style="border-color:color-mix(in srgb,var(--primary) 34%,transparent);background:color-mix(in srgb,var(--primary) 5%,var(--surface))">
+              <div class="row" style="align-items:baseline">
+                <span class="h16">我的积分</span>
+                <span class="pill ok" style="margin-left:4px">+50 今天</span>
+                <div class="spacer"></div>
+                <span class="xs11">兑换 →</span>
+              </div>
+              <div class="row" style="align-items:baseline;gap:5px;margin-top:8px">
+                <span class="money-num">1,286</span><span class="xs12">积分</span>
+              </div>
+              <div class="week-stats">
+                <span class="s">这周赚了 <b style="color:var(--success-ink)">+320</b></span>
+                <span class="s">花掉 <b style="color:var(--danger-ink)">120</b></span>
+                <span class="s">今天打卡 <b>5</b> 次</span>
+              </div>
+              <div class="divider" style="margin:14px 0 12px"></div>
+              <div class="xs11" style="margin-bottom:8px">快速打卡</div>
+              <div class="quick2">
+                <div class="q ok">作业</div>
+                <div class="q pri">睡觉</div>
+              </div>
+              <div class="row" style="margin-top:10px">
+                <div class="spacer"></div>
+                <span class="xs12" style="color:var(--primary);font-weight:700">全部打卡任务 →</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="row"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg><span class="h14">今天的学习任务</span><div class="spacer"></div><span class="pill warnp">3 项</span></div>
+              <div class="xs12" style="margin-top:6px">古诗背诵 · 英语单词 · 数学口算</div>
+            </div>
+          </div>
+          <div class="dockwrap">
+            <div class="dock">
+              <div class="di on"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lb">首页</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1.5"/><path d="M8.5 12.5l2 2 4-4.5"/></svg><span class="lb">任务</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><span class="lb">计划</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l2.1 5.2 5.6.5-4.2 3.7 1.3 5.5L12 15l-4.8 2.9 1.3-5.5-4.2-3.7 5.6-.5z"/></svg><span class="lb">花园</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h5M14 7h6M4 17h9M18 17h2"/><circle cx="11.5" cy="7" r="2.3"/><circle cx="15.5" cy="17" r="2.3"/></svg><span class="lb">设置</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>孩子首页</b>：hero 不动（阳光积分 + 连续天数 + 勋章），下面多了一张<b>「我的积分」</b> —— 余额、本周收支、今日打卡数、两个快捷打卡，和「全部打卡任务 →」跳任务页。</div>
+      </div>
+
+      <!-- 家长首页 -->
+      <div class="col-mock">
+        <div class="phone tall">
+          <div class="appbar"><div class="title">首页</div><div class="acts"><div class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg><span class="badge">3</span></div></div></div>
+          <div class="slot top"></div>
+          <div class="list">
+            <div class="card">
+              <div class="row" style="align-items:flex-start">
+                <div class="spacer">
+                  <div class="xs12">下午好，妈妈</div>
+                  <div class="row" style="align-items:baseline;gap:4px;margin-top:4px">
+                    <span style="font-size:34px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.05">14:20</span>
+                    <span class="xs11">10月25日 星期六</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 新增：积分与兑换 -->
+            <div class="card" style="border-color:color-mix(in srgb,var(--primary) 34%,transparent);background:color-mix(in srgb,var(--primary) 5%,var(--surface))">
+              <div class="row" style="align-items:baseline">
+                <span class="h16">妹妹的积分</span>
+                <div class="spacer"></div>
+                <span class="pill warnp">待审批 3</span>
+              </div>
+              <div class="row" style="align-items:baseline;gap:5px;margin-top:8px">
+                <span class="money-num">1,286</span><span class="xs12">积分 · 盈余</span>
+              </div>
+              <div class="week-stats">
+                <span class="s">这周赚了 <b style="color:var(--success-ink)">+320</b></span>
+                <span class="s">花掉 <b style="color:var(--danger-ink)">120</b></span>
+              </div>
+              <div class="divider" style="margin:14px 0 12px"></div>
+              <div class="row" style="margin-bottom:8px">
+                <span class="xs11">积分兑换现金 · 100 积分 = 10 元</span>
+              </div>
+              <div class="row">
+                <div class="inp" style="flex:1">兑换金额</div>
+                <div class="btn pri" style="margin-left:8px;height:40px">兑换</div>
+              </div>
+              <div class="row" style="margin-top:10px">
+                <div class="spacer"></div>
+                <span class="xs12" style="color:var(--primary);font-weight:700">看孩子今天做了什么 →</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="row"><span class="h14">今天要盯的事</span><div class="spacer"></div><span class="pill bad">2 件没做</span></div>
+              <div class="xs12" style="margin-top:6px">按时完成作业 · 洗头（本周还差 2 次）</div>
+            </div>
+          </div>
+          <div class="dockwrap">
+            <div class="dock">
+              <div class="di on"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lb">首页</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1.5"/><path d="M8.5 12.5l2 2 4-4.5"/></svg><span class="lb">任务</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><span class="lb">计划</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l2.1 5.2 5.6.5-4.2 3.7 1.3 5.5L12 15l-4.8 2.9 1.3-5.5-4.2-3.7 5.6-.5z"/></svg><span class="lb">花园</span></div>
+              <div class="di"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h5M14 7h6M4 17h9M18 17h2"/><circle cx="11.5" cy="7" r="2.3"/><circle cx="15.5" cy="17" r="2.3"/></svg><span class="lb">设置</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>家长首页</b>：余额 + 本周收支 + <b>兑换现金</b>（原来在家庭页最底下的输入框）合成一张卡。待审批角标从底栏挪到卡片上和右上角铃铛上。</div>
+      </div>
+
+      <div class="col-info">
+        <h3 style="margin-top:0">搬的是什么</h3>
+        <div class="tblwrap">
+          <table class="tbl">
+            <thead><tr><th>家庭页原来的内容</th><th>搬去哪</th><th>为什么</th></tr></thead>
+            <tbody>
+              <tr><td>当前总积分（大数字）</td><td class="dim">首页 · 积分卡</td><td class="dim">钱的事归首页</td></tr>
+              <tr><td>今日盈亏 pill（+50 今天）</td><td class="dim">首页 · 积分卡</td><td class="dim">跟余额同一个语境</td></tr>
+              <tr><td>家长兑换现金输入框</td><td class="dim">首页 · 积分卡</td><td class="dim">兑钱是首页的事，不该埋在任务页最底下</td></tr>
+              <tr><td>待审批 N 项 行</td><td class="dim">首页卡片 + 右上角铃铛角标</td><td class="dim">家长每天要点很多次，首页就能点到</td></tr>
+              <tr><td>必须任务进度环 1/3</td><td class="dim">任务页顶上细条</td><td class="dim">跟任务绑在一起才对</td></tr>
+              <tr><td>两个快捷打卡按钮</td><td class="dim">首页 · 积分卡（保留）</td><td class="dim">首页顺手打两个最常用的，完整的去任务页</td></tr>
+              <tr><td>近 14 天趋势</td><td class="dim">首页 · 积分卡下方（默认折叠）</td><td class="dim">看趋势是「关心全局」，不是「今天要干活」</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>一个要注意的取舍</h3>
+        <div class="note-card warn">
+          <div class="nt">孩子端现在有两个「积分」</div>
+          <div class="nb">
+            hero 里那个大数字是<b>花园阳光</b>（<code>garden.balance</code>），积分卡里的是<b>家庭账本余额</b>（<code>family.balance</code>）。
+            现在两套数字并排出现，孩子会问「我到底有多少分」。<br><br>
+            两个选择：<br>
+            <b>①</b> 合成一个 —— 花园阳光直接就是账本余额（要动数据模型，成本高）；<br>
+            <b>②</b> 明确区分 —— hero 那个改叫「阳光」，积分卡叫「积分（能兑钱）」，两个小字标注（推荐，一行文案的事）。<br><br>
+            我倾向 ②。要不要合，你定。
+          </div>
+        </div>
+        <div class="note-card good">
+          <div class="nt">不改的东西</div>
+          <div class="nb">
+            家庭账本的接口、结算逻辑、审批流程一行不动。这次纯前端搬卡片 —— 除了底栏文案，
+            数据层零风险（对比上一版改结算，这版是纯 UI）。
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ 04 ============================ -->
+  <section class="sec" id="s4">
+    <div class="sec-head"><div class="sec-num">04</div><h2>还能顺手优化的（你问的）</h2></div>
+    <p class="sec-sub">
+      按「改动小 + 每天都能感觉到」排的。前四条我建议这次一起做，后面几条可以攒到下个版本。
+    </p>
+
+    <div class="qa">
+      <b>① 任务行加「长按看规则」</b>
+      <div class="a">
+        现在必须任务的 −10 只写在 meta 那行小字里，孩子未必看。长按任意任务行 → 弹一个小面板：
+        这条为什么必须、几点截止、没做扣几分、这周做了几次。<b>不用新页面，一个底部面板就够。</b>
+      </div>
+      <div class="cost">成本 <i>小</i> · 收益 <i>高</i>（扣分前孩子知道会发生什么）</div>
+    </div>
+
+    <div class="qa">
+      <b>② 打卡成功后在行上「飞一颗星」到顶部进度条</b>
+      <div class="a">
+        现在打卡完只是行变灰 + 折叠。加一个 300ms 的微动效：星从行尾飞到顶部「今天必须完成 1/3」那个数字上，
+        数字跳一下。<b>这是唯一一个「正向反馈」的视觉</b>，比再多文字都管用。
+      </div>
+      <div class="cost">成本 <i>小</i> · 收益 <i>高</i>（打卡的爽感）</div>
+    </div>
+
+    <div class="qa">
+      <b>③ 家长端「一键通过全部待审批」</b>
+      <div class="a">
+        妹妹一次交 5 个任务，妈妈要点 5 次「通过」。待审批页顶部加一个「全部通过（5）」按钮 + 一个撤销 Toast。
+        <b>后端已有批量改状态的接口吗？没有的话加一个 <code>PATCH /api/ledger/batch</code>，10 分钟。</b>
+      </div>
+      <div class="cost">成本 <i>小</i> · 收益 <i>中</i>（家长每天少点 4 次）</div>
+    </div>
+
+    <div class="qa">
+      <b>④ 22:00 之后的红条改成倒计时</b>
+      <div class="a">
+        现在写「22:00 前 · 没做完每件 −10」。21:00 之后改成「还剩 1 小时 · 2 件没做，每件 −10」，
+        21:40 之后变红闪烁。<b>把「规则的陈述」变成「正在发生的事」</b>，孩子会更有紧迫感。
+      </div>
+      <div class="cost">成本 <i>小</i> · 收益 <i>中高</i>（解决「忘了」而不是「不想」）</div>
+    </div>
+
+    <div class="qa">
+      <b>⑤ 历史记录按周分组 + 顶部周汇总</b>
+      <div class="a">
+        现在是一长条流水，翻到上周要滑很久。改成按周折叠：「本周 +320 / −40」，点开才是逐条。
+        <b>顺手把「哪几笔是罚款」用红底标出来</b> —— 现在罚款和普通消费长一个样，孩子分不清。
+      </div>
+      <div class="cost">成本 <i>中</i> · 收益 <i>中</i>（对账时有用）</div>
+    </div>
+
+    <div class="qa">
+      <b>⑥ 首页的「今天的学习任务」卡片跟任务页重复了</b>
+      <div class="a">
+        首页已有「学习任务」卡（花园那边），任务页有「日常任务」。孩子会疑惑「古诗背诵算不算日常任务」。
+        建议：<b>花园学习任务在任务页里也出现一行汇总「花园 3 项，去花园 →」</b>，别让它变成两个平行宇宙。
+      </div>
+      <div class="cost">成本 <i>小</i> · 收益 <i>中</i>（减少一次「这个算不算」的困惑）</div>
+    </div>
+
+    <div class="qa">
+      <b>⑦ 深色模式下红色必须标签略显闷</b>
+      <div class="a">
+        深色里 <code>--danger-ink</code> 是 <code>#FFB3BF</code>，压在 <code>#211C1E</code> 上对比度够（≈8:1），
+        但「必须」小角标只有 10px，深色下偏细。<b>深色里给角标加 0.5 的描边或用实心红底白字</b>，
+        别让它糊成一片。
+      </div>
+      <div class="cost">成本 <i>极小</i> · 收益 <i>小</i>（但一眼就能看出差别）</div>
+    </div>
+
+    <div class="qa">
+      <b>⑧ 别忘了「计划」和「花园」也占底栏</b>
+      <div class="a">
+        底栏 5 格：首页 / 任务 / 计划 / 花园 / 设置。<b>「计划」其实是本周学习计划表，「花园」是任务 + 奖励</b> ——
+        它俩和任务页的边界很模糊。这版先不动，但如果以后觉得挤，第一个该合并的是「计划 → 任务页顶部入口」。
+      </div>
+      <div class="cost">成本 <i>大</i>（要动路由）· 收益 <i>待定</i>（先记着）</div>
+    </div>
+  </section>
+
+  <div class="footer">
+    SekaiNook · 任务页改版预览（2026-10-25）· 页面尺寸 1px = 1dp · 手机壳按 390×844 渲染 ·
+    所有高度是本机估算，真机误差 ±10dp · 交互为 HTML 复刻，非 Flutter 实机截图。
+  </div>
+</div>
+
+<script>
+(function () {
+  // 主题切换
+  var phones = document.querySelectorAll('.phone');
+  var btns = document.querySelectorAll('.themes button');
+  function applyTheme(name) {
+    phones.forEach(function (p) { p.setAttribute('data-theme', name === 'rose' ? '' : name); });
+    btns.forEach(function (b) { b.classList.toggle('on', b.dataset.th === name); });
+    try { history.replaceState(null, '', name === 'rose' ? location.pathname : '?theme=' + name); } catch (e) {}
+  }
+  btns.forEach(function (b) {
+    b.addEventListener('click', function () { applyTheme(b.dataset.th); });
+  });
+  var q = new URLSearchParams(location.search).get('theme');
+  if (q) applyTheme(q);
+})();
+</script>
+</body>
+</html>

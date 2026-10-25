@@ -31,17 +31,17 @@ void main() {
   group('页面名与图标跟着 location 走', () {
     test('五个 Tab 加通知页各自认领', () {
       expect(AppTopBarPage.of('/home').label, '首页');
-      expect(AppTopBarPage.of('/family').label, '家庭账本');
+      expect(AppTopBarPage.of('/family').label, '任务');
       expect(AppTopBarPage.of('/family/plan').label, '学习计划');
       expect(AppTopBarPage.of('/garden').label, '阳光花园');
       expect(AppTopBarPage.of('/settings').label, '设置');
       expect(AppTopBarPage.of('/home/notifications').label, '通知');
     });
 
-    test('先例顺序：/home/notifications 不能落成首页、/family/plan 不能落成家庭账本', () {
+    test('先例顺序：/home/notifications 不能落成首页、/family/plan 不能落成任务页', () {
       expect(AppTopBarPage.of('/home/notifications').icon, AppIcons.bell);
       expect(AppTopBarPage.of('/family/plan').icon, AppIcons.calendar);
-      expect(AppTopBarPage.of('/family').icon, AppIcons.receipt);
+      expect(AppTopBarPage.of('/family').icon, AppIcons.checklist);
       expect(AppTopBarPage.of('/home').icon, AppIcons.home);
     });
 

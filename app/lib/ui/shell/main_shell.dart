@@ -9,6 +9,7 @@ import '../../config/app_constants.dart';
 import '../../data/models/app_update.dart';
 import '../../data/models/notification_record.dart';
 import '../../fl_ui/icons/icons.dart';
+import '../icons/app_icons.dart';
 import '../../fl_ui/navigation_dock.dart';
 import '../../state/family_state.dart';
 import '../../state/garden_state.dart';
@@ -239,8 +240,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   badge: unread,
                 ),
                 NavigationDockDestination(
-                  glyph: AppGlyphs.profiles,
-                  label: '家庭',
+                  glyph: AppIcons.checklist,
+                  label: '任务',
                   badge: isParent ? pending : 0,
                 ),
                 const NavigationDockDestination(

@@ -836,7 +836,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
               ),
               const SizedBox(width: AppSpacing.xs),
               Text(
-                '积分',
+                '阳光',
                 style: TextStyle(
                   fontSize: AppFontSize.sm,
                   fontWeight: FontWeight.w600,
@@ -846,7 +846,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             ],
           ),
           Text(
-            '花园里的阳光，会存进家里的账本，换手机也在',
+            '花园的阳光只在花园里用 · 和下面的家庭积分是两本账',
             style: TextStyle(fontSize: AppFontSize.xs, color: heroSoft),
           ),
           _gapSm,
@@ -1293,7 +1293,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  '我的积分',
+                  '家庭积分',
                   style: TextStyle(
                     fontSize: AppFontSize.md,
                     fontWeight: FontWeight.w700,
@@ -1304,7 +1304,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
             ],
           ),
           Text(
-            '攒够可以跟$momName兑现 · 今天打卡 $todayCount 次',
+            '和花园阳光分开记 · 攒够可以跟$momName兑现 · 今天打卡 $todayCount 次',
             style: TextStyle(
               fontSize: AppFontSize.xs,
               color: palette.textSecondary,
@@ -1398,7 +1398,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
               style: TextButton.styleFrom(foregroundColor: palette.primary),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
-                children: <Widget>[Text('全部打卡任务'), _rightIcon],
+                children: <Widget>[Text('全部任务'), _rightIcon],
               ),
             ),
           ),

@@ -28,7 +28,7 @@ class AppTopBarPage {
   static const AppTopBarPage notifications =
       AppTopBarPage(label: '通知', icon: AppIcons.bell);
   static const AppTopBarPage family =
-      AppTopBarPage(label: '家庭账本', icon: AppIcons.receipt);
+      AppTopBarPage(label: '任务', icon: AppIcons.checklist);
   static const AppTopBarPage plan =
       AppTopBarPage(label: '学习计划', icon: AppIcons.calendar);
   static const AppTopBarPage garden =
