@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SekaiNook · 弹窗覆盖层级预览</title>
+<style>
+  :root {
+    --bg: #070C13;
+    --surf: #121C28;
+    --surf-2: #18242F;
+    --line: rgba(255, 255, 255, .08);
+    --text: #E8EFF8;
+    --muted: #8FA1B8;
+    --primary: #4C8DFF;
+    --primary-soft: rgba(76, 141, 255, .16);
+    --sun: #FFC65C;
+    --danger: #FF6B6B;
+    --ok: #4BD6A0;
+    --radius-sheet: 32px;
+    --radius-card: 22px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background:
+      radial-gradient(900px 600px at 15% -10%, #16263D 0%, transparent 60%),
+      radial-gradient(700px 500px at 90% 110%, #122A2A 0%, transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+
+  .stage {
+    display: flex;
+    gap: 48px;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 40px 32px;
+    flex-wrap: wrap;
+  }
+
+  /* ============ 手机 ============ */
+  .phone {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    flex: none;
+    border-radius: 54px;
+    padding: 10px;
+    background: linear-gradient(160deg, #2A3A4E, #0C141E 55%);
+    box-shadow:
+      0 40px 90px rgba(0, 0, 0, .65),
+      0 0 0 1px rgba(255, 255, 255, .07),
+      inset 0 1px 0 rgba(255, 255, 255, .16);
+  }
+
+  .screen {
+    position: relative;
+    height: 100%;
+    border-radius: 44px;
+    overflow: hidden;
+    background: var(--bg);
+    isolation: isolate;
+  }
+
+  .bg-glow {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(420px 300px at 20% 0%, rgba(76, 141, 255, .22), transparent 70%),
+      radial-gradient(360px 260px at 95% 25%, rgba(75, 214, 160, .10), transparent 70%);
+    pointer-events: none;
+  }
+
+  .statusbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 30px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    z-index: 25;
+    pointer-events: none;
+    opacity: .92;
+  }
+
+  .statusbar .dots { letter-spacing: 2px; font-size: 10px; color: var(--muted); }
+
+  /* ============ 内容 ============ */
+  .content {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    padding: 92px 18px 132px;
+    scrollbar-width: none;
+  }
+  .content::-webkit-scrollbar { display: none; }
+
+  .hello { padding: 2px 6px 16px; }
+  .hello h1 { margin: 0; font-size: 26px; letter-spacing: .3px; }
+  .hello p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 6px 18px; }
+
+  .chip {
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, .04);
+    color: var(--text);
+    font-size: 12.5px;
+    padding: 9px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: .18s ease;
+  }
+  .chip:hover { background: var(--primary-soft); border-color: rgba(76, 141, 255, .45); }
+  .chip.active { background: var(--primary-soft); border-color: rgba(76, 141, 255, .55); color: #CFE0FF; }
+
+  .card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .022));
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    padding: 16px;
+    margin: 0 6px 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .22);
+  }
+
+  .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .card-head h2 { margin: 0; font-size: 15px; }
+  .card-head span { font-size: 12px; color: var(--muted); }
+
+  .task {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 12px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .035);
+    margin-bottom: 8px;
+  }
+  .task:last-child { margin-bottom: 0; }
+  .task .tick {
+    width: 26px; height: 26px; flex: none;
+    border-radius: 9px;
+    display: grid; place-items: center;
+    background: var(--primary-soft);
+    color: #9CC1FF; font-size: 13px;
+  }
+  .task .task-name { font-size: 13.5px; }
+  .task .task-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .task .sun { margin-left: auto; color: var(--sun); font-size: 12.5px; font-weight: 600; }
+
+  .bars { display: flex; gap: 10px; }
+  .bar-box { flex: 1; }
+  .bar-box .cap { font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
+  .bar {
+    height: 8px; border-radius: 999px; background: rgba(255, 255, 255, .07);
+    overflow: hidden;
+  }
+  .bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #4C8DFF, #7BD3FF); }
+  .bar.green i { background: linear-gradient(90deg, #35B98A, #6FE7B8); }
+
+  /* ============ 顶部栏（悬浮） ============ */
+  .topbar {
+    position: absolute;
+    top: 10px; left: 12px; right: 12px;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px 0 18px;
+    border-radius: 20px;
+    background: rgba(18, 28, 40, .72);
+    border: 1px solid rgba(255, 255, 255, .075);
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    z-index: 30;
+    transition: opacity .25s ease, filter .25s ease;
+  }
+
+  .topbar .page { font-size: 16px; font-weight: 650; letter-spacing: .2px; }
+  .topbar .grow { flex: 1; }
+
+  .icon-btn {
+    width: 36px; height: 36px;
+    border-radius: 12px;
+    display: grid; place-items: center;
+    background: rgba(255, 255, 255, .05);
+    border: 1px solid rgba(255, 255, 255, .06);
+    color: #C6D4E6;
+    font-size: 15px;
+    cursor: pointer;
+    position: relative;
+  }
+  .icon-btn .badge {
+    position: absolute; top: 5px; right: 6px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--danger);
+    box-shadow: 0 0 0 2px rgba(18, 28, 40, .9);
+  }
+
+  .seg {
+    display: flex; gap: 2px; padding: 3px;
+    border-radius: 999px;
+    background: var(--primary-soft);
+  }
+  .seg button {
+    width: 30px; height: 30px; border: 0; border-radius: 50%;
+    background: transparent; color: #9DB3CC; font-size: 13px; cursor: pointer;
+  }
+  .seg button.on {
+    background: rgba(255, 255, 255, .16);
+    color: #EAF2FF;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+  }
+
+  /* ============ 底部胶囊导航（悬浮） ============ */
+  .dock {
+    position: absolute;
+    left: 18px; right: 18px; bottom: 14px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 8px;
+    border-radius: 34px;
+    background: rgba(18, 28, 40, .78);
+    border: 1px solid rgba(255, 255, 255, .075);
+    backdrop-filter: blur(20px) saturate(1.25);
+    -webkit-backdrop-filter: blur(20px) saturate(1.25);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, .4), inset 0 1px 0 rgba(255, 255, 255, .06);
+    z-index: 30;
+    transition: opacity .25s ease, filter .25s ease;
+  }
+
+  .dock .item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 7px 0;
+    border-radius: 18px;
+    color: #7E93AC;
+    font-size: 10.5px;
+    cursor: pointer;
+    position: relative;
+    transition: .18s ease;
+  }
+  .dock .item .glyph { font-size: 17px; line-height: 1; }
+  .dock .item.on {
+    color: #DDEAFF;
+    background: var(--primary-soft);
+    box-shadow: inset 0 0 0 1px rgba(76, 141, 255, .22);
+  }
+  .dock .item .badge {
+    position: absolute; top: 4px; right: calc(50% - 18px);
+    min-width: 15px; height: 15px; padding: 0 4px;
+    border-radius: 999px;
+    background: var(--danger);
+    color: #fff; font-size: 9px; font-weight: 700;
+    display: grid; place-items: center;
+  }
+
+  /* ============ 遮罩 + 面板 ============ */
+  .scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(3, 7, 13, .55);
+    backdrop-filter: blur(7px) saturate(.85);
+    -webkit-backdrop-filter: blur(7px) saturate(.85);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .26s ease;
+    z-index: 40;
+  }
+
+  .sheet {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 10px 18px 26px;
+    border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+    background: linear-gradient(180deg, #1A2634, #121B26 60%);
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-bottom: 0;
+    box-shadow: 0 -30px 70px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .09);
+    transform: translateY(105%);
+    transition: transform .42s cubic-bezier(.16, .9, .24, 1);
+    z-index: 41;
+    touch-action: none;
+  }
+
+  .sheet.open, .scrim.open { transform: translateY(0); opacity: 1; pointer-events: auto; }
+  .scrim.open { pointer-events: auto; }
+
+  .grabber {
+    width: 42px; height: 5px; border-radius: 999px;
+    background: rgba(255, 255, 255, .22);
+    margin: 2px auto 14px;
+  }
+
+  .sheet h3 { margin: 0 0 4px; font-size: 18px; }
+  .sheet .sub { margin: 0 0 16px; color: var(--muted); font-size: 12.5px; }
+
+  .field {
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, .04);
+    border-radius: 16px;
+    padding: 12px 14px;
+    font-size: 13.5px;
+    color: #C9D8EA;
+    margin-bottom: 10px;
+  }
+  .field.faded { color: #6E829A; }
+
+  .row-task {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 14px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, .045);
+    border: 1px solid var(--line);
+    margin-bottom: 10px;
+  }
+  .row-task .em { font-size: 18px; }
+  .row-task .grow { flex: 1; }
+  .row-task .name { font-size: 13.5px; }
+  .row-task .desc { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .row-task .sun { color: var(--sun); font-size: 12.5px; font-weight: 600; }
+
+  .btn {
+    width: 100%;
+    border: 0;
+    border-radius: 17px;
+    padding: 15px;
+    font-size: 14.5px;
+    font-weight: 650;
+    color: #06111F;
+    background: linear-gradient(180deg, #7DB0FF, #4C8DFF);
+    box-shadow: 0 10px 24px rgba(76, 141, 255, .3);
+    cursor: pointer;
+    margin-top: 6px;
+  }
+  .btn.ghost {
+    background: rgba(255, 255, 255, .055);
+    color: #C6D4E6;
+    box-shadow: none;
+    border: 1px solid var(--line);
+  }
+  .btn.danger {
+    background: linear-gradient(180deg, #FF8A8A, #F25D5D);
+    box-shadow: 0 10px 24px rgba(242, 93, 93, .28);
+  }
+  .btn-row { display: flex; gap: 10px; margin-top: 8px; }
+  .btn-row .btn { margin-top: 0; }
+
+  .list-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 12px;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: .16s ease;
+  }
+  .list-item:hover { background: rgba(255, 255, 255, .05); }
+  .list-item .em { font-size: 18px; width: 26px; text-align: center; }
+  .list-item .grow { flex: 1; }
+  .list-item .name { font-size: 14px; }
+  .list-item .desc { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .list-item .chev { color: #5C7288; font-size: 15px; }
+
+  /* 居中卡片（对话框） */
+  .dialog-wrap {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 26px;
+    z-index: 42;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease;
+  }
+  .dialog-wrap.open { opacity: 1; pointer-events: auto; }
+  .dialog {
+    width: 100%;
+    max-width: 320px;
+    border-radius: 26px;
+    padding: 22px 20px 18px;
+    background: linear-gradient(180deg, #1C2836, #141E29);
+    border: 1px solid rgba(255, 255, 255, .09);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .1);
+    transform: scale(.94);
+    transition: transform .28s cubic-bezier(.2, .9, .25, 1.05);
+  }
+  .dialog-wrap.open .dialog { transform: scale(1); }
+  .dialog h3 { margin: 0 0 8px; font-size: 17px; }
+  .dialog p { margin: 0 0 18px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+
+  /* 轻提示（toast） */
+  .toast {
+    position: absolute;
+    left: 22px; right: 22px; bottom: 92px;
+    padding: 13px 16px;
+    border-radius: 18px;
+    background: rgba(28, 40, 54, .96);
+    border: 1px solid rgba(255, 255, 255, .1);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, .45);
+    font-size: 13px;
+    display: flex; align-items: center; gap: 10px;
+    z-index: 45;
+    transform: translateY(14px);
+    opacity: 0;
+    pointer-events: none;
+    transition: .26s cubic-bezier(.2, .9, .25, 1.05);
+  }
+  .toast.open { transform: translateY(0); opacity: 1; }
+  .toast .undo { margin-left: auto; color: #8FBBFF; font-size: 12.5px; cursor: pointer; font-weight: 600; }
+
+  /* ============ 对比模式：模拟「弹窗被两条栏压住」 ============ */
+  body.legacy .scrim { z-index: 20; }
+  body.legacy .sheet { z-index: 21; }
+  body.legacy .dialog-wrap { z-index: 21; }
+  body.legacy .topbar,
+  body.legacy .dock { z-index: 30; }
+
+  /* 层级标注 */
+  body.layers .scrim { outline: 2px dashed #FF6B6B; outline-offset: -2px; }
+  body.layers .sheet { outline: 2px dashed #4BD6A0; outline-offset: -2px; }
+  body.layers .topbar { outline: 2px dashed #FFC65C; outline-offset: -2px; }
+  body.layers .dock { outline: 2px dashed #B48CFF; outline-offset: -2px; }
+  body.layers .zone {
+    position: absolute; left: 8px; font-size: 9.5px; padding: 2px 6px; border-radius: 6px;
+    font-weight: 700; letter-spacing: .3px; z-index: 60; pointer-events: none;
+    opacity: 0; transition: opacity .2s;
+  }
+  body.layers .zone.show { opacity: 1; }
+  .zone.z-top { top: 74px; background: #FFC65C; color: #241A00; }
+  .zone.z-dock { bottom: 84px; background: #B48CFF; color: #190733; }
+  .zone.z-scrim { top: 50%; background: #FF6B6B; color: #2A0000; }
+  .zone.z-sheet { bottom: 40%; background: #4BD6A0; color: #00291C; }
+
+  /* ============ 右侧说明 ============ */
+  .side {
+    width: 380px;
+    max-width: 100%;
+    flex: none;
+  }
+  .side .kicker {
+    font-size: 11.5px; letter-spacing: 2.2px; text-transform: uppercase;
+    color: #6E8BAE; margin-bottom: 12px;
+  }
+  .side h1 { margin: 0 0 10px; font-size: 25px; line-height: 1.3; }
+  .side .lead { margin: 0 0 22px; color: var(--muted); font-size: 13.5px; line-height: 1.7; }
+
+  .panel {
+    border: 1px solid var(--line);
+    background: rgba(18, 28, 40, .62);
+    border-radius: 20px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    backdrop-filter: blur(10px);
+  }
+  .panel h2 { margin: 0 0 10px; font-size: 13px; letter-spacing: .6px; color: #A9BED6; }
+
+  .toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 14px; padding: 9px 0; cursor: pointer; user-select: none;
+  }
+  .toggle + .toggle { border-top: 1px solid rgba(255, 255, 255, .05); }
+  .toggle .txt { font-size: 13px; }
+  .toggle .hint { font-size: 11.5px; color: var(--muted); margin-top: 3px; max-width: 250px; }
+
+  .switch {
+    width: 46px; height: 27px; flex: none;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .12);
+    border: 1px solid rgba(255, 255, 255, .1);
+    position: relative;
+    transition: .2s ease;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 3px; left: 3px;
+    width: 19px; height: 19px; border-radius: 50%;
+    background: #C7D6E8; transition: .2s cubic-bezier(.2, .9, .25, 1.1);
+  }
+  .toggle.on .switch { background: rgba(76, 141, 255, .55); border-color: rgba(76, 141, 255, .6); }
+  .toggle.on .switch::after { left: 22px; background: #fff; }
+
+  ul.notes { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; line-height: 1.85; }
+  ul.notes li::marker { color: #4C8DFF; }
+  ul.notes b { color: #D6E4F5; font-weight: 600; }
+
+  .legend { display: grid; gap: 8px; font-size: 12px; color: var(--muted); }
+  .legend div { display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+
+  @media (max-width: 900px) {
+    .stage { gap: 26px; padding: 22px 14px 40px; }
+    .phone { width: 340px; height: 736px; border-radius: 46px; padding: 8px; }
+    .screen { border-radius: 38px; }
+    .content { padding: 84px 14px 122px; }
+    .side { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <!-- ============ 手机 ============ -->
+  <div class="phone">
+    <div class="screen" id="screen">
+
+      <div class="bg-glow"></div>
+
+      <!-- 内容 -->
+      <div class="content" id="content">
+        <div class="hello">
+          <h1>晚上好</h1>
+          <p>今天还有 2 件家务没做 · 已攒 128 阳光</p>
+        </div>
+
+        <div class="chips">
+          <button class="chip active" data-open="sheet">底部面板</button>
+          <button class="chip" data-open="dialog">居中确认</button>
+          <button class="chip" data-open="list">选择列表</button>
+          <button class="chip" data-open="input">输入面板</button>
+          <button class="chip" data-open="toast">轻提示</button>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>今天的任务</h2><span>2 / 4</span></div>
+          <div class="task">
+            <div class="tick">✓</div>
+            <div>
+              <div class="task-name">扫地</div>
+              <div class="task-sub">已完成 · 等家长审批</div>
+            </div>
+            <div class="sun">+5 ☀</div>
+          </div>
+          <div class="task">
+            <div class="tick">✓</div>
+            <div>
+              <div class="task-name">浇花</div>
+              <div class="task-sub">已完成 · 已通过</div>
+            </div>
+            <div class="sun">+3 ☀</div>
+          </div>
+          <div class="task">
+            <div class="tick">·</div>
+            <div>
+              <div class="task-name">洗碗</div>
+              <div class="task-sub">还没做 · 22:00 前</div>
+            </div>
+            <div class="sun">+4 ☀</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>花园进度</h2><span>LV.6</span></div>
+          <div class="bars">
+            <div class="bar-box">
+              <div class="cap">小树成长 68%</div>
+              <div class="bar"><i style="width:68%"></i></div>
+            </div>
+            <div class="bar-box">
+              <div class="cap">本周连续 5 天</div>
+              <div class="bar green"><i style="width:71%"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>最近流水</h2><span>全部</span></div>
+          <div class="row-task" style="margin-bottom:8px">
+            <div class="em">🧹</div>
+            <div class="grow"><div class="name">扫地</div><div class="desc">今天 19:42 · 待审批</div></div>
+            <div class="sun">+5 ☀</div>
+          </div>
+          <div class="row-task" style="margin-bottom:0">
+            <div class="em">🌷</div>
+            <div class="grow"><div class="name">浇花</div><div class="desc">今天 18:10 · 已通过</div></div>
+            <div class="sun">+3 ☀</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 状态栏 -->
+      <div class="statusbar">
+        <span>19:42</span>
+        <span class="dots">▮▮▮ ⌁ ▰</span>
+      </div>
+
+      <!-- 顶部栏 -->
+      <header class="topbar">
+        <div class="page">首页</div>
+        <div class="grow"></div>
+        <button class="icon-btn" title="通知">🔔<span class="badge"></span></button>
+        <div class="seg">
+          <button class="on" title="浅色">☀</button>
+          <button title="深色">🌙</button>
+        </div>
+      </header>
+
+      <!-- 底部胶囊导航 -->
+      <nav class="dock">
+        <div class="item on"><span class="glyph">⌂</span><span>首页</span><span class="badge">2</span></div>
+        <div class="item"><span class="glyph">▤</span><span>家庭</span></div>
+        <div class="item"><span class="glyph">▦</span><span>计划</span></div>
+        <div class="item"><span class="glyph">✦</span><span>花园</span></div>
+        <div class="item"><span class="glyph">⚙</span><span>设置</span></div>
+      </nav>
+
+      <!-- 遮罩 -->
+      <div class="scrim" id="scrim"></div>
+
+      <!-- 底部面板 -->
+      <div class="sheet" id="sheet">
+        <div class="grabber"></div>
+        <h3 id="sheetTitle">今天的家务 · 打卡</h3>
+        <p class="sub" id="sheetSub">做完了就让家长看一眼，通过后阳光会进账。</p>
+        <div id="sheetBody"></div>
+      </div>
+
+      <!-- 居中对话框 -->
+      <div class="dialog-wrap" id="dialogWrap">
+        <div class="dialog">
+          <h3>删掉这条记录？</h3>
+          <p>「扫地 · 今天 19:42」会从账本里消失，阳光也会一起退回去。撤销不了。</p>
+          <div class="btn-row">
+            <button class="btn ghost" data-close>再想想</button>
+            <button class="btn danger" data-close>删除</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 轻提示 -->
+      <div class="toast" id="toast">
+        <span>✅</span><span>已提交，等家长审批</span><span class="undo" data-close>撤销</span>
+      </div>
+
+      <!-- 层级标注 -->
+      <span class="zone z-top" id="zoneTop">顶栏 z=30</span>
+      <span class="zone z-dock" id="zoneDock">底栏 z=30</span>
+      <span class="zone z-scrim" id="zoneScrim">遮罩 z=40</span>
+      <span class="zone z-sheet" id="zoneSheet">面板 z=41</span>
+    </div>
+  </div>
+
+  <!-- ============ 右侧说明 ============ -->
+  <aside class="side">
+    <div class="kicker">SekaiNook · 弹窗层级</div>
+    <h1>弹窗要不要盖住顶部栏和底部栏？</h1>
+    <p class="lead">
+      左边是真机尺寸的模拟。点手机里的按钮弹出各种窗，再拨下面两个开关对比：
+      <b>「旧层级」</b>是弹窗被顶栏/底栏压住的样子，<b>「标层级」</b>把每一层描出来。
+    </p>
+
+    <div class="panel">
+      <h2>对比开关</h2>
+      <div class="toggle" id="tglLegacy">
+        <div>
+          <div class="txt">旧层级（弹窗被两条栏压住）</div>
+          <div class="hint">顶栏、底栏画在遮罩之上 → 弹窗看着像只在内容区里</div>
+        </div>
+        <div class="switch"></div>
+      </div>
+      <div class="toggle" id="tglLayers">
+        <div>
+          <div class="txt">标出层级</div>
+          <div class="hint">黄色=顶栏，紫色=底栏，红色=遮罩，绿色=面板</div>
+        </div>
+        <div class="switch"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>我想确认的三件事</h2>
+      <ul class="notes">
+        <li>遮罩盖住<b>整屏</b>：顶栏和底栏都要变暗/模糊，不能再亮着。</li>
+        <li>面板在遮罩<b>之上</b>：底部面板直接从屏幕底边升起，压住胶囊底栏，而不是停在底栏上沿。</li>
+        <li>遮罩<b>吃掉点击</b>：弹窗开着时，顶栏的铃铛、底栏的导航都点不动。</li>
+      </ul>
+    </div>
+
+    <div class="panel">
+      <h2>图例</h2>
+      <div class="legend">
+        <div><span class="swatch" style="background:#FFC65C"></span>顶部栏（悬浮胶囊）</div>
+        <div><span class="swatch" style="background:#B48CFF"></span>底部导航（悬浮胶囊）</div>
+        <div><span class="swatch" style="background:#FF6B6B"></span>遮罩层</div>
+        <div><span class="swatch" style="background:#4BD6A0"></span>弹窗面板 / 卡片</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>轻提示（toast）单独说</h2>
+      <ul class="notes">
+        <li>它不拦点击、也不需要遮罩，只是浮在底栏<b>上方</b>一点点。</li>
+        <li>如果你希望它也能盖住底栏，说一声，我把它当成第四类一起改。</li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const body = document.body;
+  const scrim = $('scrim');
+  const sheet = $('sheet');
+  const dialogWrap = $('dialogWrap');
+  const toast = $('toast');
+  const sheetTitle = $('sheetTitle');
+  const sheetSub = $('sheetSub');
+  const sheetBody = $('sheetBody');
+  const chips = Array.from(document.querySelectorAll('.chip'));
+
+  const templates = {
+    sheet: {
+      title: '今天的家务 · 打卡',
+      sub: '做完了就让家长看一眼，通过后阳光会进账。',
+      html: `
+        <div class="row-task">
+          <div class="em">🧹</div>
+          <div class="grow">
+            <div class="name">扫地</div>
+            <div class="desc">客厅 + 走廊 · 22:00 前</div>
+          </div>
+          <div class="sun">+5 ☀</div>
+        </div>
+        <div class="field faded">加一句说明（可选）</div>
+        <button class="btn">拍照并提交</button>
+        <button class="btn ghost" data-close>先不做</button>
+      `,
+    },
+    list: {
+      title: '选择要补做的任务',
+      sub: '选完会记到今天的账本里。',
+      html: `
+        <div class="list-item">
+          <div class="em">🍽</div>
+          <div class="grow"><div class="name">洗碗</div><div class="desc">+4 阳光 · 22:00 前</div></div>
+          <div class="chev">›</div>
+        </div>
+        <div class="list-item">
+          <div class="em">🧺</div>
+          <div class="grow"><div class="name">收衣服</div><div class="desc">+3 阳光 · 22:00 前</div></div>
+          <div class="chev">›</div>
+        </div>
+        <div class="list-item">
+          <div class="em">📚</div>
+          <div class="grow"><div class="name">读书 20 分钟</div><div class="desc">+6 阳光 · 睡前</div></div>
+          <div class="chev">›</div>
+        </div>
+      `,
+    },
+    input: {
+      title: '驳回并说明原因',
+      sub: '孩子会看到这句话，语气轻一点。',
+      html: `
+        <div class="field">扫地漏了沙发底下，再补一遍？</div>
+        <button class="btn">驳回这条打卡</button>
+        <button class="btn ghost" data-close>取消</button>
+      `,
+    },
+  };
+
+  let opened = null;
+
+  function clear() {
+    scrim.classList.remove('open');
+    sheet.classList.remove('open');
+    dialogWrap.classList.remove('open');
+    toast.classList.remove('open');
+    chips.forEach((c) => c.classList.remove('active'));
+    opened = null;
+    const zones = document.querySelectorAll('.zone');
+    zones.forEach((z) => z.classList.remove('show'));
+  }
+
+  function open(kind, chip) {
+    clear();
+    if (kind === 'dialog') {
+      dialogWrap.classList.add('open');
+      scrim.classList.add('open');
+      if (chip) chip.classList.add('active');
+      opened = kind;
+      return;
+    }
+    if (kind === 'toast') {
+      toast.classList.add('open');
+      if (chip) chip.classList.add('active');
+      opened = kind;
+      setTimeout(() => { if (opened === 'toast') clear(); }, 3200);
+      return;
+    }
+    const tpl = templates[kind] || templates.sheet;
+    sheetTitle.textContent = tpl.title;
+    sheetSub.textContent = tpl.sub;
+    sheetBody.innerHTML = tpl.html;
+    sheetBody.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', clear));
+    sheet.classList.add('open');
+    scrim.classList.add('open');
+    if (chip) chip.classList.add('active');
+    opened = kind;
+    if (body.classList.contains('layers')) showZones();
+  }
+
+  function showZones() {
+    const zones = document.querySelectorAll('.zone');
+    zones.forEach((z) => z.classList.add('show'));
+  }
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => open(chip.dataset.open, chip));
+  });
+
+  scrim.addEventListener('click', () => {
+    if (opened === 'dialog') { clear(); return; }
+    clear();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') clear();
+  });
+
+  $('tglLegacy').addEventListener('click', function () {
+    this.classList.toggle('on');
+    body.classList.toggle('legacy', this.classList.contains('on'));
+  });
+
+  $('tglLayers').addEventListener('click', function () {
+    this.classList.toggle('on');
+    body.classList.toggle('layers', this.classList.contains('on'));
+    document.querySelectorAll('.zone').forEach((z) => {
+      z.classList.toggle('show', body.classList.contains('layers') && !!opened);
+    });
+  });
+
+  // 深浅切换只是示意，点了给个反馈
+  document.querySelectorAll('.seg button').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.seg button').forEach((x) => x.classList.remove('on'));
+      b.classList.add('on');
+    });
+  });
+
+  document.querySelectorAll('.dock .item').forEach((it) => {
+    it.addEventListener('click', () => {
+      if (opened) return; // 弹窗开着时底栏点不动（新层级下由遮罩拦，这里只是双保险）
+      document.querySelectorAll('.dock .item').forEach((x) => x.classList.remove('on'));
+      it.classList.add('on');
+    });
+  });
+})();
+</script>
+</body>
+</html>
