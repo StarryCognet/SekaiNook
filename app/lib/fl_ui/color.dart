@@ -309,9 +309,9 @@ extension ColorSchemeExtension on ColorScheme {
   /// 看着像「面板浮在界面上」而不是「界面被按下去」，所以压到 46%。
   Color get modalScrim => scrim.withValues(alpha: 0.46);
 
-  /// How far iOS 27 dims behind an alert.
-  Color get alertScrim =>
-      scrim.withValues(alpha: brightness == Brightness.dark ? 0.48 : 0.2);
+  /// How far iOS 27 dims behind an alert。这里跟 [modalScrim] 取同一档，
+  /// 否则会出现「底部面板盖住了、居中确认框却还亮着顶栏」的割裂感。
+  Color get alertScrim => modalScrim;
 
   /// iOS 27's systemRed, which an alert's destructive action takes.
   Color get destructive =>
