@@ -13,6 +13,7 @@ import 'ui/pages/role_gate_page.dart';
 import 'ui/pages/settings/settings_page.dart';
 import 'ui/pages/ui_preview_page.dart';
 import 'ui/shell/main_shell.dart';
+import 'ui/shell/route_cover.dart';
 
 /// 路由表（对应 Web 版 `src/App.tsx`）。
 ///
@@ -22,10 +23,15 @@ import 'ui/shell/main_shell.dart';
 ///
 /// [roleRefresh] 由调用方（`app.dart`）持有并负责 dispose：只有「身份变化」才 notify，
 /// 账本刷新不重跑 redirect、不重建整张路由表。
-GoRouter createRouter(FamilyState family, ValueNotifier<FamilyRole?> roleRefresh) {
+GoRouter createRouter(
+  FamilyState family,
+  ValueNotifier<FamilyRole?> roleRefresh,
+  RouteCoverState routeCover,
+) {
   return GoRouter(
     initialLocation: '/home',
     refreshListenable: roleRefresh,
+    observers: <NavigatorObserver>[routeCover.observer],
     redirect: (BuildContext context, GoRouterState state) {
       final path = state.uri.path;
       // 试样间不依赖身份，也不该被踢去 /role —— 没选身份也能进去看看。

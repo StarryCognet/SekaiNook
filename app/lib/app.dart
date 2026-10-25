@@ -23,6 +23,7 @@ import 'state/update_state.dart';
 import 'theme/app_theme.dart';
 import 'theme/motion.dart';
 import 'ui/shell/main_shell.dart';
+import 'ui/shell/route_cover.dart';
 import 'ui/widgets/app_background.dart';
 
 /// 应用根（对应 Web 版 `src/App.tsx`）。
@@ -69,7 +70,10 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
   /// 由 State 持有，dispose 时连同 GoRouter 一起释放（L-4）。
   late final ValueNotifier<FamilyRole?> _roleRefresh = ValueNotifier<FamilyRole?>(widget.family.role);
 
-  late final GoRouter _router = createRouter(widget.family, _roleRefresh);
+  /// 弹窗开合状态：MainShell 用它让悬浮顶栏 / 底栏在弹窗打开时退场。
+  final RouteCoverState _routeCover = RouteCoverState();
+
+  late final GoRouter _router = createRouter(widget.family, _roleRefresh, _routeCover);
 
   /// 出错兜底卡片的「重新加载」：递增即重建整棵树，
   /// 对应 Web 版 `ErrorBoundary` 里的 `window.location.reload()`。
@@ -91,6 +95,7 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
     widget.family.removeListener(_onFamilyChanged);
     _roleRefresh.dispose();
     _router.dispose();
+    _routeCover.dispose();
     super.dispose();
   }
 
@@ -159,6 +164,7 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
         ChangeNotifierProvider<GardenState>.value(value: widget.garden),
         ChangeNotifierProvider<LocalNotifyState>.value(value: widget.localNotify),
         ChangeNotifierProvider<UpdateState>.value(value: widget.update),
+        ChangeNotifierProvider<RouteCoverState>.value(value: _routeCover),
       ],
       child: Consumer<ThemeState>(
         builder: (BuildContext context, ThemeState theme, Widget? child) {

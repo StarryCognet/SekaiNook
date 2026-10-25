@@ -14,10 +14,12 @@ import '../../state/family_state.dart';
 import '../../state/garden_state.dart';
 import '../../state/notification_state.dart';
 import '../../state/update_state.dart';
+import '../../theme/motion.dart';
 import '../widgets/motion_widgets.dart';
 import '../widgets/update_dialog.dart';
 import 'app_top_bar.dart';
 import 'back_intent.dart';
+import 'route_cover.dart';
 
 /// 主壳：全局顶栏 + 底部导航 + 通知轮询（对应 Web 版 `src/layouts/MainLayout.tsx`）。
 ///
@@ -168,6 +170,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final pending = context.select<FamilyState, int>((state) => state.pendingCount);
     final isParent = context.select<FamilyState, bool>((state) => state.role == FamilyRole.parent);
 
+    // 上方一旦压了弹窗（底部面板、确认框、选择列表…），这一页的悬浮顶栏与
+    // 胶囊底栏就退场 —— 它们本来是页面内 z 最高的浮层，弹窗只靠半透明遮罩
+    // 压不干净，会一直「浮在面板上面」。顶栏往上收、底栏往下收，关掉再回来。
+    final RouteCoverState cover = context.read<RouteCoverState>();
+
     return BackIntentScope(
       dispatcher: _backIntent,
       child: PopScope(
@@ -176,8 +183,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           if (didPop) return;
           _handleSystemBack();
         },
-        child: Scaffold(
-          // 上下两条都是真悬浮：body 铺满整屏，顶栏与底栏各是浮在内容之上的一层 ——
+        child: Scaffold(          // 上下两条都是真悬浮：body 铺满整屏，顶栏与底栏各是浮在内容之上的一层 ——
           // 内容能从胶囊后面滚过去，不再被硬切走一条。
           //
           // `extendBody: true` 时 Scaffold 会往 body 的 MediaQuery 里塞一条
@@ -211,38 +217,48 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 top: 0,
                 left: 0,
                 right: 0,
-                child: AppTopBarHost(location: location),
+                child: ListenableBuilder(
+                  listenable: cover,
+                  child: AppTopBarHost(location: location),
+                  builder: (BuildContext context, Widget? child) =>
+                      _CoveredBar(covered: cover.covered, slideUp: true, child: child!),
+                ),
               ),
             ],
           ),
           // 悬浮胶囊底栏：FlClash lib/ui 的 NavigationDock（弹簧透镜跟手 + 按下膨胀）
-          bottomNavigationBar: NavigationDock(
-            selectedIndex: index,
-            onSelected: (value) => context.go(_locations[value]),
-            destinations: <NavigationDockDestination>[
-              NavigationDockDestination(
-                glyph: AppGlyphs.dashboard,
-                label: '首页',
-                badge: unread,
-              ),
-              NavigationDockDestination(
-                glyph: AppGlyphs.profiles,
-                label: '家庭',
-                badge: isParent ? pending : 0,
-              ),
-              const NavigationDockDestination(
-                glyph: AppGlyphs.requests,
-                label: '计划',
-              ),
-              const NavigationDockDestination(
-                glyph: AppGlyphs.sparkle,
-                label: '花园',
-              ),
-              const NavigationDockDestination(
-                glyph: AppGlyphs.settings,
-                label: '设置',
-              ),
-            ],
+          bottomNavigationBar: ListenableBuilder(
+            listenable: cover,
+            child: NavigationDock(
+              selectedIndex: index,
+              onSelected: (value) => context.go(_locations[value]),
+              destinations: <NavigationDockDestination>[
+                NavigationDockDestination(
+                  glyph: AppGlyphs.dashboard,
+                  label: '首页',
+                  badge: unread,
+                ),
+                NavigationDockDestination(
+                  glyph: AppGlyphs.profiles,
+                  label: '家庭',
+                  badge: isParent ? pending : 0,
+                ),
+                const NavigationDockDestination(
+                  glyph: AppGlyphs.requests,
+                  label: '计划',
+                ),
+                const NavigationDockDestination(
+                  glyph: AppGlyphs.sparkle,
+                  label: '花园',
+                ),
+                const NavigationDockDestination(
+                  glyph: AppGlyphs.settings,
+                  label: '设置',
+                ),
+              ],
+            ),
+            builder: (BuildContext context, Widget? child) =>
+                _CoveredBar(covered: cover.covered, slideUp: false, child: child!),
           ),
         ),
       ),
@@ -253,3 +269,39 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 /// 通知页需要的身份枚举（避免各处重复写 role → audience 的映射）
 NotifyAudience audienceOf(FamilyRole? role) =>
     role == FamilyRole.parent ? NotifyAudience.parent : NotifyAudience.child;
+
+/// 上方压了弹窗（底部面板、确认框…）时，让悬浮的顶栏 / 底栏退场。
+///
+/// [covered] 来自 [RouteCoverState]：弹窗打开时顶栏往上收、底栏往下收，
+/// 同时淡出，关掉再回来。退场期间禁用点击，免得隔着遮罩点到下面的胶囊。
+class _CoveredBar extends StatelessWidget {
+  const _CoveredBar({
+    required this.covered,
+    required this.slideUp,
+    required this.child,
+  });
+
+  final bool covered;
+
+  /// 顶栏向上收，底栏向下收。
+  final bool slideUp;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: covered,
+      child: AnimatedOpacity(
+        opacity: covered ? 0 : 1,
+        duration: const Duration(milliseconds: 260),
+        curve: AppMotion.standard,
+        child: AnimatedSlide(
+          offset: covered ? Offset(0, slideUp ? -0.25 : 0.35) : Offset.zero,
+          duration: const Duration(milliseconds: 260),
+          curve: AppMotion.standard,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
