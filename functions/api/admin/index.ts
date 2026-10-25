@@ -13,7 +13,8 @@
  *
  * **为什么密码校验必须在服务端**：这个接口能改余额，只在前端拦一道的话，
  *   任何人直接 POST /api/admin 就能改账本。密码存在 settings 表，
- *   没设过就回退出厂密码（functions/_lib/settings.ts 的 DEFAULT_ADMIN_PASSWORD）。
+ *   库里只存 sha256 哈希；初始口令由 Pages 项目的 ADMIN_PASSWORD 环境变量提供，
+ *   库和 secret 都没配时后台整体返回 503（不再回退任何公开默认口令）。
  *
  * 幂等：调整是按「目标值 − 当前值」算差额，重复提交时差额已经归零，不会再写。
  */
@@ -24,9 +25,9 @@ import {
   MAX_ADMIN_PASSWORD_LENGTH,
   MIN_ADMIN_PASSWORD_LENGTH,
   readAdminLock,
-  readAdminPassword,
   registerAdminFailure,
   sanitizeAdminPassword,
+  verifyAdminPassword,
   writeAdminPassword,
 } from '../../_lib/settings';
 import { GARDEN_ID_PREFIXES } from '../../_lib/rules';
@@ -34,6 +35,8 @@ import { LEDGER_SUMMARY_SQL } from '../ledger/summary';
 
 interface Env {
   DB: D1Database;
+  /** 初始管理员口令（Cloudflare secret；只在库里还没有口令时用来初始化） */
+  ADMIN_PASSWORD?: string;
 }
 
 /** 管理员调整在流水里的 task_id。花园那条必须带花园前缀，才会被算进「阳光」总额 */
@@ -142,16 +145,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return lockedResponse(lock.lockRemainingMs);
   }
 
-  let stored: string;
-  try {
-    stored = await readAdminPassword(env.DB);
-  } catch (error) {
-    console.error('admin password read failed', error);
-    return Response.json({ error: '设置表尚未就绪，请先执行数据库迁移' }, { status: 503 });
-  }
-
   // 不区分「没填」和「填错了」，也不透露任何关于正确密码的信息
-  if (!password || password !== stored) {
+  const verification = await verifyAdminPassword(env.DB, env.ADMIN_PASSWORD, password);
+  if (verification === 'unconfigured') {
+    return Response.json(
+      { error: '管理员口令还没配置：请给 Pages 项目加 ADMIN_PASSWORD 环境变量（secret）后重试' },
+      { status: 503 }
+    );
+  }
+  if (verification !== 'ok') {
     const next = await registerAdminFailure(env.DB);
     if (next.lockRemainingMs > 0) {
       return lockedResponse(next.lockRemainingMs);

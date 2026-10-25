@@ -12,11 +12,14 @@
  * 这段窗口里的新图看起来无人引用、其实在途。因此只清理写入时间早于 6 小时前的对象。
  */
 
+import { gateAdminPassword } from '../../_lib/admin-auth';
 import { readBackground } from '../../_lib/settings';
 
 interface Env {
   DB: D1Database;
   STARRYMIKU_BUCKET: R2Bucket;
+  /** 初始管理员口令（Cloudflare secret；只在库里还没有口令时用来初始化） */
+  ADMIN_PASSWORD?: string;
 }
 
 /** 图片对象前缀：与 functions/api/upload.ts 的上传 key 规则保持一致 */
@@ -156,7 +159,8 @@ async function scanOrphans(env: Env, now: number): Promise<OrphanScan> {
   };
 }
 
-/** 扫描闲置照片（只读，绝不删除；报出的数量就是点「清理」真会删掉的数量） */
+/** 扫描闲置照片（只读，绝不删除；报出的数量就是点「清理」真会删掉的数量）。
+ *  只回数量、不回 key：key 就是照片路径，公开吐出去等于把「哪些照片没人用」也公开了。 */
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   let scan: OrphanScan;
   try {
@@ -169,11 +173,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
     total: scan.total,
     referenced: scan.referenced,
     orphans: scan.orphanKeys.length,
-    keys: scan.orphanKeys.slice(0, MAX_KEYS),
   });
 };
 
-/** 删除闲置照片（危险操作，需请求体 { confirm: true }） */
+/** 删除闲置照片（危险操作，需管理员口令 + 请求体 { confirm: true }） */
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   let body: Record<string, unknown>;
   try {
@@ -181,6 +184,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   } catch {
     return Response.json({ error: '请求体不是合法 JSON' }, { status: 400 });
   }
+
+  const password = typeof body.password === 'string' ? body.password : '';
+  const gate = await gateAdminPassword(env.DB, password, env.ADMIN_PASSWORD);
+  if (!gate.ok) return Response.json(gate.body, { status: gate.status });
 
   if (body.confirm !== true) {
     return Response.json(

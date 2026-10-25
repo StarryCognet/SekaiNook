@@ -28,6 +28,23 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
 
+# ---- 前置检查：签名材料必须在构建之前就位（R-6）----
+# 以前这段放在构建之后、而且只在没传 -SkipBuild 时才算，于是「忘了拷 jks」要等
+# 构建几分钟、读到 APK 才炸；-SkipBuild 走手工包那条路时检查干脆形同虚设。
+if (-not $env:ANDROID_HOME) {
+    throw "没有设 ANDROID_HOME。先执行 `$env:ANDROID_HOME='E:\IDE\Android\Sdk'`（按本机实际路径改）再发版"
+}
+if (-not $SkipBuild) {
+    $keyProps = Join-Path (Get-Location) 'android\app\key.properties'
+    if (-not (Test-Path $keyProps)) {
+        throw "缺少 android/app/key.properties（正式签名）—— 现在打出来的会是 debug 包。补上 key.properties + sekainook-release.jks 再发（两个都在 .gitignore 里，换机器要手动拷）"
+    }
+    $keystore = Join-Path (Get-Location) 'android\app\sekainook-release.jks'
+    if (-not (Test-Path $keystore)) {
+        throw "缺少 android/app/sekainook-release.jks（签名库）—— 同上，签名材料在 .gitignore 里，丢了就再也无法覆盖升级，只能让全家卸载重装"
+    }
+}
+
 function Get-ApkVersionInfo([string]$Path) {
     # versionCode 以 APK 自己为准：pubspec 里的 build number 在
     # 「按 ABI 拆分」的构建里会被 Flutter 加 1000×ABI 偏移，照 pubspec 写清单会永远比本机小。
@@ -92,14 +109,10 @@ Write-Host "[apk] versionName=$($main.VersionName) versionCode=$($main.VersionCo
 # ---- 签名闸门：debug 签名的包绝不能发出去 ----
 # 2026-10-19 的教训：git subtree 搬家时 key.properties 与 .jks（两个都在 .gitignore 里）
 # 没跟着过来，Gradle 按设计静默退回 debug 签名，2.0.0 发出去后家里人在手机上覆盖安装
-# 直接失败 ——「安装失败(-7) 与已安装应用签名不同」。当时 build.gradle.kts 的注释里
-# 写着「publish_apk.ps1 会拒绝上传 debug 签名的包」，但这个脚本里并没有那道检查。
-if (-not $SkipBuild) {
-    $keyProps = Join-Path (Get-Location) 'android\app\key.properties'
-    if (-not (Test-Path $keyProps)) {
-        throw "缺少 android/app/key.properties（正式签名）—— 现在打出来的会是 debug 包。补上 key.properties + sekainook-release.jks 再发（两个都在 .gitignore 里，换机器要手动拷）"
-    }
-}
+# 直接失败 ——「安装失败(-7) 与已安装应用签名不同」。
+# 文件存在性检查已经挪到构建之前（见脚本顶部）；这里用 apksigner 复核成品，并把证书
+# 指纹钉死：换过 keystore 的话，新包能装上、老用户却永远装不上，必须在发出去之前拦住。
+$expectedCertSha256 = 'dafbd0ca318831669ec15ae2c9fd0881aa293d27d8d11ae73606ceb40b91296a'
 
 $buildToolsDir = Join-Path $env:ANDROID_HOME 'build-tools'
 $apksigner = Get-ChildItem $buildToolsDir -Directory -ErrorAction SilentlyContinue |
@@ -112,10 +125,33 @@ if ($apksigner) {
     if ($certs -match 'Android Debug') {
         throw "这个 APK 是 debug 签名，发出去用户手机上会「安装失败(-7) 签名不同」。请补上 android/app/key.properties + sekainook-release.jks 后重打"
     }
-    $sha = [regex]::Match($certs, 'SHA-256 digest:\s*([0-9a-fA-F]+)').Groups[1].Value
-    Write-Host "[sign] 非 debug 签名（证书 SHA-256 ${sha}）" -ForegroundColor Green
+    $sha = ([regex]::Match($certs, 'SHA-256 digest:\s*([0-9a-fA-F:]+)').Groups[1].Value).Replace(':', '').ToLower()
+    if (-not $sha) {
+        Write-Warning "apksigner 没读到证书指纹，无法校验签名一致性"
+    } elseif ($sha -ne $expectedCertSha256) {
+        throw "签名证书与预期不符（得到 $sha，预期 $expectedCertSha256）。换了 keystore 之后老用户覆盖安装会失败(-7)，只能卸载重装 —— 确认是无意换了库，就改脚本里的固定值并接受老用户重装"
+    } else {
+        Write-Host "[sign] 非 debug 签名，证书 SHA-256 与预期一致" -ForegroundColor Green
+    }
 } else {
     Write-Warning "没找到 apksigner，跳过签名校验 —— 请自己确认这个包不是 debug 签名"
+}
+
+# ---- 版本递增闸门（R-1）----
+# versionCode 不递增 = 手机上「检查更新」永远认为已是最新，新包静默不生效。
+# 2026-10 就踩过一次：改了代码、忘了改 pubspec 的 +N，家里人手机上毫无变化。
+$previous = $null
+try {
+    $previous = Invoke-RestMethod -Uri "$PublicBaseUrl/$Prefix/latest.json" -TimeoutSec 20 -ErrorAction Stop
+} catch {
+    Write-Warning "读不到线上清单（$($_.Exception.Message)）—— 跳过 versionCode 递增检查"
+}
+if ($previous -and $null -ne $previous.versionCode) {
+    $prevCode = [int]$previous.versionCode
+    if ($main.VersionCode -le $prevCode) {
+        throw "versionCode 没有递增（线上 $prevCode，本包 $($main.VersionCode)）。把 app/pubspec.yaml 的 version 后面 +N 改大再重打 —— 否则手机上不会收到这次更新"
+    }
+    Write-Host "[version] $($previous.versionName)($prevCode) → $($main.VersionName)($($main.VersionCode))" -ForegroundColor Green
 }
 
 # 文件名带上内容指纹（sha256 前 8 位）：
@@ -130,14 +166,17 @@ Publish-File $apk "$Prefix/$fileName" 'application/vnd.android.package-archive' 
 $size = (Get-Item $apk).Length
 $url = "$PublicBaseUrl/$Prefix/$fileName"
 
+# 版本日志：留空时给一句默认文案，别让更新弹窗出现空白
+if (-not $Changelog) { $Changelog = '小修小补，用起来更稳' }
+
 $manifest = [ordered]@{
     versionName = $main.VersionName
     versionCode = $main.VersionCode
     url         = $url
     sha256      = $sha256
     size        = $size
+    changelog   = $Changelog
 }
-if ($Changelog) { $manifest['changelog'] = $Changelog }
 
 $manifestPath = Join-Path (Get-Location) 'build\latest.json'
 $json = $manifest | ConvertTo-Json -Depth 3

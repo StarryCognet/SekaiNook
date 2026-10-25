@@ -115,17 +115,54 @@ export async function writeFamilyNames(db: D1Database, patch: Partial<FamilyName
 export const BACKGROUND_KEY = 'background';
 
 /** 只接受站内上传的图片地址（防外链，也保证清理逻辑认得出） */
-const IMAGE_URL_MARK = '/api/images/';
+const IMAGE_URL_PATH = '/api/images/';
 
 /** 背景图地址最长多少字符（URL 长度兜底） */
 export const MAX_BACKGROUND_LENGTH = 400;
 
-/** 清洗背景图地址：非字符串、太长、不是站内图片都算非法（返回 null）；空串合法（= 移除） */
-export function sanitizeBackground(value: unknown): string | null {
+/**
+ * 取站内图片路径：必须 http(s)、pathname 以 /api/images/ 开头、且不带 query/hash。
+ * 非法返回 null。导出给「写流水 image_url」等同类校验复用。
+ */
+export function parseSiteImagePath(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  let url: URL;
+  try {
+    // 相对路径（/api/images/...）也认：补一个占位 origin 只为解析 pathname
+    url = new URL(trimmed, 'https://site.invalid');
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+  if (url.search || url.hash) return null;
+  if (!url.pathname.startsWith(IMAGE_URL_PATH)) return null;
+  return url.pathname;
+}
+
+/**
+ * 清洗背景图地址：非字符串、太长、不是站内图片都算非法（返回 null）；空串合法（= 移除）。
+ * allowedOrigin 给了就要求绝对地址的 origin 与之一致 —— 只判断「包含 /api/images/」
+ * 会让 `https://evil.example.com/api/images/x` 也通过，全家人每次开 App 都向第三方发请求。
+ */
+export function sanitizeBackground(value: unknown, allowedOrigin?: string): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   if (trimmed.length > MAX_BACKGROUND_LENGTH) return null;
-  if (trimmed && !trimmed.includes(IMAGE_URL_MARK)) return null;
+  if (!trimmed) return '';
+  if (!parseSiteImagePath(trimmed)) return null;
+
+  if (allowedOrigin) {
+    let origin: string;
+    try {
+      origin = new URL(trimmed, allowedOrigin).origin;
+    } catch {
+      return null;
+    }
+    if (origin !== allowedOrigin) return null;
+  }
+
   return trimmed;
 }
 
@@ -165,17 +202,26 @@ export async function writeBackground(db: D1Database, url: string): Promise<stri
 /* ===== 管理员密码 =====
    「管理员」二级页的进门密码。存 D1 而不是本机 localStorage：家长换台手机、
    清一次浏览器缓存也进得去，两台设备看到的是同一个密码。
-   默认值是出厂密码，家长进后台可以自己改。 */
 
-/** 管理员密码在 settings 表里的键名 */
+   安全：库里只存 sha256 哈希（加固定盐），仓库里不再有任何出厂口令。
+   初始口令由 Cloudflare Pages 项目的 ADMIN_PASSWORD 环境变量（secret）提供，
+   第一次校验时写进库（之后以库为准）。库与 secret 都没有 → 后台整体不可用（503），
+   不再回退到任何公开的默认值。 */
+
+/** 管理员密码哈希在 settings 表里的键名（格式 sha256:<64 位 hex>） */
+export const ADMIN_PASSWORD_HASH_KEY = 'admin_password_hash';
+
+/** 旧版明文密码键：读到就升级成哈希并删除（一次性迁移） */
 export const ADMIN_PASSWORD_KEY = 'admin_password';
 
-/** 出厂管理员密码（第一次进后台用它，进去后建议改掉） */
-export const DEFAULT_ADMIN_PASSWORD = '3398377037';
-
-/** 密码长度范围：短到 4 位（自己改时好记），长到 32 位（出厂那串 10 位塞得下） */
+/** 密码长度范围：短到 4 位（自己改时好记），长到 32 位 */
 export const MIN_ADMIN_PASSWORD_LENGTH = 4;
 export const MAX_ADMIN_PASSWORD_LENGTH = 32;
+
+const ADMIN_HASH_RE = /^sha256:[0-9a-f]{64}$/;
+
+/** 哈希用的固定盐：迁移用不变，别改（改了所有人密码失效） */
+const ADMIN_PASSWORD_SALT = 'sekainook-admin:';
 
 /** 清洗管理员密码：非字符串、太短、太长都算非法（返回 null）；首尾空白去掉 */
 export function sanitizeAdminPassword(value: unknown): string | null {
@@ -190,30 +236,100 @@ export function sanitizeAdminPassword(value: unknown): string | null {
   return trimmed;
 }
 
-/** 当前生效的管理员密码；没设过或表不可用都回退出厂密码 */
-export async function readAdminPassword(db: D1Database): Promise<string> {
-  try {
-    const row = await db
-      .prepare('SELECT value FROM settings WHERE key = ?')
-      .bind(ADMIN_PASSWORD_KEY)
-      .first<{ value: string }>();
-    return sanitizeAdminPassword(row?.value) ?? DEFAULT_ADMIN_PASSWORD;
-  } catch (error) {
-    // 常见原因：库里还没跑 0004 迁移（老库）。回退出厂密码，别把人锁在门外。
-    console.error('readAdminPassword failed', error);
-    return DEFAULT_ADMIN_PASSWORD;
-  }
+/** 口令 → `sha256:<hex>`（sha256('固定盐' + 口令)） */
+export async function hashAdminPassword(password: string): Promise<string> {
+  const data = new TextEncoder().encode(`${ADMIN_PASSWORD_SALT}${password}`);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `sha256:${hex}`;
 }
 
-/** 写入新密码；表没迁移时会抛错，由接口转成 503 */
-export async function writeAdminPassword(db: D1Database, password: string): Promise<void> {
+/** 定长比较（避免 `===` 的时序差异；两个值格式相同时才有意义） */
+function equalAdminHash(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+async function writeAdminPasswordHash(db: D1Database, hash: string): Promise<void> {
   await db
     .prepare(
       `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
     )
-    .bind(ADMIN_PASSWORD_KEY, password, new Date().toISOString())
+    .bind(ADMIN_PASSWORD_HASH_KEY, hash, new Date().toISOString())
     .run();
+}
+
+/**
+ * 当前生效的口令哈希。
+ * 顺序：settings 里的哈希 → 旧明文（升级成哈希并删旧键）→ 环境变量 ADMIN_PASSWORD（写入库）→ null。
+ * 读库失败也返回 null：宁可后台暂时不可用，也不回退任何公开默认口令。
+ */
+export async function readAdminPasswordHash(db: D1Database, envPassword?: string): Promise<string | null> {
+  try {
+    const row = await db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .bind(ADMIN_PASSWORD_HASH_KEY)
+      .first<{ value: string }>();
+    if (typeof row?.value === 'string' && ADMIN_HASH_RE.test(row.value)) return row.value;
+  } catch (error) {
+    console.error('readAdminPasswordHash failed', error);
+    return null;
+  }
+
+  // 旧版明文（< 2.8 的库）：升级成哈希，顺手删掉明文键
+  try {
+    const legacy = await db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .bind(ADMIN_PASSWORD_KEY)
+      .first<{ value: string }>();
+    const legacyPassword = sanitizeAdminPassword(legacy?.value);
+    if (legacyPassword) {
+      const hash = await hashAdminPassword(legacyPassword);
+      await writeAdminPasswordHash(db, hash);
+      await db.prepare('DELETE FROM settings WHERE key = ?').bind(ADMIN_PASSWORD_KEY).run();
+      return hash;
+    }
+  } catch (error) {
+    console.error('migrate legacy admin password failed', error);
+  }
+
+  // 首次部署：用 secret 里的初始口令写库
+  const fromEnv = sanitizeAdminPassword(envPassword);
+  if (!fromEnv) return null;
+  const hash = await hashAdminPassword(fromEnv);
+  try {
+    await writeAdminPasswordHash(db, hash);
+  } catch (error) {
+    console.error('init admin password from env failed', error);
+  }
+  return hash;
+}
+
+/** 写入新密码（只存哈希）；表没迁移时会抛错，由接口转成 503 */
+export async function writeAdminPassword(db: D1Database, password: string): Promise<void> {
+  const hash = await hashAdminPassword(password);
+  await writeAdminPasswordHash(db, hash);
+  await db.prepare('DELETE FROM settings WHERE key = ?').bind(ADMIN_PASSWORD_KEY).run();
+}
+
+export type AdminPasswordVerification = 'ok' | 'bad' | 'unconfigured';
+
+/**
+ * 校验口令：ok / bad / unconfigured（库和 secret 都没配 → 后台不可用）。
+ * 调用方自己决定「没权限」时回什么状态码。
+ */
+export async function verifyAdminPassword(
+  db: D1Database,
+  envPassword: string | undefined,
+  password: string
+): Promise<AdminPasswordVerification> {
+  const stored = await readAdminPasswordHash(db, envPassword);
+  if (!stored) return 'unconfigured';
+  const inputHash = await hashAdminPassword(password.trim());
+  return equalAdminHash(stored, inputHash) ? 'ok' : 'bad';
 }
 
 /* ===== 管理员密码试错节流 =====
@@ -269,29 +385,46 @@ export async function readAdminLock(db: D1Database): Promise<AdminLockState> {
   }
 }
 
-/** 记一次密码失败；错到次数就上锁，返回记完之后的状态（写失败不影响拒绝本次请求） */
+/**
+ * 记一次密码失败；错到次数就上锁，返回记完之后的状态（写失败不影响拒绝本次请求）。
+ * 计数用单语句 `ON CONFLICT ... SET value = CAST(value AS INTEGER) + 1` 原子自增 ——
+ * 旧写法「读出来 +1 再写回」在并发爆破时会丢计数，锁永远凑不满。
+ */
 export async function registerAdminFailure(db: D1Database): Promise<AdminLockState> {
-  const current = await readAdminLock(db);
-  const failedAttempts = current.failedAttempts + 1;
-  const locked = failedAttempts >= ADMIN_MAX_ATTEMPTS;
-  const lockUntil = locked ? Date.now() + ADMIN_LOCK_MS : 0;
-
+  const now = new Date().toISOString();
   try {
-    const updatedAt = new Date().toISOString();
+    await db
+      .prepare(
+        `INSERT INTO settings (key, value, updated_at) VALUES (?, '1', ?)
+         ON CONFLICT(key) DO UPDATE SET
+           value = CAST(CAST(settings.value AS INTEGER) + 1 AS TEXT),
+           updated_at = excluded.updated_at`
+      )
+      .bind(ADMIN_FAIL_COUNT_KEY, now)
+      .run();
+  } catch (error) {
+    console.error('registerAdminFailure failed', error);
+    return { lockRemainingMs: 0, failedAttempts: 0 };
+  }
+
+  const state = await readAdminLock(db);
+  if (state.failedAttempts < ADMIN_MAX_ATTEMPTS) {
+    return { lockRemainingMs: 0, failedAttempts: state.failedAttempts };
+  }
+
+  const lockUntil = Date.now() + ADMIN_LOCK_MS;
+  try {
     const upsert = `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`;
     await db.batch([
-      db.prepare(upsert).bind(ADMIN_FAIL_COUNT_KEY, String(locked ? 0 : failedAttempts), updatedAt),
-      db.prepare(upsert).bind(ADMIN_LOCK_UNTIL_KEY, String(lockUntil), updatedAt),
+      db.prepare(upsert).bind(ADMIN_LOCK_UNTIL_KEY, String(lockUntil), now),
+      db.prepare(upsert).bind(ADMIN_FAIL_COUNT_KEY, '0', now),
     ]);
   } catch (error) {
-    console.error('registerAdminFailure failed', error);
+    console.error('lock admin failed', error);
   }
 
-  return {
-    lockRemainingMs: locked ? ADMIN_LOCK_MS : 0,
-    failedAttempts: locked ? 0 : failedAttempts,
-  };
+  return { lockRemainingMs: ADMIN_LOCK_MS, failedAttempts: 0 };
 }
 
 /** 密码输对了：把失败次数和锁定一起清掉 */

@@ -14,7 +14,7 @@
  */
 
 import { amountText, pushNotifications } from '../../_lib/notifications';
-import { displayName, readFamilyNames } from '../../_lib/settings';
+import { displayName, readFamilyNames, sanitizeBackground } from '../../_lib/settings';
 import {
   CUSTOM_TASK_DAILY_CAP,
   EXEC_TASK_ID,
@@ -86,6 +86,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   if (typeof task_id !== 'string' || !task_id || task_id.length > ID_MAX_LENGTH) {
     return Response.json({ error: 'task_id 非法' }, { status: 400 });
+  }
+
+  // image_url 只认本站图片：pathname 以 /api/images/ 开头、不带 query/hash，
+  // 而且 origin 必须是我们自己。不校验的话既能塞外链（追踪像素），
+  // 也能让 DELETE 接口拿它反推出别人的 R2 key 去删对象。
+  let imageValue: string | null = null;
+  if (image_url !== undefined && image_url !== null) {
+    imageValue = sanitizeBackground(image_url, new URL(request.url).origin);
+    if (imageValue === null) {
+      return Response.json({ error: 'image_url 必须是本站上传的图片地址' }, { status: 400 });
+    }
   }
 
   // 已知任务：名字 / 类型 / 积分全部以服务端规则为准，客户端改不动
@@ -230,7 +241,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       : null;
 
   const noteValue = typeof note === 'string' ? note : null;
-  const imageValue = typeof image_url === 'string' ? image_url : null;
+  // imageValue 上面已经清洗过（站内图片 + origin 一致），这里直接用
 
   // INSERT OR IGNORE：同一个 id 重发（网络重试 / 离线补发）直接命中主键，不会重复入账
   const result = member

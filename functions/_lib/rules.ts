@@ -198,14 +198,21 @@ export const CUSTOM_TASK_DAILY_CAP = 50;
 /**
  * 系统记录 id：既不算「今日完成数」，也不代表「真实用户流水」。
  * 只在这里登记一次，SQL 由 COMPLETION_EXCLUDED_SQL_LIST 派生，不手写第二份清单。
+ *
+ * admin_adjust / garden:admin_adjust：管理员手动调余额写的那两条。
+ * 它们不是「孩子完成的任务」，算进今日完成数会抵消 daily_min_tasks_penalty 罚款
+ * （家长随手 +1 分，当天的最低完成数就凭空满足了）。
+ * 注意这里必须写字面量：GARDEN_ID_PREFIXES 在本文件更后面定义，模块求值时会撞 TDZ。
  */
 export const COMPLETION_EXCLUDED_IDS: readonly string[] = [
   'seed_welcome_bonus',
   'daily_min_tasks_penalty',
   'sleep_penalty',
+  'admin_adjust',
+  'garden:admin_adjust',
 ];
 
-/** 上面那三个 id 拼成 SQL 的 IN 列表（都是代码里的字面量常量，无用户输入，不存在注入） */
+/** 上面那几条 id 拼成 SQL 的 IN 列表（都是代码里的字面量常量，无用户输入，不存在注入） */
 export const COMPLETION_EXCLUDED_SQL_LIST = COMPLETION_EXCLUDED_IDS.map((id) => `'${id}'`).join(', ');
 
 /**

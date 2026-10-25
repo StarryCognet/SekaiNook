@@ -21,12 +21,28 @@ interface Env {
   DB: D1Database;
 }
 
+/** 生成 ETag 用的小哈希（FNV-1a 32 位，够用且同步、不用 await crypto.subtle）。 */
+function contentHash(input: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const snapshot = await readChangelog(env.DB);
     // 版本日志只随发版变化，没必要每次下拉都整份重传：
     // 客户端（浏览器）可直接用 304 / 本地缓存，最长 5 分钟内看到旧值也不算问题。
-    const etag = `W/"changelog-${snapshot.version ?? 'empty'}"`;
+    //
+    // R-9：ETag 必须带上内容摘要，不能只由 version 派生 —— 同一个版本号下
+    // 改文案（修错别字）后浏览器会一直拿着 304，直到下次升版本才更新。
+    const digest = contentHash(
+      JSON.stringify([snapshot.version, snapshot.entries.map((entry) => entry.changes)]),
+    );
+    const etag = `W/"changelog-${snapshot.version ?? 'empty'}-${digest}"`;
     if (request.headers.get('If-None-Match') === etag) {
       return new Response(null, { status: 304, headers: { ETag: etag } });
     }

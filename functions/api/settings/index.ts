@@ -69,7 +69,8 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   if ('background' in source) {
-    const cleaned = sanitizeBackground(source.background);
+    // 传当前请求的 origin：只接受本站绝对地址（或相对路径），防「含 /api/images/ 的外链」混进来
+    const cleaned = sanitizeBackground(source.background, new URL(request.url).origin);
     if (cleaned === null) {
       return Response.json({ error: `背景图地址不合法（只能是本站上传的图片，且不超过 ${MAX_BACKGROUND_LENGTH} 个字符）` }, { status: 400 });
     }

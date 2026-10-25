@@ -178,22 +178,36 @@ async function checkImageOrphansScan(ctx: SelftestCtx): Promise<SelftestOutcome>
   const res = await ctx.api('/api/maintenance/orphans');
   if (!res.ok) return fail(`GET /api/maintenance/orphans 返回 ${res.status}`);
   const data = await readJson<{ orphans?: number; referenced?: number; keys?: string[] }>(res);
-  if (typeof data?.orphans !== 'number' || !Array.isArray(data.keys)) {
+  // keys 已刻意不再公开（key 就是照片路径），只校验数量字段
+  if (typeof data?.orphans !== 'number' || typeof data.referenced !== 'number') {
     return fail('扫描结果结构不对', undefined, data);
   }
-  return ok(`扫描到 ${data.orphans} 张闲置照片（在用 ${data.referenced ?? '?'} 张）`);
+  return ok(`扫描到 ${data.orphans} 张闲置照片（在用 ${data.referenced} 张）`);
 }
 
 async function checkImageOrphansGuard(ctx: SelftestCtx): Promise<SelftestOutcome> {
-  const res = await ctx.api('/api/maintenance/orphans', {
+  // 口令闸在前：不带口令的清理必须先被拒（401/429/503 都算拒）
+  const noPassword = await ctx.api('/api/maintenance/orphans', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+    body: JSON.stringify({ confirm: true }),
   });
-  if (res.status < 400) {
-    return fail(`不带 confirm 的清理被放过了（${res.status}）`, '删除必须要求 confirm: true');
+  if (noPassword.status < 400) {
+    return fail(`不带口令的清理被放过了（${noPassword.status}）`, '删除必须要求管理员口令');
   }
-  return ok(`不带 confirm 的清理被拒：${res.status}`);
+
+  const password = ctx.password;
+  if (!password) return ok(`不带口令的清理被拒：${noPassword.status}（这轮没带口令，跳过 confirm 检查）`);
+
+  const noConfirm = await ctx.api('/api/maintenance/orphans', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  if (noConfirm.status < 400) {
+    return fail(`不带 confirm 的清理被放过了（${noConfirm.status}）`, '删除必须要求 confirm: true');
+  }
+  return ok(`不带口令/不带 confirm 的清理都被拒：${noPassword.status} / ${noConfirm.status}`);
 }
 
 /* ---------------------------------- 推送 ---------------------------------- */

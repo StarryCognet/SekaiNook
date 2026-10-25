@@ -13,8 +13,8 @@ import {
   ADMIN_MAX_ATTEMPTS,
   clearAdminLock,
   readAdminLock,
-  readAdminPassword,
   registerAdminFailure,
+  verifyAdminPassword,
 } from './settings';
 
 export interface AdminGateOk {
@@ -38,23 +38,27 @@ export function adminLockedResponse(lockRemainingMs: number): Response {
   );
 }
 
-/** 校验管理员密码；通过时顺手清掉失败计数 */
-export async function gateAdminPassword(db: D1Database, password: string): Promise<AdminGate> {
+/** 校验管理员密码；通过时顺手清掉失败计数。envPassword = 环境变量 ADMIN_PASSWORD（首次初始化用） */
+export async function gateAdminPassword(
+  db: D1Database,
+  password: string,
+  envPassword?: string
+): Promise<AdminGate> {
   const lock = await readAdminLock(db);
   if (lock.lockRemainingMs > 0) {
     return { ok: false, status: 429, body: { error: `密码错误次数太多，请等 ${Math.max(1, Math.ceil(lock.lockRemainingMs / 1000))} 秒后再试`, lockRemainingMs: lock.lockRemainingMs } };
   }
 
-  let stored: string;
-  try {
-    stored = await readAdminPassword(db);
-  } catch (error) {
-    console.error('admin password read failed', error);
-    return { ok: false, status: 503, body: { error: '设置表尚未就绪，请先执行数据库迁移' } };
+  const verification = await verifyAdminPassword(db, envPassword, password);
+  if (verification === 'unconfigured') {
+    return {
+      ok: false,
+      status: 503,
+      body: { error: '管理员口令还没配置：请给 Pages 项目加 ADMIN_PASSWORD 环境变量（secret）后重试' },
+    };
   }
 
-  const trimmed = password.trim();
-  if (!trimmed || trimmed !== stored) {
+  if (verification !== 'ok') {
     const next = await registerAdminFailure(db);
     if (next.lockRemainingMs > 0) {
       return { ok: false, status: 429, body: { error: `密码错误次数太多，请等 ${Math.max(1, Math.ceil(next.lockRemainingMs / 1000))} 秒后再试`, lockRemainingMs: next.lockRemainingMs } };

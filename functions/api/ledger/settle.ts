@@ -153,6 +153,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const requestedDate = body.date;
+    const yesterdayKey = previousDayKey(todayKey);
     let settleDay: string;
     if (requestedDate !== undefined) {
       if (typeof requestedDate !== 'string' || !isRealDayKey(requestedDate)) {
@@ -160,6 +161,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
       if (requestedDate > todayKey) {
         return Response.json({ error: '不能结算未来的日期' }, { status: 400 });
+      }
+      // 「今天/昨天」之外的日期不给补：再往前就是给账本补历史罚单，
+      // 而这个接口没有鉴权，挡在两天内能把「凭空造罚款」的空间压到最小。
+      if (requestedDate < yesterdayKey) {
+        return Response.json({ error: '只能补结算今天或昨天' }, { status: 400 });
       }
       settleDay = requestedDate;
     } else {
@@ -270,7 +276,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       // 本次结算的是哪一天（前端拿它做「当天已结算过就不再调」的节流键）
       day: settleDay,
     });
-  } catch {
+  } catch (error) {
+    // 别空手吞：结算里任何一步失败都要能在 Workers 日志里看到原因
+    console.error('settle ledger failed', error);
     return Response.json({ error: '结算失败' }, { status: 500 });
   }
 };

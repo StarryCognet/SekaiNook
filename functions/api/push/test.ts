@@ -27,10 +27,16 @@ const AUDIENCES: readonly string[] = ['parent', 'child'];
 /** 同一个人两次点「测试」之间的最短间隔 */
 const COOLDOWN_SECONDS = 15;
 
+/** 每小时最多发几次（换 audience 能绕开单键冷却，用总量兜住） */
+const HOURLY_LIMIT = 10;
+
 /** settings 里的冷却标记键前缀 */
 const MARKER_PREFIX = 'push_test_';
 
-/** 读标记、判断是否还在冷却里 */
+/** 每小时计数键前缀（键里带 UTC 小时，过期不再用，不需要清理） */
+const HOURLY_PREFIX = 'push_test_hour_';
+
+/** 读标记、判断是否还在冷却里（只在占位失败后算剩余秒数用） */
 async function readCooldown(db: D1Database, key: string): Promise<number> {
   try {
     const row = await db
@@ -43,25 +49,61 @@ async function readCooldown(db: D1Database, key: string): Promise<number> {
     const left = COOLDOWN_SECONDS * 1000 - elapsed;
     return left > 0 ? Math.ceil(left / 1000) : 0;
   } catch (error) {
-    // 读不到标记就当没发过：表结构出问题不该把「测试通知」这个功能整个掐掉
     console.error('read push test marker failed', error);
     return 0;
   }
 }
 
-/** 写冷却标记（失败只记日志：通知已经发出去了，不能因为记不上时间就报失败） */
-async function writeCooldown(db: D1Database, key: string): Promise<void> {
+/**
+ * 原子占位：冷却已过才写入新时间戳，返回是否抢到。
+ * 旧写法「读冷却 → 发推送 → 写冷却」在并发时全部读到「没冷却」，一起发出去；
+ * 条件 upsert 里 `WHERE settings.updated_at <= cutoff` 不满足就不更新，`meta.changes === 0` 即没抢到。
+ */
+async function claimCooldown(
+  db: D1Database,
+  key: string,
+  now: Date
+): Promise<{ claimed: boolean; remainingSeconds: number }> {
+  const nowIso = now.toISOString();
+  const cutoff = new Date(now.getTime() - COOLDOWN_SECONDS * 1000).toISOString();
   try {
-    const now = new Date().toISOString();
-    await db
+    const result = await db
       .prepare(
         `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
-          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+          WHERE settings.updated_at <= ?`
       )
-      .bind(key, now, now)
+      .bind(key, nowIso, nowIso, cutoff)
       .run();
+    if ((result.meta?.changes ?? 0) > 0) return { claimed: true, remainingSeconds: 0 };
   } catch (error) {
-    console.error('write push test marker failed', error);
+    // 表结构出问题不该把「测试通知」整个掐掉
+    console.error('claim push test marker failed', error);
+    return { claimed: true, remainingSeconds: 0 };
+  }
+  const left = await readCooldown(db, key);
+  return { claimed: false, remainingSeconds: left > 0 ? left : COOLDOWN_SECONDS };
+}
+
+/** 每小时配额：原子自增并返回是否仍在额度内（写失败放行，不挡功能） */
+async function bumpHourlyCount(db: D1Database, now: Date): Promise<boolean> {
+  const hourKey = `${HOURLY_PREFIX}${now.toISOString().slice(0, 13)}`;
+  try {
+    const result = await db
+      .prepare(
+        `INSERT INTO settings (key, value, updated_at) VALUES (?, '1', ?)
+          ON CONFLICT(key) DO UPDATE SET
+            value = CAST(CAST(settings.value AS INTEGER) + 1 AS TEXT),
+            updated_at = excluded.updated_at
+          RETURNING value`
+      )
+      .bind(hourKey, now.toISOString())
+      .first<{ value: string }>();
+    const count = Number.parseInt(result?.value ?? '1', 10);
+    return !Number.isFinite(count) || count <= HOURLY_LIMIT;
+  } catch (error) {
+    console.error('bump push test hourly failed', error);
+    return true;
   }
 }
 
@@ -105,11 +147,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
 
+  const now = new Date();
   const markerKey = `${MARKER_PREFIX}${audience ?? 'all'}`;
-  const cooldown = await readCooldown(env.DB, markerKey);
-  if (cooldown > 0) {
+  const claim = await claimCooldown(env.DB, markerKey, now);
+  if (!claim.claimed) {
     return Response.json(
-      { ok: false, cooldown: true, remainingSeconds: cooldown, error: `刚发过，${cooldown} 秒后再试` },
+      { ok: false, cooldown: true, remainingSeconds: claim.remainingSeconds, error: `刚发过，${claim.remainingSeconds} 秒后再试` },
+      { status: 429 }
+    );
+  }
+  if (!(await bumpHourlyCount(env.DB, now))) {
+    return Response.json(
+      { ok: false, error: `每小时最多发 ${HOURLY_LIMIT} 次测试通知，休息一下` },
       { status: 429 }
     );
   }
@@ -142,8 +191,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   } catch {
     // Worker 正常都回 JSON；回不了就按「发出去了但不知道几台」处理
   }
-
-  await writeCooldown(env.DB, markerKey);
 
   const sent = payload.sent === true;
   const channel = typeof payload.sendChannel === 'string' ? payload.sendChannel : null;
