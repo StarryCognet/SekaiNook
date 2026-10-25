@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sekainook_app/fl_ui/icons/glyph.dart';
@@ -7,6 +9,9 @@ import 'package:sekainook_app/ui/icons/app_icons.dart';
 
 /// 图标总览（golden 快照）：`flutter test --update-goldens test/icons_preview_test.dart`
 /// 产出的 PNG 放在 `test/goldens/icons_preview.png`，用来肉眼核对新绘图标。
+///
+/// 只在 Windows 跑：参考图是在 Windows 上生成的，Linux/CI 的字体与抗锯齿
+/// 渲染有约 0.4% 的像素差（golden 天生不跨平台），会被误判成回归。
 void main() {
   testWidgets('icons preview sheet', (tester) async {
     tester.view.physicalSize = const Size(1240, 1020);
@@ -100,5 +105,5 @@ void main() {
       find.byType(Scaffold),
       matchesGoldenFile('goldens/icons_preview.png'),
     );
-  });
+  }, skip: !Platform.isWindows);
 }
