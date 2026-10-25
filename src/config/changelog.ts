@@ -14,10 +14,20 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.8.0';
+export const APP_VERSION = '2.9.0';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.9.0',
+    date: '2026-10-25 11:30:00',
+    title: '轻提示改到顶部',
+    changes: [
+      '「已保存」「提交失败」这类轻提示改成从顶栏下方滑下来，不再压在底部导航上，也不会被误触',
+      '提示会自动收起（普通 3 秒、警告 5 秒），带「撤销」的那种也能点了就撤',
+      '连点几次只留最新一条，不会攒一叠挡住页面',
+    ],
+  },
   {
     version: '2.8.0',
     date: '2026-10-25 10:35:00',
