@@ -1,0 +1,93 @@
+
+  <!-- ==================== 01 积分规则 ==================== -->
+  <div class="sec" id="s1">
+    <div class="sec-head"><span class="sec-num">01</span><h2>积分规则（按你确认的 7 条口径定稿）</h2></div>
+    <p class="sec-sub">
+      左边是分类，中间是真要写进 <code>app/lib/config/family_rules.dart</code> 的任务。
+      <b class="tag ok">已定</b> = 按你上次那句「按你推荐的做」定下来的；<b class="tag new">新增</b> = 现在 12 条里没有、这轮要加的。
+    </p>
+
+    <div class="tblwrap">
+      <table class="tbl">
+        <thead>
+          <tr><th>分类</th><th>任务</th><th>分值</th><th>频率</th><th>没完成</th><th>备注</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="grpname" rowspan="3">今天必须完成<br><span class="dim" style="font-weight:400">缺一件扣 10</span></td>
+            <td class="task">按时完成作业</td><td class="num" style="color:var(--doc-ok)">+20</td>
+            <td class="dim">每天 1 次</td><td class="num" style="color:#B03A4A">−10</td>
+            <td class="dim">现有任务 · 21:00 前打卡</td>
+          </tr>
+          <tr>
+            <td class="task">按时睡觉</td><td class="num" style="color:var(--doc-ok)">+10</td>
+            <td class="dim">每天 1 次</td><td class="num" style="color:#B03A4A">−10</td>
+            <td class="dim">现有任务 · 19:00–22:00 窗口</td>
+          </tr>
+          <tr>
+            <td class="task">洗脸刷牙 <b class="tag new">新增</b></td><td class="num" style="color:var(--doc-ok)">+5</td>
+            <td class="dim">每天 1 次</td><td class="num" style="color:#B03A4A">−10</td>
+            <td class="dim">新加的一条，凑齐「早上 / 晚上都要做」</td>
+          </tr>
+
+          <tr>
+            <td class="grpname" rowspan="3">本周任务<br><span class="dim" style="font-weight:400">周日 22:00 结算</span></td>
+            <td class="task">洗头 <b class="tag new">新增</b></td><td class="num" style="color:var(--doc-ok)">+5</td>
+            <td class="dim">每周 3 次</td><td class="num" style="color:#B03A4A">每次 −10</td>
+            <td class="dim">按自然周（周一–周日）算次数</td>
+          </tr>
+          <tr>
+            <td class="task">剪指甲（手指甲 / 脚指甲） <b class="tag new">新增</b></td><td class="num" style="color:var(--doc-ok)">+10</td>
+            <td class="dim">每周 1 次</td><td class="num" style="color:#B03A4A">−10</td>
+            <td class="dim">手指甲、脚指甲算同一次，做完打一次卡</td>
+          </tr>
+          <tr>
+            <td class="task">上班一天 <b class="tag new">新增</b></td><td class="num" style="color:var(--doc-ok);font-weight:800">+500</td>
+            <td class="dim">每周 1 次</td><td class="dim">不扣分</td>
+            <td class="dim">孩子自己的任务 · 打卡时家长审批一次</td>
+          </tr>
+
+          <tr>
+            <td class="grpname" rowspan="3">特殊加分<br><span class="dim" style="font-weight:400">纯加分，不扣分</span></td>
+            <td class="task">参加各种比赛 <b class="tag new">新增</b></td><td class="num" style="color:var(--doc-ok)">+20</td>
+            <td class="dim">每次</td><td class="dim">—</td>
+            <td class="dim">要传照片留档</td>
+          </tr>
+          <tr>
+            <td class="task">获奖 <b class="tag new">新增</b></td><td class="num" style="color:var(--doc-ok)">+50</td>
+            <td class="dim">每次</td><td class="dim">—</td>
+            <td class="dim">同一次比赛跟「参赛」各记一次（+70）</td>
+          </tr>
+          <tr>
+            <td class="task">学校奖状 <b class="tag new">新增</b></td><td class="num" style="color:var(--doc-ok)">+20</td>
+            <td class="dim">每次</td><td class="dim">—</td>
+            <td class="dim">要传照片留档</td>
+          </tr>
+
+          <tr>
+            <td class="grpname">消费 · 罚款<br><span class="dim" style="font-weight:400">本次不动</span></td>
+            <td class="task">看 iPad 30 分钟 / 玩手机 30 分钟 / 视力下降 1 度 / 未按时作息 / 作业未完成</td>
+            <td class="num" style="color:#B03A4A">−10 ~ −100</td>
+            <td class="dim">见现有规则</td><td class="dim">—</td>
+            <td class="dim">12 条里的 5 条，语义没变，位置不变</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note-card ok" style="margin-top:18px">
+      <b>一天做满能拿多少</b><br>
+      必须任务 3 件 <b>+35</b>，加上现在已有的收拾房间 +10、洗碗 +5、阅读 +10 之类，正常一天 <b>60~80 分</b>。
+      一件必须任务不做就 <b>−10</b>，三件全不做 <b>−30</b> —— 这个量级刚好：一次扣肉疼但不至于一天白干。
+    </div>
+
+    <div class="note-card warn" style="margin-top:12px">
+      <b>还有两处细节要你点头（写代码前必须定，不然会双扣）</b>
+      <div style="margin-top:8px;line-height:1.85">
+        ① <b>「按时睡觉」没做（−10）和现有「未按时作息 · 晚于 22:00」（−20）会撞</b>：同一晚会扣 30。
+        建议：必须任务的 −10 只管「没打卡」，把现有那条 −20 当成「晚于 22:00」的加罚保留 —— 也就是最坏 −30，认不认？<br>
+        ② <b>「每天不足 5 件扣 10」这条要删掉</b>（<code>FamilyRules.dailyMinTasks = 5</code>）。
+        新规则已经逐件管住了必须任务，再留这条等于一天能被扣两次。建议直接删除。
+      </div>
+    </div>
+  </div>
