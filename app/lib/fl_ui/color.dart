@@ -305,7 +305,9 @@ extension ColorSchemeExtension on ColorScheme {
     );
   }
 
-  Color get modalScrim => scrim.withValues(alpha: 0.32);
+  /// 弹窗遮罩：要能压住悬浮顶栏与胶囊底栏，32% 时玻璃还会透出颜色，
+  /// 看着像「面板浮在界面上」而不是「界面被按下去」，所以压到 46%。
+  Color get modalScrim => scrim.withValues(alpha: 0.46);
 
   /// How far iOS 27 dims behind an alert.
   Color get alertScrim =>
