@@ -52,10 +52,14 @@ fi
 if [ -z "${OLD}" ] || [ -z "${NEW}" ] || changed '^(app/|src/|public/|server/deploy\.sh$|package\.json$)'; then
   echo "[deploy] 前端源码有变化 → 构建 Flutter Web（约 1~2 分钟）"
   cd "${ROOT}/app"
-  if [ ! -d .dart_tool ]; then
-    echo "[deploy] 首次构建，先 flutter pub get"
-    flutter pub get
-  fi
+  # ⚠️ 构建前必须 clean。2026-10-30 踩过的坑：服务器上的增量编译缓存
+  # （app/.dart_tool）从 2.11.0 一路增到 2.11.1 后，产出的 main.dart.js 是坏的 ——
+  # 点几次底部 tab 就整页卡死（卡在 CanvasKit/WASM 层，连 DevTools 的
+  # Debugger.pause 都断不开），而同一份源码在本机构建完全正常（三次对照实验确认）。
+  # 代价是每次前端变更多花约 90 秒，换产物一定干净。
+  echo "[deploy] 清理构建缓存（flutter clean）"
+  flutter clean
+  flutter pub get
   # --no-wasm-dry-run 跳过 wasm 兼容性试编译，省 10~20 秒
   # --no-web-resources-cdn：canvaskit 改为从本站 canvaskit/ 加载。
   #   不加这个开关时 Flutter 会去 www.gstatic.com 拉 canvaskit.js + canvaskit.wasm（7.3MB），
