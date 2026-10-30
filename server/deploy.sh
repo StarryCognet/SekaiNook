@@ -13,6 +13,13 @@
 
 set -e
 
+# git 在 post-receive 钩子里会导出 GIT_DIR / GIT_WORK_TREE 等变量。
+# 子进程（flutter / dart / git）继承这些变量后，会把它们当成「当前仓库」，
+# 于是 Flutter 的版本检查在 app/ 目录跑 git log 时报
+#   fatal: not a git repository: '.'
+# 这里清掉，让子进程按正常方式自己找 .git。
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX
+
 OLD="${1:-}"
 NEW="${2:-}"
 
