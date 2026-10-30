@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../config/app_constants.dart';
 import '../../theme/motion.dart';
 
 /// 全局背景图层（对应 Web 版 `--app-bg-image` + 固定不动的 `background-attachment: fixed`）。
@@ -39,6 +40,7 @@ class AppBackgroundLayer extends StatelessWidget {
             children: <Widget>[
               Image.network(
                 url,
+                headers: AppConstants.imageHeaders,
                 fit: BoxFit.cover,
                 cacheWidth: decodeWidth,
                 cacheHeight: decodeHeight,

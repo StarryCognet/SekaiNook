@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// 全局常量。
 ///
 /// 后端接口地址可在构建时覆盖：
@@ -13,11 +15,30 @@ abstract final class AppConstants {
   /// 后端根地址（不带尾斜杠）
   static const String apiBase = String.fromEnvironment(
     'API_BASE',
-    defaultValue: 'https://sn.starrymiku.com',
+    // 正式环境：家里自建的国内服务器（腾讯云轻量 · IP + HTTP）。
+    // 本地调试仍可 --dart-define=API_BASE=http://127.0.0.1:8788 覆盖。
+    defaultValue: 'http://140.143.240.238',
   );
 
   /// 单次请求超时（与 Web 版 DEFAULT_TIMEOUT_MS 一致）
   static const Duration requestTimeout = Duration(milliseconds: 12000);
+
+  /// 自建服务器 nginx 层的 Basic Auth 凭证，形如 `family:3398`。
+  ///
+  /// 只在打安卓包时用 `--dart-define=BASIC_AUTH=family:3398` 传进来；
+  /// 网页版是浏览器自己弹框、之后自动带凭证，不需要这个。
+  /// **留空 = 不发 Authorization 头**（连 CF 线上时正是这样）。
+  ///
+  /// 不写默认值是因为本仓库公开（GitHub），密码不进版本库。
+  static const String basicAuth = String.fromEnvironment('BASIC_AUTH');
+
+  /// 给 `Image.network` 用的请求头（安卓端要从 nginx Basic Auth 后面取图）。
+  /// 网页版 basicAuth 为空 → 返回空表，浏览器自己带凭证。
+  static Map<String, String> get imageHeaders => basicAuth.isEmpty
+      ? const <String, String>{}
+      : <String, String>{
+          'Authorization': 'Basic ${base64Encode(utf8.encode(basicAuth))}',
+        };
 
   /// 应用内更新的清单地址：Cloudflare R2 上的一个静态 `latest.json`，
   /// 由 `tool/publish_apk.ps1` 发布（和 APK 放在一起，见 docs/android-update.md）。

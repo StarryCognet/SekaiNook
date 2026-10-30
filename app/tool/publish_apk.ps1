@@ -17,6 +17,11 @@ param(
     # 直接用这个 APK，不去 build 目录里找
     [string]$ApkPath = '',
 
+    # 自建服务器 nginx 层的 Basic Auth 凭证，形如 family:3398。
+    # 公开仓库里不能写密码，所以发版时用参数传（或先设环境变量 SEKAINOOK_BASIC_AUTH）。
+    # 不传 = 包里的 App 不带 Authorization 头，连自建服务器会 401。
+    [string]$BasicAuth = $env:SEKAINOOK_BASIC_AUTH,
+
     # 打通用包（三种 ABI 都在里面，约 60MB）。默认只装 arm64 那一份，约 22MB。
     [switch]$Universal,
 
@@ -86,6 +91,12 @@ function Publish-File([string]$LocalPath, [string]$Key, [string]$ContentType, [s
 # 整个发版就在这里断掉。依赖真变了（改过 pubspec 的 dependencies）就先手动跑
 # `flutter pub get --offline` 再发版。
 $buildArgs = @('build', 'apk', '--release', '--no-pub')
+if ($BasicAuth) {
+    # 编译期常量，App 的每个请求（含图片）都会带这个凭证
+    $buildArgs += @("--dart-define=BASIC_AUTH=$BasicAuth")
+} else {
+    Write-Host "[warn] 没传 -BasicAuth，包里的 App 不会带 Authorization 头，连自建服务器会 401" -ForegroundColor Yellow
+}
 $abiTag = 'arm64-v8a'
 if (-not $Universal) {
     $buildArgs += @('--target-platform', 'android-arm64')

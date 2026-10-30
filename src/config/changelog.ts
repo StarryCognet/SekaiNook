@@ -14,10 +14,21 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.11.0';
+export const APP_VERSION = '2.11.1';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.11.1',
+    date: '2026-10-30 18:10:00',
+    title: '换成家里自己的服务器：打开更快，不再绕道国外',
+    changes: [
+      'App 改为连接家里自建的服务器，数据都在国内，打开、记账、翻页都更快',
+      '图片不再跨境加载，翻流水、看花园照片不用干等',
+      '账本、每周计划、花园、设置这些内容和用法完全没变',
+      '第一次打开这版会自动切过去，不用你做任何设置',
+    ],
+  },
   {
     version: '2.11.0',
     date: '2026-10-26 11:30:00',

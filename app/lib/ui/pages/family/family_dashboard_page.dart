@@ -12,6 +12,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../../config/app_constants.dart';
 import '../../../config/family_rules.dart';
 import '../../../core/api_client.dart';
 import '../../../core/api_exception.dart';
@@ -2945,6 +2946,7 @@ class _RecordThumb extends StatelessWidget {
                   maxScale: 4,
                   child: Image.network(
                     url,
+                    headers: AppConstants.imageHeaders,
                     fit: BoxFit.contain,
                     errorBuilder: (context, error, stack) => Padding(
                       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -2965,6 +2967,7 @@ class _RecordThumb extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Image.network(
           url,
+          headers: AppConstants.imageHeaders,
           width: 48,
           height: 48,
           // 只按显示尺寸解码：48 逻辑像素 × 3 倍屏，别把整张打卡照片解码进内存

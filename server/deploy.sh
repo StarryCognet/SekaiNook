@@ -70,6 +70,20 @@ else
   echo "[deploy] 前端源码无变化，跳过构建"
 fi
 
-# 3) 重启后端（sudoers 里已为 ubuntu 开免密）
+# 3) 版本日志 → 本地 D1
+#    自建服务器没有 wrangler，但 changelog-sync.mjs 的 --dry 只生成 SQL
+#    （migrations/.changelog-sync.sql，UPSERT + 删多余，重复执行安全），
+#    再用 sqlite3 灌进本地库即可。失败不影响网站（页面和 App 都有本地兜底）。
+if changed '^src/config/changelog\.ts$'; then
+  echo "[deploy] 版本日志有变化 → 写入本地 D1"
+  if node scripts/changelog-sync.mjs sync --dry >/dev/null 2>&1 &&
+     sqlite3 "${ROOT}/data/sekainook.db" < "${ROOT}/migrations/.changelog-sync.sql"; then
+    echo "[deploy] 版本日志已同步（$(sqlite3 "${ROOT}/data/sekainook.db" 'SELECT COUNT(*) FROM changelog') 条）"
+  else
+    echo "[deploy] [warn] 版本日志同步失败，页面会退回内置的那份，不影响使用"
+  fi
+fi
+
+# 4) 重启后端（sudoers 里已为 ubuntu 开免密）
 sudo -n /usr/bin/systemctl restart sekainook
 echo "[deploy] 后端已重启"

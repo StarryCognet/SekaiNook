@@ -7,5 +7,8 @@
         <domain includeSubdomains="false">127.0.0.1</domain>
         <domain includeSubdomains="false">localhost</domain>
         <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- 正式环境：自建服务器暂时只有 IP、没有域名和证书，App 走明文 HTTP。
+             将来上了域名 + HTTPS 后，这一条可以删掉。 -->
+        <domain includeSubdomains="false">140.143.240.238</domain>
     </domain-config>
 </network-security-config>

@@ -1345,6 +1345,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             borderRadius: BorderRadius.circular(AppRadius.md),
                             child: Image.network(
                               theme.background,
+                              headers: AppConstants.imageHeaders,
                               height: 140,
                               width: double.infinity,
                               // 只是设置页里的预览条，按 800px 解码足够，别解整张原图

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -29,7 +30,14 @@ class ApiClient {
                 receiveTimeout: AppConstants.requestTimeout,
                 sendTimeout: AppConstants.requestTimeout,
                 responseType: ResponseType.json,
-                headers: const <String, dynamic>{'Accept': 'application/json'},
+                headers: <String, dynamic>{
+                  'Accept': 'application/json',
+                  // 自建服务器（IP + HTTP）前面挂着 nginx Basic Auth，
+                  // 安卓端没有浏览器那种弹框，只能在每个请求上带凭证。
+                  if (AppConstants.basicAuth.isNotEmpty)
+                    'Authorization':
+                        'Basic ${base64Encode(utf8.encode(AppConstants.basicAuth))}',
+                },
                 // 状态码一律不抛，交给下面自己判，这样能统一读 body 里的 error
                 validateStatus: (_) => true,
               ),
