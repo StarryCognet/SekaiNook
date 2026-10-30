@@ -1,4 +1,4 @@
-# 打一个安卓包、传到 R2、更新 latest.json —— 发版就这一条命令。
+﻿# 打一个安卓包、传到 R2、更新 latest.json —— 发版就这一条命令。
 #
 #   .\tool\publish_apk.ps1 -Changelog "修了花园浇水的一处错算"
 #
@@ -165,8 +165,11 @@ try {
     $webClient = New-Object System.Net.WebClient
     $webClient.Proxy = $null  # 直连
     try {
-        $rawManifest = $webClient.DownloadString("$PublicBaseUrl/$Prefix/latest.json")
-        $previous = $rawManifest | ConvertFrom-Json
+        # 必须 DownloadData + 手动 UTF-8 解码：PS 5.1 的 DownloadString 按系统
+        # ANSI(GBK) 解码，清单里的中文 changelog 会被解成乱码，ConvertFrom-Json
+        # 直接报「传入了未终止的字符串」（2026-10-30 实测）。
+        $rawBytes = $webClient.DownloadData("$PublicBaseUrl/$Prefix/latest.json")
+        $previous = ([System.Text.Encoding]::UTF8.GetString($rawBytes)) | ConvertFrom-Json
     } finally {
         $webClient.Dispose()
     }
@@ -198,7 +201,8 @@ if (-not $SkipChangelogCheck) {
         $webClient = New-Object System.Net.WebClient
         $webClient.Proxy = $null
         try {
-            $remoteChangelog = $webClient.DownloadString('https://sn.starrymiku.com/api/changelog') | ConvertFrom-Json
+            $changelogBytes = $webClient.DownloadData('https://sn.starrymiku.com/api/changelog')
+            $remoteChangelog = ([System.Text.Encoding]::UTF8.GetString($changelogBytes)) | ConvertFrom-Json
             $remoteChangelogVersion = $remoteChangelog.version
         } finally {
             $webClient.Dispose()

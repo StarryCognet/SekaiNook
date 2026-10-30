@@ -37,5 +37,17 @@
     }
   }
 
-  _flutter.loader.load();
+  // 中文字体本地化（2026-10-30）。
+  // Flutter Web 的 CanvasKit 渲染中文时，会按 unicode 区间从
+  // https://fonts.gstatic.com/s/ 按需下载 Noto Sans SC 的子集 woff2；
+  // 国内访问该域名基本被 reset（ERR_CONNECTION_RESET），引擎会不断重试
+  // （console 里满屏 "Transient error ... Retrying..."），大量并发请求
+  // 堵住浏览器连接池与主线程 —— 表现就是切换页面时整页卡死。
+  // 这里把 fallback 基址指到站点自带的 fonts/ 目录（app/web/fonts/，
+  // 随构建产物一起部署，nginx 同域直出），引擎改为向本站请求这些子集。
+  _flutter.loader.load({
+    config: {
+      fontFallbackBaseUrl: 'fonts/',
+    },
+  });
 })();

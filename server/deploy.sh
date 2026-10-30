@@ -62,6 +62,9 @@ if [ -z "${OLD}" ] || [ -z "${NEW}" ] || changed '^(app/|src/|public/|server/dep
   #   国内基本拉不动 —— 页面会长时间白屏/“卡死”，刷新也一样。这是测试站卡顿的头号嫌疑。
   flutter build web --release --no-pub --no-wasm-dry-run --no-web-resources-cdn \
     --dart-define=API_BASE=http://140.143.240.238
+  # 给 version.json 补 built_at：flutter_bootstrap.js 用它拼 main.dart.js?v=<built_at>，
+  # 每次构建都变，才能绕开 nginx 对 .js 的强缓存（见 nginx 的 expires 7d）。
+  node "${ROOT}/scripts/stamp-web-version.mjs"
   cd "${ROOT}"
   rm -rf web
   cp -r app/build/web web
