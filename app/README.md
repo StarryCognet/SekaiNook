@@ -277,3 +277,4 @@ docs/                    接口契约与移植说明（见下）
    （见 `lib/core/app_error.dart`）。
 
 <!-- deploy-test: 20261030-165919 -->
+<!-- deploy-test-2: 170051 -->
