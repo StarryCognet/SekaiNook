@@ -47,7 +47,8 @@ if [ -z "${OLD}" ] || [ -z "${NEW}" ] || changed '^(app/|src/|public/)'; then
     echo "[deploy] 首次构建，先 flutter pub get"
     flutter pub get
   fi
-  flutter build web --release --no-pub \
+  # --no-wasm-dry-run 跳过 wasm 兼容性试编译，省 10~20 秒
+  flutter build web --release --no-pub --no-wasm-dry-run \
     --dart-define=API_BASE=http://140.143.240.238
   cd "${ROOT}"
   rm -rf web

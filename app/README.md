@@ -276,5 +276,3 @@ docs/                    接口契约与移植说明（见下）
    没有这种失败模式。错误兜底改为 `ErrorWidget.builder` 的中文卡片 + 手动「重新加载」
    （见 `lib/core/app_error.dart`）。
 
-<!-- deploy-test: 20261030-165919 -->
-<!-- deploy-test-2: 170051 -->
