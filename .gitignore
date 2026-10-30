@@ -44,3 +44,6 @@ migrations/.changelog-sync.sql
 
 # 本地临时目录（截图 / flclash 工作区 / 校验产物，动辄几个 G，不入库）
 .tmp-*/
+
+# 国内测试站部署的临时产物（D1 快照 data.sql、nginx 配置草稿、Flutter Web 打包 tar）
+.snapshot/

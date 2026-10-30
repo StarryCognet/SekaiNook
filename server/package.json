@@ -1,0 +1,14 @@
+{
+  "name": "sekainook-server",
+  "private": true,
+  "version": "1.0.0",
+  "description": "SekaiNook 国内测试站：把 Pages Functions 跑在 Node 上的适配层（业务代码仍来自 functions/，一行不改）",
+  "type": "module",
+  "scripts": {
+    "start": "tsx server/index.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "tsx": "^4.23.15"
+  }
+}
