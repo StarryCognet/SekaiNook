@@ -30,6 +30,12 @@ String normalizeTaskName(String name) {
   return folded.length > 30 ? folded.substring(0, 30) : folded;
 }
 
+/// 存档字段容错读取：只有字符串才透传，其它类型（数字 / 对象 / null）一律当缺省。
+///
+/// 以前这里写的是 `raw['createdBy'] as String?` —— 存档被手改或旧格式里该字段是
+/// 数字时会抛 TypeError，而整条任务的解析没有一个兜底，直接把启动流程炸掉（审计 S-2）。
+String? _stringOrNull(dynamic value) => value is String ? value : null;
+
 /// 自定义任务（本地存档，字段名与 Web 版 `CustomTask` 一字不差）
 class CustomTask {
   const CustomTask({
@@ -102,9 +108,9 @@ class CustomTask {
       name: name,
       value: signed,
       type: type,
-      createdBy: TaskCreator.parse(raw['createdBy'] as String?),
+      createdBy: TaskCreator.parse(_stringOrNull(raw['createdBy'])),
       createdAt: createdAt is String ? createdAt : DateTime.now().toUtc().toIso8601String(),
-      kind: CustomTaskKind.parse(raw['kind'] as String?),
+      kind: CustomTaskKind.parse(_stringOrNull(raw['kind'])),
       repeatDaily: raw['repeatDaily'] != false,
       // 老存档里没有这个字段：赚钱类按「要照片」兜底，消费 / 罚款一律不要
       requirePhoto: type == TaskType.earning ? raw['requirePhoto'] != false : false,

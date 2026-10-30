@@ -32,6 +32,7 @@ import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
+import '../../widgets/admin_password_prompt.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_sheet.dart';
 import '../../widgets/format.dart';
@@ -438,13 +439,35 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final customTasks = context.read<CustomTasksState>();
     setState(() => _submittingId = task.id);
     try {
-      final recordId = await state.api.addLedgerRecord(
-            task,
-            note: note,
-            imageUrl: imageUrl,
-            // 家长自己记的账让服务端立刻入账，女儿提交的一律进待审批
-            autoApprove: isParent,
-          );
+      String recordId;
+      if (isParent) {
+        // 家长自己记的账会立刻入账（autoApprove），服务端要口令；
+        // 孩子提交的一律进待审批，不需要口令。
+        String created = '';
+        final bool ok = await runWithAdminPassword(
+          context,
+          description: '家长记账会立刻入账，需要家长口令',
+          action: (String password) async {
+            created = await state.api.addLedgerRecord(
+              task,
+              note: note,
+              imageUrl: imageUrl,
+              autoApprove: true,
+              password: password,
+            );
+          },
+        );
+        if (!ok || !mounted) return;
+        recordId = created;
+      } else {
+        recordId = await state.api.addLedgerRecord(
+          task,
+          note: note,
+          imageUrl: imageUrl,
+          // 家长自己记的账让服务端立刻入账，女儿提交的一律进待审批
+          autoApprove: false,
+        );
+      }
       await state.loadLedger();
       if (!mounted) return;
       // 从自定义任务按钮进来的：把那条标成「今天做过」，按钮立刻置灰
@@ -495,10 +518,15 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   /// （服务端允许把 approved 改回 pending，积分也跟着退回去）。
   Future<void> _approve(LedgerRecord record) async {
     if (_approvingIds.contains(record.id)) return;
+    final FamilyState state = context.read<FamilyState>();
     setState(() => _approvingIds.add(record.id));
     try {
-      await context.read<FamilyState>().approve(record.id);
-      if (!mounted) return;
+      final bool ok = await runWithAdminPassword(
+        context,
+        description: '通过「${record.taskName}」会立刻入账，需要家长口令',
+        action: (String password) => state.approve(record.id, password: password),
+      );
+      if (!ok || !mounted) return;
       _toast(
         '已通过「${record.taskName}」，积分已入账',
         actionLabel: '撤销',
@@ -514,11 +542,14 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   /// 撤销「通过」：把这条打回待审批，积分随之从余额上退回去
   Future<void> _undoApprove(String id) async {
-    final state = context.read<FamilyState>();
+    final FamilyState state = context.read<FamilyState>();
     try {
-      await state.api.updateStatus(id, LedgerStatus.pending);
-      await state.loadLedger();
-      if (!mounted) return;
+      final bool ok = await runWithAdminPassword(
+        context,
+        description: '打回待审批会把已入账的积分退回去，需要家长口令',
+        action: (String password) => state.undoApprove(id, password: password),
+      );
+      if (!ok || !mounted) return;
       _toast('已打回待审批，积分也退回去了');
     } catch (e) {
       _handleWriteError(e, '打回失败，请到「历史记录」里删除这条');
@@ -527,11 +558,18 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   /// 批量通过：一次把待审批全部入账（孩子一口气交好几条时最省事）
   Future<void> _approveAll(List<LedgerRecord> pending) async {
+    final FamilyState state = context.read<FamilyState>();
     setState(() => _approvingAll = true);
     try {
-      await context.read<FamilyState>().approveMany(
-            pending.map((record) => record.id).toList(growable: false),
-          );
+      final bool ok = await runWithAdminPassword(
+        context,
+        description: '一次通过 ${pending.length} 条会立刻入账，需要家长口令',
+        action: (String password) => state.approveMany(
+          pending.map((record) => record.id).toList(growable: false),
+          password: password,
+        ),
+      );
+      if (!ok || !mounted) return;
       _toast('已通过 ${pending.length} 条');
       _burst();
     } catch (e) {
@@ -549,11 +587,19 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   /// 审批驳回：先让家长写一句原因，这句话会进女儿的通知
   Future<void> _confirmReject(LedgerRecord target, String reason) async {
+    final FamilyState state = context.read<FamilyState>();
     setState(() => _rejecting = true);
     try {
-      await context
-          .read<FamilyState>()
-          .reject(target.id, reason: reason.isEmpty ? null : reason);
+      final bool ok = await runWithAdminPassword(
+        context,
+        description: '驳回「${target.taskName}」需要家长口令',
+        action: (String password) => state.reject(
+          target.id,
+          reason: reason.isEmpty ? null : reason,
+          password: password,
+        ),
+      );
+      if (!ok || !mounted) return;
       _toast('已驳回，孩子会看到你的话');
     } catch (e) {
       _handleWriteError(e, '操作失败，请重试');
@@ -584,8 +630,14 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   /// 删除流水（仅家长），含图片时后端会一并删除 R2 中的图片
   Future<void> _delete(String id) async {
+    final FamilyState state = context.read<FamilyState>();
     try {
-      await context.read<FamilyState>().removeRecord(id);
+      final bool ok = await runWithAdminPassword(
+        context,
+        description: '删除这条记录会把已入账的积分一起抹掉，需要家长口令',
+        action: (String password) => state.removeRecord(id, password: password),
+      );
+      if (!ok || !mounted) return;
       _toast('已删除该记录');
     } catch (e) {
       _handleWriteError(e, '删除失败，请重试');
@@ -900,7 +952,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   /// 22:00 之后改说已经发生 —— 同一句话在不同时刻给的信息不一样，
   /// 才有「现在该动手」的紧迫感，而不是一条永远不动的说明书。
   String _mustCountdownHint() {
-    const int deadlineMinutes = 22 * 60;
+    const int deadlineMinutes = FamilyRules.settleMinutes;
     final int nowMinutes = _now.hour * 60 + _now.minute;
     final int perTask = FamilyRules.mandatoryPenaltyPerTask;
     if (nowMinutes >= deadlineMinutes) {
@@ -2551,6 +2603,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     child: Image.memory(
                       photo!,
+                      // 原图常常是几 MB 的相机照片：按显示宽度解码，别把
+                      // 4000px 的位图整张塞进内存（审计 U-2 / AN-P-10）
+                      cacheWidth: 1080,
                       width: double.infinity,
                       height: 160,
                       fit: BoxFit.cover,

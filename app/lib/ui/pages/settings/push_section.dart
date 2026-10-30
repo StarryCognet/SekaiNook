@@ -11,6 +11,7 @@ import '../../../state/local_notify_state.dart';
 import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/tokens.dart';
+import '../../widgets/admin_password_prompt.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/format.dart';
 import '../../widgets/motion_widgets.dart';
@@ -128,17 +129,26 @@ class _PushSectionState extends State<PushSection> {
   }
 
   Future<void> _send() async {
-    final NotifyAudience? audience = _audienceOf(context.read<FamilyState>().role);
+    final FamilyState family = context.read<FamilyState>();
+    final NotifyAudience? audience = _audienceOf(family.role);
     setState(() => _sending = true);
     try {
-      final PushTestResult result = await _api.sendTest(audience: audience);
-      if (!mounted) return;
+      // 服务端的测试推送接口要家长身份（还会按小时节流），所以先过口令闸
+      PushTestResult? sent;
+      final bool ok = await runWithAdminPassword(
+        context,
+        description: '发测试通知需要家长口令',
+        action: (String password) async {
+          sent = await _api.sendTest(audience: audience, password: password);
+        },
+      );
+      if (!ok || !mounted || sent == null) return;
       // 正文直接用服务端的 detail：它把「送达几台、清理几条」写清楚了
-      final String message = result.detail.isEmpty
-          ? (result.sent ? '测试通知已经发出去了' : '还没有手机订阅，一条都没发出去')
-          : result.detail;
+      final String message = sent!.detail.isEmpty
+          ? (sent!.sent ? '测试通知已经发出去了' : '还没有手机订阅，一条都没发出去')
+          : sent!.detail;
       // sent == false 是「还没有设备订阅」这类要用户去处理的状态，按提醒显示
-      widget.onToast(message, !result.sent);
+      widget.onToast(message, !sent!.sent);
     } on ApiException catch (error) {
       if (!mounted) return;
       widget.onToast(pushTestErrorMessage(error), true);

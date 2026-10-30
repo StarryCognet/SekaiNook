@@ -37,10 +37,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     // 版本日志只随发版变化，没必要每次下拉都整份重传：
     // 客户端（浏览器）可直接用 304 / 本地缓存，最长 5 分钟内看到旧值也不算问题。
     //
-    // R-9：ETag 必须带上内容摘要，不能只由 version 派生 —— 同一个版本号下
-    // 改文案（修错别字）后浏览器会一直拿着 304，直到下次升版本才更新。
+    // R-9：ETag 必须带上完整内容摘要，不能只由 version 派生 —— 同一个版本号下
+    // 改文案（修错别字）或改标题/日期后浏览器会一直拿着 304，直到下次升版本才更新。
     const digest = contentHash(
-      JSON.stringify([snapshot.version, snapshot.entries.map((entry) => entry.changes)]),
+      JSON.stringify(
+        snapshot.entries.map((entry) => [entry.version, entry.date, entry.title, entry.changes]),
+      ),
     );
     const etag = `W/"changelog-${snapshot.version ?? 'empty'}-${digest}"`;
     if (request.headers.get('If-None-Match') === etag) {

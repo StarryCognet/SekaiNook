@@ -1,5 +1,6 @@
 import '../data/models/ledger_record.dart';
 import '../data/models/task_config.dart';
+import 'week.dart';
 
 /// 打卡规则的唯一实现（对应 Web 版 `src/utils/taskRules.ts`）。
 ///
@@ -73,10 +74,17 @@ int countWeekSubmissions(List<LedgerRecord> records, String taskId, {DateTime? n
       .length;
 }
 
-/// 某一刻所在自然周的起点（周一 00:00，本地时刻）
+/// 某一刻所在自然周的起点（东八区周一 00:00 对应的**真实时刻**）。
+///
+/// 后端按东八区结算周（与 [WeekUtil.beijingNow] 同口径），而 `createdAt` 是
+/// 真实瞬间。所以先取东八区墙钟上「本周一 00:00」，再减 8 小时还原成 UTC
+/// 时刻 —— 非东八区设备上也不会与后端缺次罚款口径错位。
 DateTime _startOfWeek(DateTime moment) {
-  final day = DateTime(moment.year, moment.month, moment.day);
-  return day.subtract(Duration(days: day.weekday - DateTime.monday));
+  final beijing = WeekUtil.beijingNow(moment);
+  // 东八区墙钟的当日零点（以 UTC 标记承载，避免本机时区参与构造）
+  final day = DateTime.utc(beijing.year, beijing.month, beijing.day);
+  final mondayWall = day.subtract(Duration(days: day.weekday - DateTime.monday));
+  return mondayWall.subtract(const Duration(hours: 8));
 }
 
 /// 现在能不能打卡；不能则返回给用户看的原因，能则返回 null。

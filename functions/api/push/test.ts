@@ -6,16 +6,20 @@
  * 那是服务端密钥，下发到浏览器等于把「给全家手机发通知」的能力公开。
  * 这里让 Pages 用令牌转一手，前端只拿到「发了几台设备」这种结果。
  *
- * 为什么不要管理员密码：手机提醒这个区块是给孩子用的（他自己的手机要能当场试一下通不通），
- * 而管理员密码在妈妈手里。这条接口只能给「已经订阅过的设备」发一条固定文案，
- * 既改不了数据也删不了东西，所以用冷却时间防连点即可，不引入密码门禁。
+ * 为什么要管理员密码：这条接口会真给全家手机发通知，零鉴权时外部就能反复刷（30 条/小时
+ * 就能让全家手机响一晚上）。孩子要自测时由家长输一次口令 —— 成本只是多一步输入，
+ * 换掉的是「知道域名的人都能给全家发通知」这个口子。
  *
  * 为什么冷却 15 秒：不然连点几下就是给全家手机刷屏，而且推送服务商会把这些当异常流量。
  * 标记写在 settings 表（跟 reminder_sent_<day> 同一张表），过期即失效，不需要清理任务。
  */
 
+import { gateAdminPassword } from '../../_lib/admin-auth';
+
 interface Env {
   DB: D1Database;
+  /** Pages secret：管理员口令（首次初始化用，线上以 settings 表哈希为准） */
+  ADMIN_PASSWORD?: string;
   /** 提醒 Worker 的地址（Pages 环境变量，例如 https://sekainook-reminder.xxx.workers.dev） */
   REMINDER_URL?: string;
   /** 调用提醒 Worker 的令牌（Pages secret，与 Worker 的 REMIND_TOKEN 同一份） */
@@ -137,6 +141,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ error: 'audience 非法（应为 parent 或 child）' }, { status: 400 });
   }
   const audience = typeof rawAudience === 'string' ? rawAudience : undefined;
+
+  // ── 口令闸 ──
+  // 这条接口零鉴权时 = 任何人都能让全家手机响（每小时最多 30 条）。孩子要自测时
+  // 由家长输一次口令：前端「测试通知」按钮会先弹口令框，密码只走这一次请求。
+  const gate = await gateAdminPassword(
+    env.DB,
+    typeof body.password === 'string' ? body.password : '',
+    env.ADMIN_PASSWORD
+  );
+  if (!gate.ok) return Response.json(gate.body, { status: gate.status });
 
   const reminderUrl = env.REMINDER_URL?.trim().replace(/\/+$/, '') ?? '';
   const token = env.REMIND_TOKEN?.trim() ?? '';

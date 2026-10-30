@@ -480,7 +480,13 @@ class GardenState extends ChangeNotifier {
       'pending': _pending.map((op) => op.toJson()).toList(),
     };
     try {
-      _prefs.setString(AppConstants.keyGardenState, jsonEncode(payload));
+      // SharedPreferences 写盘是异步的：不接住这个 future，写失败（隐私模式 /
+      // 配额满）会变成未捕获的异步异常，而不是走到下面的 catch（L-15）。
+      unawaited(
+        _prefs
+            .setString(AppConstants.keyGardenState, jsonEncode(payload))
+            .catchError((Object _) => false),
+      );
     } catch (_) {
       // 隐私模式 / 配额满：这一份存不下就存不下，内存里的账照常
     }

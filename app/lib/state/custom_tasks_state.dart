@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -119,7 +120,17 @@ class CustomTasksState extends ChangeNotifier {
       }
     }
 
-    _tasks = rawTasks.map(CustomTask.fromStored).whereType<CustomTask>().toList();
+    // 单条坏数据不该让整份存档作废，更不该在 App 启动时抛异常 —— 逐条兜底（审计 S-2）。
+    _tasks = rawTasks
+        .map((item) {
+          try {
+            return CustomTask.fromStored(item);
+          } catch (_) {
+            return null;
+          }
+        })
+        .whereType<CustomTask>()
+        .toList();
   }
 
   void _persist() {
@@ -129,7 +140,13 @@ class CustomTasksState extends ChangeNotifier {
       'removedPresets': _removedPresets,
     };
     try {
-      _prefs.setString(AppConstants.keyCustomTasks, jsonEncode(payload));
+      // 写盘是异步的：接住 future 才不会让「隐私模式 / 配额满」变成未捕获异步
+      // 异常（L-15）；存不下就退化成只在内存里生效。
+      unawaited(
+        _prefs
+            .setString(AppConstants.keyCustomTasks, jsonEncode(payload))
+            .catchError((Object _) => false),
+      );
     } catch (_) {
       // 本机存储不可用：退化成只在内存里生效
     }

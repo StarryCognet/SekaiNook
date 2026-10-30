@@ -24,6 +24,7 @@ import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
 import '../../shell/app_nav_bar.dart';
 import '../../shell/app_top_bar.dart';
+import '../../widgets/admin_password_prompt.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/format.dart';
 import '../../widgets/live_clock.dart';
@@ -249,9 +250,15 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
 
   Future<void> _approve(LedgerRecord record) async {
     if (_busyId != null) return;
+    final FamilyState family = context.read<FamilyState>();
     setState(() => _busyId = record.id);
     try {
-      await context.read<FamilyState>().approve(record.id);
+      final bool ok = await runWithAdminPassword(
+        context,
+        description: '通过「${record.taskName}」会立刻入账，需要家长口令',
+        action: (String password) => family.approve(record.id, password: password),
+      );
+      if (!ok || !mounted) return;
       await _refresh();
       if (mounted) {
         // 通过那一下给一整页的「做成了」反馈（不挡点击，自己消失）
@@ -272,12 +279,19 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
       child: _RejectDialog(taskName: record.taskName),
     );
     if (reason == null || !mounted) return;
+    final FamilyState family = context.read<FamilyState>();
     setState(() => _busyId = record.id);
     try {
-      await context.read<FamilyState>().reject(
-            record.id,
-            reason: reason.trim().isEmpty ? null : reason.trim(),
-          );
+      final bool ok = await runWithAdminPassword(
+        context,
+        description: '驳回「${record.taskName}」需要家长口令',
+        action: (String password) => family.reject(
+          record.id,
+          reason: reason.trim().isEmpty ? null : reason.trim(),
+          password: password,
+        ),
+      );
+      if (!ok || !mounted) return;
       await _refresh();
       if (mounted) _toast('「${record.taskName}」已驳回', success: true);
     } catch (e) {
@@ -306,16 +320,22 @@ class _ParentHomePageState extends State<ParentHomePage> with WidgetsBindingObse
 
     setState(() => _settling = true);
     try {
-      await family.api.addLedgerRecord(
-        TaskConfig(
-          id: 'payout',
-          name: '现金兑现',
-          type: TaskType.spending,
-          value: -balance.round(),
+      final bool ok = await runWithAdminPassword(
+        context,
+        description: '兑换会立刻扣掉 ${formatPoints(balance)} 积分，需要家长口令',
+        action: (String password) => family.api.addLedgerRecord(
+          TaskConfig(
+            id: 'payout',
+            name: '现金兑现',
+            type: TaskType.spending,
+            value: -balance.round(),
+          ),
+          note: '积分兑换现金：${formatPoints(balance)} 积分 = ${_yuanText(yuan)} 元',
+          autoApprove: true,
+          password: password,
         ),
-        note: '积分兑换现金：${formatPoints(balance)} 积分 = ${_yuanText(yuan)} 元',
-        autoApprove: true,
       );
+      if (!ok || !mounted) return;
       await _refresh();
       if (mounted) {
         // 到账那一下同样放一个光环

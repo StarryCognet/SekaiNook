@@ -82,6 +82,10 @@ class SettingsState extends ChangeNotifier {
     }
   }
 
+  /// 拉服务端设置的「轮次号」（L-14）：save 成功后自增，让在飞的旧 load
+  /// 回来时作废，避免慢请求把刚保存的值覆盖回旧值。
+  int _loadSeq = 0;
+
   /// 拉服务端设置并覆盖本地（失败保留当前值，不打扰用户）。
   ///
   /// 并发去重：正在加载时重复调用直接返回，不报错不排队。
@@ -89,8 +93,14 @@ class SettingsState extends ChangeNotifier {
     if (_loading) return;
     _loading = true;
     notifyListeners();
+    final seq = ++_loadSeq;
     try {
       final payload = await _api.fetchSettings();
+      if (seq != _loadSeq) {
+        // 期间 save 已写入更新的值：这次响应作废，别覆盖
+        _loading = false;
+        return;
+      }
       _names = payload.names;
       await _saveCache(payload.names);
       // ready 用「不是显式 false」判定：服务端没回这个字段就算 true（老部署兼容）
@@ -100,6 +110,7 @@ class SettingsState extends ChangeNotifier {
     } catch (_) {
       // 失败保留当前值（缓存/默认），但 ready 被显式置回 false
       _loading = false;
+      if (seq != _loadSeq) return;
       _ready = false;
       notifyListeners();
     }
@@ -111,6 +122,8 @@ class SettingsState extends ChangeNotifier {
     _names = payload.names;
     await _saveCache(payload.names);
     _ready = true;
+    // 作废在飞的旧 load（L-14）：它的响应比这次保存更旧
+    _loadSeq++;
     notifyListeners();
     return payload.names;
   }

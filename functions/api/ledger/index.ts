@@ -18,9 +18,11 @@ import { displayName, readFamilyNames, sanitizeBackground } from '../../_lib/set
 import {
   CUSTOM_TASK_DAILY_CAP,
   EXEC_TASK_ID,
+  GARDEN_LIKE_CLAUSE,
   LEDGER_TASK_RULES,
   beijingDayBounds,
   checkLedgerRule,
+  isGardenTaskId,
 } from '../../_lib/rules';
 
 interface Env {
@@ -162,6 +164,55 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const providedId =
     typeof body.id === 'string' && ID_PATTERN.test(body.id) ? body.id.slice(0, ID_MAX_LENGTH) : null;
   const id = providedId ?? crypto.randomUUID();
+
+  // ── 一次性任务（老余额迁移 garden_legacy）：成功写过一次就永久拒绝 ──
+  // 只靠 dailyLimit 不够：那个每天清零，跨天就能把「历史余额」再搬一次 2000。
+  if (rule.onceOnly) {
+    const existingMigration = await env.DB.prepare(
+      'SELECT COUNT(*) AS c FROM family_ledger WHERE task_id = ?'
+    )
+      .bind(task_id)
+      .first<{ c: number }>();
+    if ((existingMigration?.c ?? 0) > 0) {
+      // 幂等优先：同一个 id 的重发（首次写成功但响应丢了）照旧回 duplicate
+      if (providedId) {
+        const existing = await env.DB.prepare('SELECT id, status FROM family_ledger WHERE id = ?')
+          .bind(providedId)
+          .first<{ id: string; status: string }>();
+        if (existing) {
+          return Response.json({ id: existing.id, status: existing.status, duplicate: true });
+        }
+      }
+      return Response.json(
+        { error: `「${rule.name}」只能迁移一次，历史余额已经搬过了` },
+        { status: 409 }
+      );
+    }
+  }
+
+  // ── 即时到账的负金额（payout / garden_shop / 罚款类）必须过余额闸门 ──
+  // 旧行为只卡单笔上限、不查余额：一条 POST 就能把家庭积分打成 -100000，
+  // 或把阳光反复扣成负数。口径与 /api/ledger/summary 完全一致：
+  // status IS NULL 或 approved，按 GARDEN_LIKE_CLAUSE 分红/阳光。
+  if (finalStatus === 'approved' && finalAmount < 0) {
+    const garden = isGardenTaskId(task_id);
+    const balanceRow = await env.DB.prepare(
+      garden
+        ? `SELECT COALESCE(SUM(amount), 0) AS s FROM family_ledger
+           WHERE (${GARDEN_LIKE_CLAUSE}) AND (status IS NULL OR status = 'approved')`
+        : `SELECT COALESCE(SUM(amount), 0) AS s FROM family_ledger
+           WHERE NOT (${GARDEN_LIKE_CLAUSE}) AND (status IS NULL OR status = 'approved')`
+    ).first<{ s: number | null }>();
+    const balance = Number(balanceRow?.s ?? 0);
+    if (balance + finalAmount < 0) {
+      return Response.json(
+        {
+          error: `${garden ? '阳光' : '积分'}余额不足：当前 ${balance}，这次要扣 ${-finalAmount}`,
+        },
+        { status: 409 }
+      );
+    }
+  }
 
   const { startIso, endIso } = beijingDayBounds(now);
   if (rule?.dailyLimit !== undefined) {

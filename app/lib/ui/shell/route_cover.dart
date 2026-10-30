@@ -14,9 +14,20 @@ class RouteCoverState extends ChangeNotifier {
   /// 有弹窗压在页面上。
   bool get covered => _popups > 0;
 
+  late final NavigatorObserver _observer = _RouteCoverObserver(this);
+
   /// 注册给 `GoRouter(observers: [...])` 用。同一个状态可以反复取，
-  /// observer 本身不持有别的资源。
-  NavigatorObserver get observer => _RouteCoverObserver(this);
+  /// observer 本身不持有别的资源；这里只建一次，避免取两次叠两个 observer。
+  NavigatorObserver get observer => _observer;
+
+  /// 整树重建（[MaterialApp.router] 换 key）时 Navigator 里已有的 Route 会被
+  /// 直接丢弃，observer 收不到 didPop —— 计数会永远停在 >0，`covered` 常开，
+  /// 悬浮顶栏/底栏就再也不出现，只能重启 App。重建前手动清一次。
+  void reset() {
+    if (_popups == 0) return;
+    _popups = 0;
+    notifyListeners();
+  }
 
   void _pushed(Route<dynamic> route) {
     if (route is! PopupRoute) return;

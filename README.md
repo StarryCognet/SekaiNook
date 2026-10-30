@@ -78,7 +78,7 @@
 | 后端 | Cloudflare Pages Functions（文件即路由，`functions/api/`） |
 | 数据库 | Cloudflare D1（SQLite，绑定名 `DB`，database `sekainook`） |
 | 对象存储 | Cloudflare R2（绑定名 `STARRYMIKU_BUCKET`，bucket `starrymiku`） |
-| 部署 | **主域名 `sn.starrymiku.com` 跑 Flutter Web**：`npm run web:deploy`（手动推到 Pages 项目 `sekainook`；该项目 Git 自动构建已关）；React 版仍可用 `npm run deploy`（会覆盖 Flutter 产物）；`compatibility_date=2025-09-01` |
+| 部署 | **主域名 `sn.starrymiku.com` 跑 Flutter Web**：`npm run web:deploy`（手动推到 Pages 项目 `sekainook`；该项目 Git 自动构建已关）；React 版回滚用 `npm run deploy:legacy-react`（`npm run deploy` 已改成故意报错退出，防止误把 React 产物盖回去）；发版前后用 `npm run release:check` 核对两端版本号；`compatibility_date=2025-09-01` |
 
 > 后端已于提交 `4e6347c` 从 Supabase 迁移到 Cloudflare Pages Functions + D1 + R2，仓库中不再有任何 Supabase 依赖、配置或 SQL。
 >
@@ -87,7 +87,7 @@
 ## 🚀 快速开始
 
 ### 环境要求
-- Node.js 18+
+- Node.js 22.18+（`npm run changelog:sync` / `release:check` 等脚本直接 import TypeScript 源码，依赖 Node 原生 TS 擦除）
 - npm 9+
 - wrangler（devDependency，随 `npm install` 安装）
 
@@ -116,13 +116,17 @@ npm run preview
 npm run web:deploy
 
 # 切回 React 版（会覆盖 Flutter 产物；React 版仍完整保留在 src/ public/）
-npm run deploy
+# ⚠️ `npm run deploy` 已改为拒绝执行并提示，回滚只能用下面这个显式脚本
+npm run deploy:legacy-react
 
 # 线上数据库迁移
 npm run db:migrate:remote
 
 # 把版本日志同步到线上 D1（改完 src/config/changelog.ts 后跑；本地库用 changelog:sync:local）
 npm run changelog:sync
+
+# 发布前一致性检查（本地版本号 ↔ changelog.ts ↔ 线上网页版 / App 清单 / 版本日志）
+npm run release:check
 ```
 
 ### 环境变量与绑定
@@ -171,9 +175,9 @@ functions/api/            # 后端接口（文件路径即 URL 路径）
 functions/_lib/           # 后端共用模块（不下划线开头会被当成路由，所以放 _lib）
 functions/_lib/selftest/  # 自检清单与执行器（types / helpers / checks-core / checks-rules / checks-rest）
 migrations/               # D1 建表 SQL（编号递增，必须幂等；0002 给流水加 member 列，0003 建通知表，0004 建 settings 键值表，0005 建推送订阅表，0006 建版本日志表）
-public/_routes.json       # 声明 Functions 只接管 /api/*
-public/_redirects         # SPA 路由回退 /* → /index.html 200
-public/sw.js              # Service Worker（静态资源缓存 + Web Push 的 push / notificationclick 处理）
+public/_routes.json       # 声明 Functions 只接管 /api/*（React 版用；Flutter Web 部署实际生效的是 app/web/_routes.json，两份内容必须一致）
+public/_redirects         # SPA 路由回退 /* → /index.html 200（React 版用；Flutter 版对应 app/web/_redirects）
+public/sw.js              # React 版的 Service Worker；Flutter Web 用 app/web/sw.js（同一套 Web Push 的 push / notificationclick 处理）
 wrangler.jsonc            # D1 / R2 绑定与 Pages 构建配置（vars 里有 Web Push 的 VAPID 公钥）
 workers/reminder/         # 独立 cron Worker：每天 21:30 提醒还差几个任务（Pages 不支持 cron，只能另起）
 
@@ -298,14 +302,15 @@ src/
 
 1. **代理必须用 `127.0.0.1`**：Node 可能把 `localhost` 解析到 IPv6 `::1`，而 workerd 只监听 IPv4（表现为 500/502）
 2. **`build` 脚本必须先跑 `wrangler types`**：`worker-configuration.d.ts` 被 gitignore，CI 上不存在，不生成会导致 `tsc` 找不到 `Env` / `PagesFunction` 类型
-3. **`public/_routes.json` 必须保持 `include: ["/api/*"]`**：否则 `_redirects` 的 SPA 兜底会把接口请求吞成 HTML
-4. **不引入鉴权中间件 / 共享口令校验**：家庭内部简单 CRUD，接口默认公开，鉴权只在前端做
+3. **`app/web/_routes.json`（Flutter 部署生效的那份）必须保持 `include: ["/api/*"]`**：否则 `_redirects` 的 SPA 兜底会把接口请求吞成 HTML；`public/_routes.json` 是 React 版的对应文件，两份内容要保持一致
+4. **不引入鉴权中间件 / 会话体系**：家庭内部简单 CRUD，接口默认公开，身份与界面鉴权只在前端做。**例外（2026-10 安全修复）**：涉及「改钱 / 删钱 / 推送测试」的敏感写操作必须带 `x-admin-password` 头或 body `password`，由 `functions/_lib/admin_auth.ts` 的 `gateAdminPassword` 复用 `/api/admin` 的口令哈希校验；孩子对 `pending` 流水的提交 / 撤回免口令
 5. **`/api/images/*` 保持匿名**：`<img>` 无法携带请求头
 6. **改动绑定要同步三处**：`wrangler.jsonc`、Cloudflare Dashboard 的 Pages 绑定、函数内的 `interface Env`
 7. **绑定名固定**：D1 = `DB`，R2 = `STARRYMIKU_BUCKET`，不要改名
 8. **前端所有请求走 `src/api/http.ts`**，业务代码禁止裸写 `fetch`（`src/api/upload.ts` 是唯一例外：请求体是二进制图片）
 9. **组件禁止直接访问 D1/R2**，必须经 `src/api/` 封装
 10. **禁止引入依赖 `tslib` 的库（如 `echarts-for-react`）**：项目未安装 `tslib`，打包会留下未解析的 `import ... from "tslib"`，对应 chunk 在浏览器里直接加载失败；图表请用 `echarts/core` 自建容器组件（见 `src/components/BalanceTrend.tsx`）
+11. **App 更新清单域名常量在 `app/lib/config/app_constants.dart:30`（`UPDATE_MANIFEST_URL`，默认 `https://pub.starrymiku.com/sekainook/latest.json`）**：可用 `--dart-define=UPDATE_MANIFEST_URL=...` 覆盖 —— 换域名要常量默认值、R2 自定义域、发版脚本三处一起改
 
 ## 📄 License
 

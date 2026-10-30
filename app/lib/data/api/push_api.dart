@@ -24,12 +24,16 @@ class PushApi {
   ///
   /// [audience] 传 null 表示「给所有已订阅设备发」—— 这时**不带这个字段**
   /// （契约里没有 `all` 这个取值，缺省才是全部）。
-  Future<PushTestResult> sendTest({NotifyAudience? audience}) async {
+  /// [password] 是家长口令：服务端对该接口做了每小时节流，且要求家长身份才能发。
+  Future<PushTestResult> sendTest({NotifyAudience? audience, String? password}) async {
     final raw = await _api.postJson<Map<String, dynamic>>(
       testPath,
       data: <String, dynamic>{
         if (audience != null) 'audience': audience.wire,
       },
+      headers: password == null || password.isEmpty
+          ? null
+          : <String, dynamic>{'x-admin-password': password},
     );
     if (raw == null) throw const ApiException('测试通知没有返回内容', 0);
     return PushTestResult.fromJson(raw);

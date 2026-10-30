@@ -11,7 +11,7 @@ import 'tokens.dart';
 /// 组装成 ThemeData + palette 扩展，页面只读 palette，不再各写各的色值。
 ///
 /// 加新主题的步骤：① 下面 [AppTheme.all] 加一条 ② [ThemeId] 加一个枚举值。
-enum ThemeId { rose, brown, blue, yellow, grayblue, green, purple }
+enum ThemeId { rose, brown, blue, yellow, grayblue, green, purple, p5r }
 
 /// 一套主题的全部颜色。字段与 Web 版 `ThemePalette` 一一对应，不要改名。
 class AppPalette extends ThemeExtension<AppPalette> {
@@ -58,7 +58,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
 
   /// 三级文字：标签、单位、时间戳、空态提示。
   ///
-  /// **七套主题的值都按对比度校准过**（`test/palette_contrast_test.dart` 会拦）：
+  /// **八套主题的值都按对比度校准过**（`test/palette_contrast_test.dart` 会拦）：
   /// 卡片底 ≥ 4.5:1、页面底 ≥ 4.0:1。改色板时别再凭手感调淡 —— 出厂主题最初
   /// 给的 `#9CA3AF` 在白卡上只有 2.54:1，用户反馈的「字和底撞一起看不清」多半是它。
   final Color textTertiary;
@@ -217,6 +217,57 @@ class AppPalette extends ThemeExtension<AppPalette> {
     return pureBlack ? palette.toPureBlack() : palette;
   }
 
+  /// P5R 手工色板（不走 ColorScheme.fromSeed）。
+  ///
+  /// 取自游戏实机取样（`docs/p5-ui/p5r-ui-facts.md`）：底 `#0A0A0A`、
+  /// 主红 `#C41001`、亮红 `#E31500`、荧光红 `#FD1700`、亮黄 `#FED023`、
+  /// 白纸 `#FDFDFD`。深色 = 黑底红白（主场景），浅色 = 白纸黑字红块（菜单页）。
+  ///
+  /// 对比度按 `test/palette_contrast_test.dart` 的阈值配过：
+  /// 正文 ≥ 4.5、三级文字在卡底 ≥ 4.5 / 在页底 ≥ 4.0。
+  factory AppPalette.p5r({required bool dark}) {
+    if (dark) {
+      return const AppPalette(
+        primary: Color(0xFFC41001), // P5R 主红：白字压得住，不用亮一档的 E31500
+        primarySoft: Color(0xFFD81900), // 选中块（比主色亮一档）
+        success: Color(0xFF5ADE00), // P5R 荧光绿（菜单确认）
+        danger: Color(0xFFFD1700), // 荧光红
+        warning: Color(0xFFFED023), // P5R 亮黄
+        bg: Color(0xFF0A0A0A), // 舞台黑
+        surface: Color(0xFF141414), // 卡片：比页底亮一档，像贴上去的黑纸
+        surfaceSoft: Color(0xFF1E1E1E),
+        text: Color(0xFFFDFDFD), // 纯白
+        textSecondary: Color(0xFFC9C9C9),
+        textTertiary: Color(0xFF9A9A9A), // 卡底 6.6:1 / 页底 7.1:1
+        border: Color(0xFF2A2A2A), // 暗底上只用极淡的分隔线
+        sider: Color(0xFF080808),
+        siderSelected: Color(0xFFC41001),
+        segmentedSelected: Color(0xFF2B1A1A), // 暗红调，选中不刺眼
+        surfaceGlass: Color(0xD1141414),
+        surfaceSoftGlass: Color(0xB31E1E1E),
+      );
+    }
+    return const AppPalette(
+      primary: Color(0xFFC41001),
+      primarySoft: Color(0xFFFFD9D4), // 浅红底（选中块）
+      success: Color(0xFF0A9B4C),
+      danger: Color(0xFFD21001),
+      warning: Color(0xFFE0A800), // 浅底上的黄要压暗，否则白字/黄字都糊
+      bg: Color(0xFFF3F1EC), // 纸白（不是纯白，P5R 的纸有 grain）
+      surface: Color(0xFFFDFDFD), // 纯白卡
+      surfaceSoft: Color(0xFFE9E5DC),
+      text: Color(0xFF0D0A0A), // 近黑（纯黑太硬）
+      textSecondary: Color(0xFF4A4440),
+      textTertiary: Color(0xFF6B635C), // 卡底 5.8:1 / 页底 5.2:1
+      border: Color(0xFF2B2B2B), // 粗黑描边是 P5R 的招牌，分隔线也用它
+      sider: Color(0xFFF7F5F0),
+      siderSelected: Color(0xFFFFD9D4),
+      segmentedSelected: Color(0xFFE2DDD2),
+      surfaceGlass: Color(0xD1FDFDFD),
+      surfaceSoftGlass: Color(0xB3E9E5DC),
+    );
+  }
+
   /// 纯黑模式：只压「底」，不动「墨」。
   ///
   /// AMOLED 上纯黑像素不发光（省电、黑边更利落），但把文字和主色也一起压暗
@@ -321,6 +372,44 @@ class AppPalette extends ThemeExtension<AppPalette> {
 /// 一个主题预设 = 一个种子色。
 ///
 /// 色板不存了 —— 它由 [AppPalette.fromSeed] 现推，深色浅色各推一份。
+/// P5R 专属的「剪切纸片」造型开关。
+///
+/// 只在 [ThemeId.p5r] 下挂进 [ThemeData.extensions]；别的主题拿不到它，
+/// 组件照旧走超椭圆圆角。把「方角 / 2px 黑描边 / 无模糊硬投影」收在这里，
+/// 是为了让它们只有一个数据源 —— 改一处，全站 P5R 一起变。
+@immutable
+class P5rSkin extends ThemeExtension<P5rSkin> {
+  const P5rSkin({required this.dark});
+
+  final bool dark;
+
+  /// 纸片是切出来的，几乎不圆
+  static const double corner = 2;
+
+  /// 每个色块都有一道粗勾边
+  static const double edge = 2;
+
+  /// 浅色：白纸配黑勾边；深色：黑底配白勾边（黑边压在黑底上等于没有轮廓）。
+  Color get edgeColor => dark ? const Color(0xFFFDFDFD) : const Color(0xFF2B2B2B);
+
+  /// 影子不带模糊 —— 剪纸叠放投出来的是干净的一块。
+  /// 深色底上黑影子看不见，改用主红：黑 / 白 / 红三色就齐了。
+  List<BoxShadow> get hardShadow => <BoxShadow>[
+        BoxShadow(
+          color: dark ? const Color(0xFFC41001) : const Color(0xFF000000),
+          offset: const Offset(4, 4),
+          blurRadius: 0,
+        ),
+      ];
+
+  @override
+  P5rSkin copyWith({bool? dark}) => P5rSkin(dark: dark ?? this.dark);
+
+  @override
+  P5rSkin lerp(covariant P5rSkin? other, double t) =>
+      t < 0.5 || other == null ? this : other;
+}
+
 class AppThemePreset {
   const AppThemePreset({
     required this.id,
@@ -347,7 +436,7 @@ class AppThemePreset {
 /// 不是第七个主题。
 enum ThemeBrightness { light, dark, system }
 
-/// 七个种子色 —— 与 FlClash 的预设主色用的是同一套。
+/// 七个种子色 —— 与 FlClash 的预设主色用的是同一套（另加一套手写的 P5R）。
 ///
 /// 主题列表只存种子色，色板现推（[paletteOf]）；推导结果有缓存，
 /// `ColorScheme.fromSeed` 要跑一遍 HCT 量化，而主题 × 明暗一共就 14 种。
@@ -411,6 +500,14 @@ abstract final class AppTheme {
       description: '灰调紫，晚上看不刺眼',
       seed: Color(0xFF665390),
     ),
+    // P5R 不是「一个种子色推一整套」—— 它是手写色板（见 [AppPalette.p5r]）。
+    // seed 只用于 ThemeData 的 ColorScheme 兜底与设置页排序，不参与推导。
+    AppThemePreset(
+      id: ThemeId.p5r,
+      name: 'P5R 红黑',
+      description: '剪切纸片风：黑底、P5 红、白纸卡、亮黄',
+      seed: Color(0xFFC41001),
+    ),
   ];
 
   static AppThemePreset preset(ThemeId id) {
@@ -428,21 +525,33 @@ abstract final class AppTheme {
     required bool dark,
     bool pureBlack = false,
     Color? dynamicSeed,
-  }) =>
-      _palettes.putIfAbsent(
-        '${id.name}-$dark-$pureBlack-${dynamicSeed?.hashCode}',
-        () => AppPalette.fromSeed(
-          dynamicSeed ?? preset(id).seed,
-          dark: dark,
-          pureBlack: pureBlack,
-        ),
-      );
+  }) {
+    // P5R 不走种子推导：它要的是「黑底 + P5 红 + 白纸 + 亮黄」，
+    // 用 fromSeed 推出来的 Material 红会变成粉白底，完全没有那个味道。
+    // 跟随壁纸（dynamicSeed）对 P5R 也不生效 —— 它本身就是一套完整的美术取向。
+    if (id == ThemeId.p5r) {
+      return _palettes.putIfAbsent('p5r-$dark-$pureBlack', () {
+        final AppPalette base = AppPalette.p5r(dark: dark);
+        return pureBlack ? base.toPureBlack() : base;
+      });
+    }
+    return _palettes.putIfAbsent(
+      '${id.name}-$dark-$pureBlack-${dynamicSeed?.hashCode}',
+      () => AppPalette.fromSeed(
+        dynamicSeed ?? preset(id).seed,
+        dark: dark,
+        pureBlack: pureBlack,
+      ),
+    );
+  }
 
   /// 设置页色板卡的三块颜色（浅色版推导出的 底 / 卡片 / 主色）。
   /// 手写会和推导公式漂移，所以现算。
   static List<Color> swatchOf(ThemeId id) {
-    final AppPalette light = paletteOf(id, dark: false);
-    return <Color>[light.bg, light.surface, light.primary];
+    // P5R 的辨识度在深色侧（黑底红），所以它的色卡也用深色版；
+    // 其余主题继续用浅色版（白底、浅卡、主色）。
+    final AppPalette base = paletteOf(id, dark: id == ThemeId.p5r);
+    return <Color>[base.bg, base.surface, base.primary];
   }
 
   static ThemeData build(
@@ -455,6 +564,16 @@ abstract final class AppTheme {
   }) {
     final p = paletteOf(id, dark: dark, pureBlack: pureBlack, dynamicSeed: dynamicSeed);
     final Brightness brightness = dark ? Brightness.dark : Brightness.light;
+
+    // P5R 走「剪切纸片」造型：方角、2px 黑描边（见 [P5rSkin]）。
+    // 别的主题保持超椭圆圆角 + 1px 发丝边 —— 两套造型不要混。
+    final bool paper = id == ThemeId.p5r;
+    final BorderSide edge = paper
+        ? BorderSide(
+            color: dark ? const Color(0xFFFDFDFD) : p.border,
+            width: P5rSkin.edge,
+          )
+        : BorderSide(color: p.border);
 
     // 种子用**原始**种子色而不是 p.primary —— p.primary 本身就是推出来的，
     // 拿它当种子再推一次会把色相又挪一点（推两次 ≠ 推一次）。
@@ -512,7 +631,7 @@ abstract final class AppTheme {
     );
 
     return base.copyWith(
-      extensions: <ThemeExtension<dynamic>>[p],
+      extensions: <ThemeExtension<dynamic>>[p, if (paper) P5rSkin(dark: dark)],
       // 字号缩放走 MediaQuery.textScaler（见 app.dart 的 builder）：
       // 只乘文字、不乘尺寸，全站所有 `fontSize: AppFontSize.*` 的裸文字也一起生效。
       // 这里绝不能再用 `textTheme.apply(fontSizeFactor:)` —— 两套一起开会双倍放大，
@@ -530,32 +649,41 @@ abstract final class AppTheme {
         titleTextStyle: TextStyle(
           color: p.text,
           fontSize: AppFontSize.md,
-          fontWeight: FontWeight.w600,
+          fontWeight: paper ? FontWeight.w900 : FontWeight.w600,
+          // P5R 的标题是「加粗 + 斜切」：中文没有真斜体，Flutter 会合成倾斜，
+          // 在标题上反而正是那个味道（正文不要开，会糊）。
+          fontStyle: paper ? FontStyle.italic : FontStyle.normal,
         ),
       ),
       cardTheme: CardThemeData(
         color: p.cardColor(hasBackground: hasBackground),
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: AppShape.card(p.border),
+        shape: paper ? AppShape.all(P5rSkin.corner, side: edge) : AppShape.card(p.border),
       ),
       dividerTheme: DividerThemeData(color: p.border, thickness: 1, space: 1),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: p.cardColor(hasBackground: hasBackground),
         surfaceTintColor: Colors.transparent,
-        shape: AppShape.sheet(),
+        shape: paper ? AppShape.top(P5rSkin.corner, side: edge) : AppShape.sheet(),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: p.cardColor(hasBackground: hasBackground),
         surfaceTintColor: Colors.transparent,
-        shape: AppShape.dialog(),
+        shape: paper ? AppShape.all(P5rSkin.corner, side: edge) : AppShape.dialog(),
       ),
       // 输入框也走超椭圆：InputBorder 得自己实现（见 app_shape.dart 的 AppInputBorder）
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: p.softColor(hasBackground: hasBackground),
-        border: AppInputBorder(borderSide: BorderSide(color: p.border)),
-        enabledBorder: AppInputBorder(borderSide: BorderSide(color: p.border)),
+        border: AppInputBorder(
+          borderSide: edge,
+          borderRadius: BorderRadius.circular(paper ? P5rSkin.corner : AppRadius.md),
+        ),
+        enabledBorder: AppInputBorder(
+          borderSide: edge,
+          borderRadius: BorderRadius.circular(paper ? P5rSkin.corner : AppRadius.md),
+        ),
         focusedBorder: AppInputBorder(borderSide: BorderSide(color: p.primary, width: 1.5)),
         hintStyle: TextStyle(color: p.textTertiary),
       ),
@@ -578,8 +706,8 @@ abstract final class AppTheme {
         secondarySelectedColor: p.primarySoft,
         labelStyle: TextStyle(color: p.text, fontSize: AppFontSize.sm),
         secondaryLabelStyle: TextStyle(color: p.onSoft, fontSize: AppFontSize.sm),
-        side: BorderSide(color: p.border),
-        shape: AppShape.all(AppRadius.sm),
+        side: edge,
+        shape: AppShape.all(paper ? P5rSkin.corner : AppRadius.sm),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
@@ -591,8 +719,10 @@ abstract final class AppTheme {
             (states) =>
                 states.contains(WidgetState.selected) ? p.primarySoft : Colors.transparent,
           ),
-          side: WidgetStatePropertyAll(BorderSide(color: p.border)),
-          shape: WidgetStatePropertyAll<OutlinedBorder>(AppShape.all(AppRadius.sm)),
+          side: WidgetStatePropertyAll<BorderSide>(edge),
+          shape: WidgetStatePropertyAll<OutlinedBorder>(
+            AppShape.all(paper ? P5rSkin.corner : AppRadius.sm),
+          ),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -601,45 +731,45 @@ abstract final class AppTheme {
           foregroundColor: p.onPrimary,
           disabledBackgroundColor: p.softColor(hasBackground: hasBackground),
           disabledForegroundColor: p.textTertiary,
-          shape: AppShape.pill(),
+          shape: paper ? AppShape.all(P5rSkin.corner, side: edge) : AppShape.pill(),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: p.primary,
-          side: BorderSide(color: p.border),
-          shape: AppShape.pill(),
+          side: edge,
+          shape: paper ? AppShape.all(P5rSkin.corner, side: edge) : AppShape.pill(),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: p.primary,
-          shape: AppShape.pill(),
+          shape: paper ? AppShape.all(P5rSkin.corner, side: edge) : AppShape.pill(),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: p.primary,
         foregroundColor: p.onPrimary,
-        shape: AppShape.all(AppRadius.lg),
+        shape: paper ? AppShape.all(P5rSkin.corner, side: edge) : AppShape.all(AppRadius.lg),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: p.cardColor(hasBackground: hasBackground),
         textStyle: TextStyle(color: p.text, fontSize: AppFontSize.sm),
-        shape: AppShape.all(AppRadius.lg),
+        shape: paper ? AppShape.all(P5rSkin.corner, side: edge) : AppShape.all(AppRadius.lg),
       ),
       tooltipTheme: TooltipThemeData(
         decoration: ShapeDecoration(
           color: p.text,
-          shape: AppShape.all(AppRadius.sm),
+          shape: AppShape.all(paper ? P5rSkin.corner : AppRadius.sm),
         ),
         textStyle: TextStyle(color: p.bg, fontSize: AppFontSize.xs),
       ),
       listTileTheme: ListTileThemeData(textColor: p.text, iconColor: p.textSecondary),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: p.cardColor(hasBackground: hasBackground),
-        indicatorColor: p.primarySoft,
+        indicatorColor: paper ? p.primary : p.primarySoft,
         surfaceTintColor: Colors.transparent,
-        indicatorShape: AppShape.pill(),
+        indicatorShape: paper ? AppShape.all(P5rSkin.corner) : AppShape.pill(),
       ),
       tabBarTheme: TabBarThemeData(
         labelColor: p.primary,

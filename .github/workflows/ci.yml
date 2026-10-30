@@ -46,3 +46,16 @@ jobs:
       - name: 单元测试（跳过 live）
         working-directory: app
         run: flutter test --no-pub
+
+      # ---- 发布一致性三闸（报告 §9.4）：任何一闸红都说明「这次发出去会和另一端不一致」 ----
+      # ① 版本日志兜底文件必须与 src/config/changelog.ts 同步（两端共用一份日志）
+      # ② pubspec.yaml 的 version 必须等于 APP_VERSION（否则 APK 版本号与日志对不上）
+      - name: 版本一致性与版本日志
+        run: |
+          npm run changelog:fallback:check
+          npm run release:check -- --offline
+
+      # ③ 网页版必须能构建（含 version.json 的 built_at 注入）——
+      #    挡住「发版命令能跑、但 web:build 已经坏了」的半端发布
+      - name: 网页版构建
+        run: npm run web:build

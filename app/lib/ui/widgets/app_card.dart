@@ -52,7 +52,12 @@ class _AppCardState extends State<AppCard> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final hasBackground = context.select<ThemeState, bool>((state) => state.background.isNotEmpty);
-    final radius = widget.borderRadius ?? BorderRadius.circular(AppRadius.lg);
+    // P5R 的卡片是方角纸片（[P5rSkin]）；其它主题保持 lg 超椭圆圆角。
+    final P5rSkin? p5r = Theme.of(context).extension<P5rSkin>();
+    final radius =
+        widget.borderRadius ?? BorderRadius.circular(p5r == null ? AppRadius.lg : P5rSkin.corner);
+    final double edgeWidth = p5r == null ? 1 : P5rSkin.edge;
+    final Color edgeColor = p5r == null ? palette.border : p5r.edgeColor;
     final bool emphasize = widget.highlight || _pressed;
 
     final Color fill = widget.highlight
@@ -70,8 +75,8 @@ class _AppCardState extends State<AppCard> {
         shape: AppShape.of(
           radius,
           side: BorderSide(
-            color: emphasize ? palette.primary : palette.border,
-            width: widget.highlight ? 1.5 : 1,
+            color: emphasize ? palette.primary : edgeColor,
+            width: widget.highlight ? edgeWidth + 0.5 : edgeWidth,
           ),
         ),
       ),
@@ -80,27 +85,41 @@ class _AppCardState extends State<AppCard> {
 
     final bool tappable = widget.onTap != null || widget.onLongPress != null;
 
-    return Padding(
-      padding: widget.margin ?? EdgeInsets.zero,
-      child: Material(
-        color: fill,
-        shape: AppShape.of(radius),
-        // **不要裁剪**：按压缩放（[PressInkWell] 的 AnimatedScale）会把描边胀到
-        // 卡片边界之外几个像素，`Clip.antiAlias` 会把那一圈切掉 —— 表现出来就是
-        // 「按下时看不出描边转主色」。水波纹已在 `app_theme.dart` 里关掉
-        // （`NoSplash.splashFactory`），所以不需要靠这里裁 splash。
-        clipBehavior: Clip.none,
-        child: !tappable
-            ? inner
-            : PressInkWell(
-                onTap: widget.onTap,
-                onLongPress: widget.onLongPress,
-                borderRadius: radius,
-                onHighlightChanged: (bool value) => setState(() => _pressed = value),
-                child: inner,
-              ),
-      ),
+    final Widget card = Material(
+      color: fill,
+      shape: AppShape.of(radius),
+      // **不要裁剪**：按压缩放（[PressInkWell] 的 AnimatedScale）会把描边胀到
+      // 卡片边界之外几个像素，`Clip.antiAlias` 会把那一圈切掉 —— 表现出来就是
+      // 「按下时看不出描边转主色」。水波纹已在 `app_theme.dart` 里关掉
+      // （`NoSplash.splashFactory`），所以不需要靠这里裁 splash。
+      clipBehavior: Clip.none,
+      child: !tappable
+          ? inner
+          : PressInkWell(
+              onTap: widget.onTap,
+              onLongPress: widget.onLongPress,
+              borderRadius: radius,
+              onHighlightChanged: (bool value) => setState(() => _pressed = value),
+              child: inner,
+            ),
     );
+
+    // P5R：纸片是「叠」在底上的 —— 右下 4px 无模糊硬投影。阴影会画到卡片边界外，
+    // 所以留 4px 内边距，免得被外层 Column/ListView 裁掉。
+    final Widget body = p5r == null
+        ? card
+        : Padding(
+            padding: const EdgeInsets.only(right: 4, bottom: 4),
+            child: DecoratedBox(
+              decoration: ShapeDecoration(
+                shape: AppShape.of(radius),
+                shadows: p5r.hardShadow,
+              ),
+              child: card,
+            ),
+          );
+
+    return Padding(padding: widget.margin ?? EdgeInsets.zero, child: body);
   }
 }
 

@@ -217,7 +217,7 @@
 
 | # | 位置 | 问题 | 建议 |
 |---|---|---|---|
-| B-8 | `functions/_lib/settings.ts:194-206` | 管理员密码**明文**存 settings；读取失败回退 `DEFAULT_ADMIN_PASSWORD`（硬编码 `'3398377037'`）—— 这个值恰好就是 **Cloudflare 账号 ID**（也出现在 `wrangler.jsonc` 的 `REMINDER_URL` = `sekainook-reminder.3398377037.workers.dev` 里），可猜性极高；库短暂异常时等于退回这个公开口令 | 存哈希（SHA-256 + 盐）；读失败拒绝而非回退 |
+| B-8 | `functions/_lib/settings.ts:194-206` | 管理员密码**明文**存 settings；读取失败回退 `DEFAULT_ADMIN_PASSWORD`（硬编码的出厂口令，已移除）—— 该值与 **Cloudflare 账号 ID** 相同（也出现在 `wrangler.jsonc` 的 `REMINDER_URL` 子域里），可猜性极高；库短暂异常时等于退回这个公开口令 | 存哈希（SHA-256 + 盐）；读失败拒绝而非回退 |
 | B-9 | `functions/_lib/settings.ts:124-130` | `sanitizeBackground` 只判断字符串「包含」`/api/images/` —— `https://evil.example.com/api/images/x` 也能存成全局背景图，每个客户端打开都向第三方发请求（泄露 IP/UA） | `new URL` 解析后断言 origin 一致且 path 前缀正确 |
 | B-10 | `functions/api/ledger/[id].ts:62-65` | UPDATE 后不检查 `meta.changes` 就按「状态变了」发通知 —— 与并发 DELETE 竞争时仍回 `ok:true`，并推一条指向已删记录的通知 | `if (result.meta.changes === 0) return 404` |
 | B-11 | `functions/api/ledger/snapshot.ts:61-83` | `pendingCount` 取 `pending.length` 而 pending 查询带 LIMIT；两个 `SELECT *` 各回最多 500 整行且 records/pending 高度重叠 —— pending 超 limit 时红点偏小，轮询响应体可达数百 KB | pending 用独立 COUNT；列表只选必要列 |
@@ -448,7 +448,7 @@
 
 ### 13.3 数据安全与隐私（C 组）
 
-- **M-C-1（高）`functions/_lib/settings.ts:174` `DEFAULT_ADMIN_PASSWORD = '3398377037'` 是最终回退值** —— `readAdminPassword` 在 settings 表没有 `admin_password` 时回退到它，`admin/index.ts:154` 明文比较。线上若从没改过（很可能，因为默认值能用），任何人读公开仓库就知道口令，可改余额、审批、跑自检（自检能写库、发真通知）。这 10 位数字还与 `wrangler.jsonc` 里 `REMINDER_URL` 的子域一致。建议删回退值（无口令一律 503）+ 口令走 `ADMIN_PASSWORD` secret。
+- **M-C-1（高）`functions/_lib/settings.ts` 曾有 `DEFAULT_ADMIN_PASSWORD` 出厂口令回退值** —— `readAdminPassword` 在 settings 表没有 `admin_password` 时回退到它，`admin/index.ts` 明文比较。线上若从没改过（很可能，因为默认值能用），任何人读公开仓库就知道口令，可改余额、审批、跑自检（自检能写库、发真通知）。该数字还与 `wrangler.jsonc` 里 `REMINDER_URL` 的子域一致。**现已修复**：删回退值（无口令一律 503）+ 口令走 `ADMIN_PASSWORD` secret + 哈希存储。
 - **M-C-2（中）`settings.ts:171` 管理员口令明文存在与「公开称呼」同一张表** —— `admin_password` 与 `mom_call` / `background` 同居 `settings`，无可见性分区；一次 `d1 export` 或备份就把口令带走。建议单独表或存 hash+salt。
 - **M-C-3（中）`workers/reminder/src/index.ts:139` `/trigger` 接受 `?token=`** —— 令牌会进 Cloudflare 访问日志、浏览器历史、Referer。建议只收 `Authorization: Bearer`。
 - **M-C-4（中）`workers/reminder/src/index.ts:23-25` cron 把整个 `RunResult` 打进 console.log** —— 含 `sendDetail`（上游推送服务响应原文），而 ntfy 的 topic 本身就是访问凭证，上游错误体常回显它。建议只打 `sent/skipped/sendStatus/sendChannel`。

@@ -42,12 +42,18 @@ export interface ServerTaskRule {
    * 用途：开户礼金 / 日结算罚款这类「服务端自己生成」的记录，绝不能被客户端自己提交。
    */
   serverOnly?: boolean;
+  /**
+   * 一辈子只允许写一次（目前只有老余额迁移 garden_legacy）。
+   * 与 dailyLimit 的区别：dailyLimit 每天清零，跨天还能再搬一次；这条是客户端
+   * POST 成功一次之后就永久拒绝 —— 历史本机余额只该搬进来一次，否则每天都能白拿。
+   */
+  onceOnly?: boolean;
 }
 
 /**
  * 单次现金兑现的积分数上限（取绝对值）。
- * 家长把积分换成钱时可以只兑换一部分，金额由客户端带；这个数只兜住
- * 「客户端塞个大数把余额一下冲成大负数」，不是余额校验（余额校验在前端输入框上）。
+ * 家长把积分换成钱时可以只兑换一部分，金额由客户端带；这个数兜住「客户端塞个大数」，
+ * 真正的余额校验在服务端 `ledger/index.ts` 的负金额闸门（前端输入框只是体验层）。
  */
 export const PAYOUT_MAX_POINTS = 100000;
 
@@ -136,7 +142,8 @@ const FAMILY_TASK_RULES: Record<string, ServerTaskRule> = {
     // 契约 §2：自定义任务的名称由客户端带（账本里显示孩子真正做的那件事）
     clientName: true,
   },
-  // 积分兑换现金（家长把积分换成钱）。金额由客户端带（支持只兑换一部分），服务端只卡上限；
+  // 积分兑换现金（家长把积分换成钱）。金额由客户端带（支持只兑换一部分），服务端卡上限，
+  // 并且 ledger/index.ts 会对所有「即时到账的负金额」做余额校验 —— 不能只靠前端。
   // 前端按 100 积分 = 10 元折算，见 src/config/familyRules.ts 的 POINTS_PER_YUAN。
   // ⚠️ 回归修复：v1.30 的「未知 task_id 一律拒绝」把这条老任务一起挡掉了
   //    （前端点「结算兑现」必 403「未知任务，不能记账」），这里补登记。
@@ -158,8 +165,8 @@ export const GARDEN_LEGACY_MAX = 2000;
  * （唯一例外是标了 clientAmount 的历史余额迁移）。
  */
 const GARDEN_TASK_RULES: Record<string, ServerTaskRule> = {
-  // 一天可以背好几首，每首 10：没有日限
-  'garden:poem': { name: '背一首古诗', type: 'earning', value: 10, autoApprove: true },
+  // 一天可以背好几首（最多 10 首）：此前完全没有日限，等于公开的 +10 刷分口子。
+  'garden:poem': { name: '背一首古诗', type: 'earning', value: 10, dailyLimit: 10, autoApprove: true },
   // 下面这些是「每天做一次」的日常打卡：客户端只放一次，服务端必须同样卡住（否则能连点刷分）
   'garden:chinese': { name: '语文预习 15 分钟', type: 'earning', value: 15, dailyLimit: 1, autoApprove: true },
   'garden:math': { name: '数学预习 15 分钟', type: 'earning', value: 15, dailyLimit: 1, autoApprove: true },
@@ -171,17 +178,20 @@ const GARDEN_TASK_RULES: Record<string, ServerTaskRule> = {
   'garden:read_aloud': { name: '课文朗读', type: 'earning', value: 5, dailyLimit: 3, autoApprove: true },
   'garden:new_words': { name: '生字认读', type: 'earning', value: 5, dailyLimit: 2, autoApprove: true },
   'garden:write_words': { name: '生字书写', type: 'earning', value: 10, dailyLimit: 1, autoApprove: true },
-  // 历史余额迁移（老版本把阳光记在本机 localStorage 里）：一次性搬进账本。
+  // 历史余额迁移（老版本把阳光记在本机 localStorage 里）：一辈子只搬一次。
   // 金额由客户端传（server 端 value 只是兜底 0），但服务端卡 [0, GARDEN_LEGACY_MAX]，防止被塞大数。
+  // onceOnly：不能只靠 dailyLimit —— 那个每天清零，跨天就能再搬一次 2000。
   'garden_legacy': {
     name: '花园阳光迁移',
     type: 'earning',
     value: 0,
-    dailyLimit: 1,
+    onceOnly: true,
     autoApprove: true,
     clientAmount: { min: 0, max: GARDEN_LEGACY_MAX },
   },
 
+  // 商城 6 项：即时扣阳光。金额固定由服务端定，客户端改不动；余额不足由
+  // ledger/index.ts 的负金额闸门拒绝（此前可以把阳光扣成负数）。
   'garden_shop:avatar_sun': { name: '阳光头像框', type: 'spending', value: -60, autoApprove: true },
   'garden_shop:avatar_star': { name: '星星头像框', type: 'spending', value: -80, autoApprove: true },
   'garden_shop:title_poet': { name: '称号・小诗人', type: 'spending', value: -100, autoApprove: true },

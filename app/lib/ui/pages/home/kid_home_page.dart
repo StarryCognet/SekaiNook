@@ -459,10 +459,11 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
   /// 打开打卡弹窗（拍照 / 备注 → 压缩 → 上传 → 记账）。
   ///
   /// 「我的任务」与上面的快捷按钮都走这里。`custom` 传进来表示这次打卡来自
-  /// 一条本地任务：妈妈加的 / 两条预置任务即时到账，我自己加的要等妈妈批；
+  /// 一条本地任务；不论任务是谁加的，孩子提交后**一律进待审批**，由妈妈点通过。
   /// 提交成功后还要把它标成「今天做过」。
   Future<void> _openCheckInSheet(TaskConfig task, {CustomTask? custom}) async {
-    // 妈妈加的任务与预置任务走即时到账（与以前 `_checkInMyTask` 的判据一致）
+    // 妈妈加的任务与我现在自己加的一样：提交后进待审批（服务端 PATCH 审批要家长口令，
+    // 孩子设备没有口令 —— 客户端再自报 autoApprove 只会换来一次 401）。
     final bool isParent = custom?.createdBy == TaskCreator.parent;
     final bool? submitted = await showAppSheet<bool>(
       context: context,
@@ -477,7 +478,6 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
                   submittedTask,
                   note: note,
                   imageUrl: imageUrl,
-                  autoApprove: isParent,
                 ),
       ),
     );
@@ -496,10 +496,7 @@ class _KidHomePageState extends State<KidHomePage> with WidgetsBindingObserver {
     }
     if (!mounted) return;
     final String momName = context.read<SettingsState>().momName;
-    _toast(
-      isParent ? '「${task.name}」打卡成功' : '「${task.name}」已提交，等$momName审批',
-      success: true,
-    );
+    _toast('「${task.name}」已提交，等$momName审批', success: true);
   }
 
   // ---- 派生值 ----
@@ -2317,6 +2314,8 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                     children: <Widget>[
                       Image.memory(
                         _photo!,
+                        // 打卡照片常常是相机原图：按显示宽度解码（审计 U-2）
+                        cacheWidth: 1080,
                         width: double.infinity,
                         height: AppSpacing.xl * 4,
                         fit: BoxFit.cover,

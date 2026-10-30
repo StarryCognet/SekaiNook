@@ -162,6 +162,8 @@ class LocalNotifyState extends ChangeNotifier {
 
   Future<void> disable() async {
     _enabled = false;
+    // 队列里还挂着一轮待重排也一并作废：否则关闭后它还会把通知排回来（审计 S-1）。
+    _rescheduleNext = null;
     _nextFire.clear();
     _scheduledText.clear();
     await _prefs.setBool(AppConstants.keyLocalNotifyEnabled, false);
@@ -382,14 +384,22 @@ class LocalNotifyState extends ChangeNotifier {
   ///
   /// 先 [NotificationSink.cancelAll] 再逐条排 —— 提醒项被删/被改时间以后，
   /// 上一次排的通知必须撤掉，否则会「改了时间还在老时间响」。
+  ///
+  /// S-1：整个流程里有多个 await（cancelAll / schedule），用户随时可能点「关闭」。
+  /// 旧实现只在入口看一次 `_enabled`，关掉开关后仍在飞行中的这一轮会继续把通知
+  /// 排回去（`disable()` 的 cancelAll 先执行、这轮的 schedule 后执行，最后通知还在）。
+  /// 所以这里每个 await 之后都复查 `_enabled`，中途关闭就再撤一次并丢弃半截状态。
   Future<void> _doReschedule(List<LedgerRecord> records, {DateTime? now}) async {
     _lastRecords = records;
     if (!supported) return;
 
-    _nextFire.clear();
-    _scheduledText.clear();
+    // 先攒在局部，整轮排完再一次性写回，中途失败/关闭不会留下半截 _nextFire。
+    final Map<String, DateTime> nextFire = <String, DateTime>{};
+    final Map<String, String> scheduledText = <String, String>{};
 
     if (!_enabled) {
+      _nextFire.clear();
+      _scheduledText.clear();
       notifyListeners();
       return;
     }
@@ -399,8 +409,23 @@ class LocalNotifyState extends ChangeNotifier {
     final vars = templateVars(completion);
 
     await _sink.cancelAll();
+    if (!_enabled) {
+      // 用户在这条 await 期间关了开关：撤掉刚排的一切并放弃本轮。
+      await _sink.cancelAll();
+      _nextFire.clear();
+      _scheduledText.clear();
+      notifyListeners();
+      return;
+    }
+
+    var cancelled = false;
 
     for (final reminder in activeReminders) {
+      if (!_enabled) {
+        cancelled = true;
+        break;
+      }
+
       final when = nextFireTimeFor(reminder, now: ref, completion: completion);
       if (when == null) {
         // 只提醒一次且已经过了 —— 自动关掉，免得留个永远不响的开关
@@ -423,9 +448,30 @@ class LocalNotifyState extends ChangeNotifier {
         exact: _exactMode,
       );
 
-      _nextFire[reminder.id] = when;
-      _scheduledText[reminder.id] = body.isEmpty ? title : '$title\n$body';
+      if (!_enabled) {
+        // schedule 期间被关闭：这一条已经排上去了，得再撤一次。
+        cancelled = true;
+        break;
+      }
+
+      nextFire[reminder.id] = when;
+      scheduledText[reminder.id] = body.isEmpty ? title : '$title\n$body';
     }
+
+    if (cancelled) {
+      await _sink.cancelAll();
+      _nextFire.clear();
+      _scheduledText.clear();
+      notifyListeners();
+      return;
+    }
+
+    _nextFire
+      ..clear()
+      ..addAll(nextFire);
+    _scheduledText
+      ..clear()
+      ..addAll(scheduledText);
 
     await _persist();
     final earliest = nextFireAt;

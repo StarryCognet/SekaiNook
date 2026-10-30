@@ -25,6 +25,7 @@ import 'theme/motion.dart';
 import 'ui/shell/main_shell.dart';
 import 'ui/shell/route_cover.dart';
 import 'ui/widgets/app_background.dart';
+import 'ui/widgets/p5r_texture.dart';
 
 /// 应用根（对应 Web 版 `src/App.tsx`）。
 ///
@@ -116,6 +117,9 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
 
   void _handleReload() {
     if (!mounted) return;
+    // 整树重建会丢弃 Navigator 里的弹窗，observer 收不到 didPop，
+    // 弹窗计数会卡住让顶栏/底栏永久退场（U-2）—— 重建前清一次。
+    _routeCover.reset();
     setState(() => _generation += 1);
   }
 
@@ -238,6 +242,8 @@ class _SekaiNookAppState extends State<SekaiNookApp> {
                         url: theme.background,
                         veil: context.palette.bgVeil,
                       ),
+                    // P5R 的印刷网点：非 P5R 主题时是空壳，不影响其它主题。
+                    const P5rTexture(),
                     LiquidGlassHost(
                       enabled: glass,
                       child: LiquidGlassScope(

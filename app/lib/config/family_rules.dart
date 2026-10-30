@@ -18,6 +18,14 @@ class WeeklyPlanTemplate {
 /// 这张表是**前端本地规则**：任务清单、分值、日限、时间窗都在这里，
 /// 后端不校验这些。所以改分值 = 改这里一处就够，但日限的拦截责任也在客户端。
 abstract final class FamilyRules {
+  /// 日结算截止时刻（东八区 22:00）—— 与服务端 `SLEEP_DEADLINE`、罚款任务名
+  /// 「未按时作息(晚于22:00)」同一个口径。所有「还差多久到 22:00」的 UI 都读这里，
+  /// 别在页面里写死 `22 * 60`（报告 U-3/P2）。
+  static const int settleHour = 22;
+
+  /// 截止时刻距当天零点的分钟数（22:00 → 1320）
+  static const int settleMinutes = settleHour * 60;
+
   /// 固定任务表。顺序 = 同组内的渲染顺序（任务区按 [TaskGroup] 分组渲染）。
   ///
   /// 三组的分工（v2.10 起）：

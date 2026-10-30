@@ -168,6 +168,7 @@ class LedgerApi {
     String? imageUrl,
     String? requestId,
     bool autoApprove = false,
+    String? password,
   }) async {
     final id = requestId ?? createRequestId();
     final result = await postLedgerRecord(
@@ -181,7 +182,7 @@ class LedgerApi {
     );
     if (autoApprove && result.id.isNotEmpty) {
       try {
-        await updateStatus(result.id, LedgerStatus.approved);
+        await updateStatus(result.id, LedgerStatus.approved, password: password);
       } catch (_) {
         // 不能吞：账已经记上了，调用方若照常报「余额清零」就是在骗人
         throw LedgerApprovalException(result.id);
@@ -191,29 +192,51 @@ class LedgerApi {
   }
 
   /// 修改某条流水的审批状态（reason 只在驳回时有意义，会带给孩子看）
-  Future<void> updateStatus(String id, LedgerStatus status, {String? reason}) async {
+  ///
+  /// [password] 是家长口令（服务端校验，见 `functions/api/ledger/[id].ts`）。
+  /// 走 `x-admin-password` 头而不是塞进 body：DELETE 没有 body，两种方法统一口径。
+  Future<void> updateStatus(
+    String id,
+    LedgerStatus status, {
+    String? reason,
+    String? password,
+  }) async {
     await _client.patchJson<dynamic>(
       '/api/ledger/${Uri.encodeComponent(id)}',
       data: <String, dynamic>{
         'status': status.wire,
         if (reason != null && reason.isNotEmpty) 'reason': reason,
       },
+      headers: _adminHeaders(password),
     );
   }
 
   /// 审批通过
-  Future<void> approveRequest(String id) => updateStatus(id, LedgerStatus.approved);
+  Future<void> approveRequest(String id, {String? password}) =>
+      updateStatus(id, LedgerStatus.approved, password: password);
 
   /// 审批驳回，可附一句给女儿的话
-  Future<void> rejectRequest(String id, {String? reason}) =>
-      updateStatus(id, LedgerStatus.rejected, reason: reason);
+  Future<void> rejectRequest(String id, {String? reason, String? password}) =>
+      updateStatus(id, LedgerStatus.rejected, reason: reason, password: password);
 
-  /// 驳回后重新提交：状态置回 pending
+  /// 驳回后重新提交：状态置回 pending（孩子端用，服务端免口令）
   Future<void> resubmitRequest(String id) => updateStatus(id, LedgerStatus.pending);
 
   /// 删除一条流水（仅家长）；若含图片，后端会一并删除 R2 中的图片
-  Future<void> deleteLedgerRecord(String id) async {
-    await _client.deleteJson<dynamic>('/api/ledger/${Uri.encodeComponent(id)}');
+  ///
+  /// 删除「待审批」记录（孩子撤回自己的申请）服务端免口令；
+  /// 删除已入账 / 已驳回的历史流水必须家长口令。
+  Future<void> deleteLedgerRecord(String id, {String? password}) async {
+    await _client.deleteJson<dynamic>(
+      '/api/ledger/${Uri.encodeComponent(id)}',
+      headers: _adminHeaders(password),
+    );
+  }
+
+  /// 家长口令 → 请求头；空值 = 不带（孩子端撤回 / 重新提交走这条路）
+  static Map<String, dynamic>? _adminHeaders(String? password) {
+    if (password == null || password.isEmpty) return null;
+    return <String, dynamic>{'x-admin-password': password};
   }
 
   /// 计算家庭已入账积分：仅统计无状态（存量）或已审批的记录，且**不含花园阳光**

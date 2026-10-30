@@ -96,15 +96,19 @@ class ApiClient {
   }
 
   /// POST 并解码 JSON。默认**不**重试。
+  ///
+  /// [headers] 用于需要额外鉴权信息的写请求（如管理员口令 `x-admin-password`）。
   Future<T?> postJson<T>(
     String path, {
     Object? data,
     bool retry = false,
+    Map<String, dynamic>? headers,
   }) async {
     final raw = await _send(
       path,
       method: 'POST',
       data: data,
+      headers: headers,
       retries: retry ? maxRetriesWrite : 0,
     );
     return _cast<T>(raw, path);
@@ -115,21 +119,30 @@ class ApiClient {
     String path, {
     Object? data,
     bool retry = false,
+    Map<String, dynamic>? headers,
   }) async {
     final raw = await _send(
       path,
       method: 'PATCH',
       data: data,
+      headers: headers,
       retries: retry ? maxRetriesWrite : 0,
     );
     return _cast<T>(raw, path);
   }
 
   /// DELETE 并解码 JSON。默认**不**重试。
-  Future<T?> deleteJson<T>(String path, {bool retry = false}) async {
+  ///
+  /// DELETE 没有 body，鉴权信息只能走 [headers]（如 `x-admin-password`）。
+  Future<T?> deleteJson<T>(
+    String path, {
+    bool retry = false,
+    Map<String, dynamic>? headers,
+  }) async {
     final raw = await _send(
       path,
       method: 'DELETE',
+      headers: headers,
       retries: retry ? maxRetriesWrite : 0,
     );
     return _cast<T>(raw, path);

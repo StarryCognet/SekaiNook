@@ -20,6 +20,9 @@ param(
     # 打通用包（三种 ABI 都在里面，约 60MB）。默认只装 arm64 那一份，约 22MB。
     [switch]$Universal,
 
+    # 跳过「线上版本日志版本号一致」检查（只在救急回滚、日志确实来不及同步时用）
+    [switch]$SkipChangelogCheck,
+
     [string]$Bucket = 'flclash-updates',
     [string]$Prefix = 'sekainook',
     [string]$PublicBaseUrl = 'https://pub.starrymiku.com'
@@ -140,13 +143,32 @@ if ($apksigner) {
 # ---- 版本递增闸门（R-1）----
 # versionCode 不递增 = 手机上「检查更新」永远认为已是最新，新包静默不生效。
 # 2026-10 就踩过一次：改了代码、忘了改 pubspec 的 +N，家里人手机上毫无变化。
+#
+# 读清单必须直连且 fail-closed：
+#   * 本机常年开着 HTTP_PROXY=127.0.0.1:7890，走代理读公网清单会超时；
+#   * Windows PowerShell 5.1 没有 `Invoke-RestMethod -NoProxy`（那是 PS 7 的参数），
+#     传了会直接报参数错误，被 catch 吃掉 → 闸门静默失效、照样发版（2026-10-25 实测）。
+# 所以改用 WebClient 且 Proxy=$null；除「清单 404（首次发布）」外，读不到就中止发布。
 $previous = $null
 try {
-    # -NoProxy：本机常年开着 127.0.0.1:7890 代理，走代理读清单会 20s 超时，
-    # 闸门就静默失效了（2026-10-25 实测踩到）。发版脚本读自己的公共域名一律直连。
-    $previous = Invoke-RestMethod -Uri "$PublicBaseUrl/$Prefix/latest.json" -TimeoutSec 20 -NoProxy -ErrorAction Stop
+    $webClient = New-Object System.Net.WebClient
+    $webClient.Proxy = $null  # 直连
+    try {
+        $rawManifest = $webClient.DownloadString("$PublicBaseUrl/$Prefix/latest.json")
+        $previous = $rawManifest | ConvertFrom-Json
+    } finally {
+        $webClient.Dispose()
+    }
+} catch [System.Net.WebException] {
+    $statusCode = $null
+    if ($_.Exception.Response) { $statusCode = [int]$_.Exception.Response.StatusCode }
+    if ($statusCode -eq 404) {
+        Write-Warning "线上还没有清单（首次发布？）—— 跳过 versionCode 递增检查"
+    } else {
+        throw "读不到线上清单（HTTP $statusCode / $($_.Exception.Message)）—— 版本递增闸门失效，不能发。确认网络后再试"
+    }
 } catch {
-    Write-Warning "读不到线上清单（$($_.Exception.Message)）—— 本次跳过 versionCode 递增检查，发布后请手动核对线上 latest.json 的 versionCode"
+    throw "读不到线上清单（$($_.Exception.Message)）—— 版本递增闸门失效，不能发。确认网络后再试"
 }
 if ($previous -and $null -ne $previous.versionCode) {
     $prevCode = [int]$previous.versionCode
@@ -154,6 +176,29 @@ if ($previous -and $null -ne $previous.versionCode) {
         throw "versionCode 没有递增（线上 $prevCode，本包 $($main.VersionCode)）。把 app/pubspec.yaml 的 version 后面 +N 改大再重打 —— 否则手机上不会收到这次更新"
     }
     Write-Host "[version] $($previous.versionName)($prevCode) → $($main.VersionName)($($main.VersionCode))" -ForegroundColor Green
+}
+
+# ---- 版本日志闸门（R-3）----
+# 只发 APK 不同步 D1 版本日志时，更新弹窗里是新包、日志却还停在旧版本。
+# 先 sync 再发是铁律；这里用线上 /api/changelog 的最新版本号兜底断言。
+if (-not $SkipChangelogCheck) {
+    $remoteChangelogVersion = $null
+    try {
+        $webClient = New-Object System.Net.WebClient
+        $webClient.Proxy = $null
+        try {
+            $remoteChangelog = $webClient.DownloadString('https://sn.starrymiku.com/api/changelog') | ConvertFrom-Json
+            $remoteChangelogVersion = $remoteChangelog.version
+        } finally {
+            $webClient.Dispose()
+        }
+    } catch {
+        throw "读不到线上版本日志 /api/changelog（$($_.Exception.Message)）—— 先 npm run changelog:sync 再发版；确实要跳过请加 -SkipChangelogCheck"
+    }
+    if ($remoteChangelogVersion -ne $main.VersionName) {
+        throw "线上版本日志是 $remoteChangelogVersion，本包是 $($main.VersionName) —— 先改 src/config/changelog.ts 并 npm run changelog:sync 再发版（接口缓存 5 分钟，刚同步可等一会重试）；确实要跳过请加 -SkipChangelogCheck"
+    }
+    Write-Host "[changelog] 线上版本日志已是 $remoteChangelogVersion，与本包一致" -ForegroundColor Green
 }
 
 # 文件名带上内容指纹（sha256 前 8 位）：

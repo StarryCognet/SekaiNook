@@ -337,7 +337,7 @@ finalStatus = rule.autoApprove ? 'approved' : 'pending'
 | `MAX_NAME_LENGTH`（称呼） | `12` | `_lib/settings.ts:39` |
 | `MAX_BACKGROUND_LENGTH` | `400` | `_lib/settings.ts:121` |
 | `MIN/MAX_ADMIN_PASSWORD_LENGTH` | `4` / `32` | `_lib/settings.ts:177-178` |
-| `DEFAULT_ADMIN_PASSWORD` | `'3398377037'` | `_lib/settings.ts:174` |
+| `ADMIN_PASSWORD` | （secret，无代码默认值） | 仅**首次初始化**管理员口令时使用；已无出厂口令 |
 | `ADMIN_MAX_ATTEMPTS` / `ADMIN_LOCK_MS` | `5` / `300000`（5 分钟） | `_lib/settings.ts:233-236` |
 | `MAX_ADJUST_ABS` | `1000000` | `admin/index.ts:47` |
 | `ADMIN_ADJUSTMENT_LIMIT` | `20` | `admin/index.ts:50` |
@@ -889,7 +889,7 @@ WHERE (status IS NULL OR status = 'approved')
 
 1. body 必须是 JSON 对象 → 400 `请求体不是合法 JSON` / `请求体必须是对象`
 2. 读锁定状态；`lockRemainingMs > 0` → **429**（**连正确密码也拒绝**，根本不比较密码）
-3. 读当前密码（失败时回退出厂密码，见 15.5）
+3. 校验密码：`verifyAdminPassword` 返回 `ok` / `bad` / `unconfigured`（库里没哈希且没配 `ADMIN_PASSWORD` secret → 503，见 15.5）
 4. `!password || password !== stored` → 记一次失败：
    - 本次失败后达到 5 次 → **429** `密码错误次数太多，请等 ${seconds} 秒后再试` + `lockRemainingMs`
    - 否则 → **401** `管理员密码不对，还可以试 ${attemptsLeft} 次` + `attemptsLeft`
@@ -922,24 +922,26 @@ WHERE (status IS NULL OR status = 'approved')
 | 400 | `action='adjust'` 且有 `family` 键但值非法（非 number/非有限/`|round| > 1000000`） | `{"error":"家庭积分需要是 ±1000000 之间的整数"}` |
 | 400 | 同上，`sun` 键 | `{"error":"花园阳光需要是 ±1000000 之间的整数"}` |
 | 400 | `action='adjust'` 但 `family`/`sun` 两个键都没带 | `{"error":"没有要修改的积分"}` |
-| 503 | 读密码抛错 | `{"error":"设置表尚未就绪，请先执行数据库迁移"}`（**实际不可达**，见 15.5） |
+| 503 | 口令未配置（库里没哈希、也没配 `ADMIN_PASSWORD` secret） | `{"error":"管理员口令还没配置：请给 Pages 项目加 ADMIN_PASSWORD 环境变量（secret）后重试"}` |
 | 500 | action 处理过程中任意异常 | `{"error":"操作失败，请重试"}` |
 
 ⚠️ `adjust` 的键存在性用 `'family' in body`：**省略该键 = 不改这本账**；显式传 `null` / 非数字 = 400。传 `0` 是合法目标值（会把余额改成 0）。
 
-### 15.5 出厂密码与锁定策略
+### 15.5 管理员口令策略（哈希 + 无出厂口令）
 
 | 项 | 值 / 行为 |
 |---|---|
-| 出厂密码 | `3398377037`（`DEFAULT_ADMIN_PASSWORD`），存在 `settings.admin_password` 里；没设过就用它 |
-| 密码长度 | 4–32（自己改时）。出厂那串 10 位 |
+| 存储 | 只存 `sha256:<64 位 hex>`，键 `settings.admin_password_hash`（固定盐 `sekainook-admin:`，迁移勿改） |
+| 初始口令 | 由 Cloudflare Pages 项目的 `ADMIN_PASSWORD` **secret** 提供，第一次校验成功时写进库；之后以库为准 |
+| 旧明文键 | `settings.admin_password`（旧版）：读到就升级成哈希并删除（一次性迁移） |
+| 出厂口令 | **已彻底删除**，代码里没有任何默认值；库与 secret 都没有 → 全站 503 |
+| 密码长度 | 4–32 位 |
 | 试错节流 | 连续错 **5** 次 → 锁 **5 分钟**（`ADMIN_LOCK_MS = 300000`） |
 | 锁定期内 | 任何请求（含正确密码）一律 429，不比较密码 |
 | 锁定触发时 | `admin_fail_count` 归 **0**、`admin_lock_until = now + 300000` ⇒ 解锁后重新获得 5 次机会 |
 | 成功一次 | 清空 `admin_fail_count` 与 `admin_lock_until` 两行 |
 | 状态存放 | 同 `settings` 表，键 `admin_fail_count`（字符串十进制整数）/ `admin_lock_until`（毫秒时间戳字符串） |
-| 表不可用 | `readAdminLock` / `readAdminPassword` 内部吞异常 ⇒ 当作"没锁 + 出厂密码"（不能因为库的问题把人锁在门外） |
-| `503` 路径说明 | `readAdminPassword` 自带 try/catch 并回退出厂密码，所以外层那个 `503` 分支**实际上不可达**【未确认】；但 `action='password'` 时 `writeAdminPassword` 会抛 ⇒ 外层 catch → **500 `操作失败，请重试`** |
+| 表不可用 | `readAdminLock` 内部吞异常 ⇒ 当作"没锁"；口令校验抛错会落到外层 catch → **500 `操作失败，请重试`** |
 
 ### 15.6 adjust 的差额记账语义（重要）
 
@@ -1289,7 +1291,7 @@ delta !== 0 → INSERT 一条 approved 流水：
 
 ### 20.11 管理员
 
-- [ ] `POST /api/admin {"action":"verify","password":"3398377037"}` → 200 `{family,sun}`。
+- [ ] `POST /api/admin {"action":"verify","password":"<你的管理员口令>"}` → 200 `{family,sun}`。
 - [ ] 未知 action（如 `{"action":"nope","password":"正确"}`）→ 200（静默按 verify）⇒ 客户端自己枚举。
 - [ ] `{"action":"adjust","password":"正确","family":500}` → 200 `{family:500,sun,changed:["家庭积分 X → 500"]}`，账本多一条 `admin_adjust` 的 `管理员调整`。
 - [ ] 重复提交相同 `family:500` → 200，**不新增**流水。

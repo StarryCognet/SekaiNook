@@ -32,6 +32,7 @@ import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
 import '../../../theme/tokens.dart';
+import '../../widgets/admin_password_prompt.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/format.dart';
 import '../../widgets/motion_widgets.dart';
@@ -734,9 +735,17 @@ class _SettingsPageState extends State<SettingsPage> {
       danger: true,
     );
     if (!ok || !mounted) return;
+    // 撤销调整会走 DELETE /api/ledger/{id}（非 pending 记录服务端要口令）；
+    // 设置页本身就有解锁过的口令，优先复用，没有再弹一次。
+    final String? password = _adminPassword ??
+        await promptAdminPassword(
+          context,
+          description: '撤销调整会删掉这条流水，需要家长口令',
+        );
+    if (password == null || password.isEmpty || !mounted) return;
     setState(() => _revokingId = item.id);
     try {
-      await family.removeRecord(item.id);
+      await family.removeRecord(item.id, password: password);
       await _refreshAdjustments();
       if (!mounted) return;
       _toast('已撤销，余额回到改之前');
@@ -1175,10 +1184,10 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              const _CardHead(
+              _CardHead(
                 title: '主题',
                 description:
-                    '七种颜色，每种只要一个种子色 —— 整套色板由 Material You 推出来。只改这台手机，另一台自己选',
+                    '七套由种子色推导（Material You），另加一套手写的 P5R 红黑。只改这台手机，另一台自己选',
               ),
               const SizedBox(height: AppSpacing.md),
               Wrap(
@@ -1296,42 +1305,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     width: 48,
                     child: Text(
                       '${(theme.textScale * 100).round()}%',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        fontSize: AppFontSize.sm,
-                        fontWeight: FontWeight.w600,
-                        color: palette.text,
-                        fontFeatures: kTabularNumbers,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              const _CardHead(
-                title: '底栏不透明度',
-                description:
-                    '底部那颗胶囊。调低一点能看见从它后面滚过去的内容；默认不透明，觉得字看不清就调回 100%',
-              ),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Slider(
-                      value: theme.navBarOpacity,
-                      min: ThemeState.navOpacityMin,
-                      max: ThemeState.navOpacityOpaque,
-                      divisions: 10,
-                      // 读屏念出来是「80%」而不是「0.8」
-                      semanticFormatterCallback: (double value) => '${(value * 100).round()}%',
-                      // 拖动时只改内存（每帧都会回调），松手才落盘
-                      onChanged: theme.previewNavBarOpacity,
-                      onChangeEnd: theme.setNavBarOpacity,
-                    ),
-                  ),
-                  SizedBox(
-                    width: 48,
-                    child: Text(
-                      '${(theme.navBarOpacity * 100).round()}%',
                       textAlign: TextAlign.right,
                       style: TextStyle(
                         fontSize: AppFontSize.sm,

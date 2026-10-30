@@ -23,7 +23,6 @@ class ThemeState extends ChangeNotifier {
         _api = settingsApi {
     _themeId = _loadThemeId();
     _brightness = _loadBrightness();
-    _navOpacity = _loadNavOpacity();
   }
 
   final SharedPreferences _prefs;
@@ -48,50 +47,6 @@ class ThemeState extends ChangeNotifier {
   String get background => _background;
 
   bool get hasBackground => _background.isNotEmpty;
-
-  // ---- 底栏胶囊的不透明度 ----
-
-  /// 完全不透明 —— 出厂默认
-  static const double navOpacityOpaque = 1;
-
-  /// 下限。再低胶囊几乎看不见，图标与文字会失去底色衬托，对比度掉得厉害。
-  static const double navOpacityMin = 0.5;
-
-  double _navOpacity = navOpacityOpaque;
-
-  /// 底部悬浮胶囊的不透明度：1.0 = 实心（默认），越小越能透出从底下滚过的内容。
-  ///
-  /// **存本机**：这是「这台设备看起来怎么样」的偏好，与主题同类，不跨设备同步。
-  double get navBarOpacity => _navOpacity;
-
-  double _loadNavOpacity() {
-    final raw = _prefs.getDouble(AppConstants.keyNavBarOpacity);
-    // 没写过这个键 = 没调过 = 出厂的不透明；脏值一律夹回合法区间
-    if (raw == null) return navOpacityOpaque;
-    return raw.clamp(navOpacityMin, navOpacityOpaque).toDouble();
-  }
-
-  /// 拖动滑杆时的即时预览：只改内存、不落盘。
-  ///
-  /// 拖动过程中 onChanged 每帧都会调，一帧写一次 SharedPreferences 纯属浪费；
-  /// 松手（onChangeEnd）才走 [setNavBarOpacity] 真正落盘。
-  void previewNavBarOpacity(double value) {
-    final next = value.clamp(navOpacityMin, navOpacityOpaque).toDouble();
-    if (_navOpacity == next) return;
-    _navOpacity = next;
-    notifyListeners();
-  }
-
-  /// 改底栏不透明度并落盘（松手时调一次，别放进 onChanged）
-  Future<void> setNavBarOpacity(double value) async {
-    final next = value.clamp(navOpacityMin, navOpacityOpaque).toDouble();
-    try {
-      await _prefs.setDouble(AppConstants.keyNavBarOpacity, next);
-    } catch (_) {}
-    if (_navOpacity == next) return;
-    _navOpacity = next;
-    notifyListeners();
-  }
 
   bool _backgroundReady = false;
 

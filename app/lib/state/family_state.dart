@@ -42,6 +42,35 @@ class FamilyState extends ChangeNotifier {
 
   // ---- 状态 ----
 
+  // ---- 家长口令（内存缓存） ----
+
+  /// 家长敏感操作（审批 / 驳回 / 删除 / 撤销调整 / 推送测试）用的口令。
+  ///
+  /// 只放内存不落盘：这是「本会话已经输过一次」的便利缓存，App 重启就重输。
+  /// 服务端每次写操作都会再校验一遍（`gateAdminPassword`），缓存不是安全边界。
+  String? _adminPassword;
+
+  /// 已缓存的口令（没输过 = null）
+  String? get adminPassword => _adminPassword;
+
+  /// 记住口令（弹框输入后调用）
+  void cacheAdminPassword(String password) {
+    final trimmed = password.trim();
+    if (trimmed.isEmpty) return;
+    _adminPassword = trimmed;
+  }
+
+  /// 忘掉口令（服务端回 401 时调用，下次重新弹框）
+  void clearAdminPassword() {
+    _adminPassword = null;
+  }
+
+  /// 显式传入口令优先，其次用缓存
+  String? _adminPasswordOr(String? password) {
+    if (password != null && password.trim().isNotEmpty) return password.trim();
+    return _adminPassword;
+  }
+
   FamilyRole? _role;
 
   /// 当前身份（null = 尚未选择，由身份选择门引导）
@@ -270,34 +299,64 @@ class FamilyState extends ChangeNotifier {
     }
   }
 
-  /// 审批通过
-  Future<void> approve(String id) => _guardWrite(id, () => api.approveRequest(id));
+  /// 审批通过（家长；服务端要口令）
+  Future<void> approve(String id, {String? password}) => _guardWrite(
+        id,
+        () => api.approveRequest(id, password: _adminPasswordOr(password)),
+      );
 
-  /// 审批驳回（reason 会原样带给孩子看）
-  Future<void> reject(String id, {String? reason}) =>
-      _guardWrite(id, () => api.rejectRequest(id, reason: reason));
+  /// 审批驳回（reason 会原样带给孩子看；家长；服务端要口令）
+  Future<void> reject(String id, {String? reason, String? password}) => _guardWrite(
+        id,
+        () => api.rejectRequest(
+          id,
+          reason: reason,
+          password: _adminPasswordOr(password),
+        ),
+      );
 
-  /// 驳回后重新提交（孩子端用）
+  /// 驳回后重新提交（孩子端用，服务端免口令）
   Future<void> resubmit(String id) => _guardWrite(id, () => api.resubmitRequest(id));
 
-  /// 删除一条流水（仅家长），后端会一并删除关联图片
-  Future<void> removeRecord(String id) => _guardWrite(id, () => api.deleteLedgerRecord(id));
+  /// 撤销一次「通过」：把已入账记录打回 pending（家长；服务端要口令）
+  Future<void> undoApprove(String id, {String? password}) => _guardWrite(
+        id,
+        () => api.updateStatus(
+          id,
+          LedgerStatus.pending,
+          password: _adminPasswordOr(password),
+        ),
+      );
+
+  /// 删除一条流水，后端会一并删除关联图片。
+  ///
+  /// 孩子撤回自己的待审批记录时服务端免口令（[password] 不传即可）；
+  /// 家长删除已入账 / 已驳回的记录必须口令。
+  Future<void> removeRecord(String id, {String? password}) => _guardWrite(
+        id,
+        () => api.deleteLedgerRecord(id, password: _adminPasswordOr(password)),
+      );
 
   /// 批量审批通过（逐条提交，最后统一刷新一次）
   ///
   /// 一条失败不拖累其余：整批先跑完，再统一刷新一次账本，
   /// 最后失败数大于 0 时抛错让界面提示「有 N 条没通过，请重试」。
   /// 失败项会带上 id 与第一条错误原因（M-2）—— 只报个数家长没法排查。
-  Future<void> approveMany(List<String> ids) async {
+  Future<void> approveMany(List<String> ids, {String? password}) async {
     final List<String> failedIds = <String>[];
     String? firstReason;
+    final pwd = _adminPasswordOr(password);
     await Future.wait(
       ids.map((id) async {
+        // 复用单条审批的在途守卫：快速连点两次不会对同一条发两次请求（L-12）
+        if (!_writesInFlight.add(id)) return;
         try {
-          await api.approveRequest(id);
+          await api.approveRequest(id, password: pwd);
         } catch (error) {
           failedIds.add(id);
           firstReason ??= error is ApiException ? error.message : '$error';
+        } finally {
+          _writesInFlight.remove(id);
         }
       }),
     );

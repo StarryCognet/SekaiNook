@@ -1,8 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sekainook",
-  // 前端静态产物目录（Vite 构建输出），Cloudflare Pages 从这里发布
-  "pages_build_output_dir": "./dist",
+  // 前端静态产物目录。⚠️ 主域名现在跑的是 Flutter Web（产物在 app/build/web），
+  // 由 `npm run web:deploy` 显式传目录发布；这里默认指向 Flutter 产物，避免
+  // 「wrangler pages deploy 不带目录」时把 React 的 dist 误传上生产（报告 R-5）。
+  // React 旧版回滚用 `npm run deploy:legacy-react`（脚本里显式传 dist）。
+  "pages_build_output_dir": "./app/build/web",
   "compatibility_date": "2025-09-01",
   // D1 数据库绑定：函数内通过 env.DB 访问
   "d1_databases": [

@@ -60,14 +60,21 @@ class NotificationRecord {
 
   bool get isUnread => status != 'read';
 
+  /// 宽松取字符串：服务端字段类型漂移（如 id 变数字）时回落默认值，
+  /// 而不是 `as String` 直接抛 TypeError 把整页通知炸掉（D-9）。
+  static String _asString(Object? value) => value is String ? value : '';
+
+  static String? _asStringOrNull(Object? value) =>
+      value is String && value.isNotEmpty ? value : null;
+
   factory NotificationRecord.fromJson(Map<String, dynamic> json) => NotificationRecord(
-        id: (json['id'] ?? '') as String,
+        id: _asString(json['id']),
         audience: NotifyAudience.parse(json['audience']),
         type: NotifyType.parse(json['type']),
-        title: (json['title'] ?? '') as String,
-        body: json['body'] as String?,
-        link: json['link'] as String?,
-        status: (json['status'] as String?) ?? 'unread',
+        title: _asString(json['title']),
+        body: _asStringOrNull(json['body']),
+        link: _asStringOrNull(json['link']),
+        status: _asStringOrNull(json['status']) ?? 'unread',
         createdAt: _parseTime(json['created_at']) ?? DateTime.now(),
         readAt: _parseTime(json['read_at']),
       );
@@ -112,7 +119,12 @@ class NotificationBox {
     final items = <NotificationRecord>[];
     if (rawItems is List) {
       for (final item in rawItems) {
-        if (item is Map<String, dynamic>) items.add(NotificationRecord.fromJson(item));
+        if (item is! Map) continue;
+        try {
+          items.add(NotificationRecord.fromJson(Map<String, dynamic>.from(item)));
+        } catch (_) {
+          // 一条坏记录不该让整箱通知消失（D-9）：跳过它，其余照常显示
+        }
       }
     }
     return NotificationBox(

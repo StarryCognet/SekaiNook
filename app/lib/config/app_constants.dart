@@ -76,9 +76,6 @@ abstract final class AppConstants {
   /// 自定义任务（家长新增的任务）本地列表
   static const String keyCustomTasks = 'sekainook_custom_tasks_v1';
 
-  /// 家庭页首屏卡片的排列顺序（本机偏好：孩子和家长各拖各的）
-  static const String keyFamilyCardOrder = 'sekainook_family_card_order_v1';
-
   /// 上一次用的浅色主题（切到深色时记住，切回来用）
   static const String keyThemeLight = 'sekainook_theme_light';
 
@@ -134,10 +131,4 @@ abstract final class AppConstants {
 
   /// 「自动检测更新」开关。没写过这个键时按开处理（默认开）。
   static const String keyAutoCheckUpdate = 'sekainook_auto_check_update';
-
-  // ---- 外观 ----
-
-  /// 底部悬浮胶囊的不透明度（0.5 ~ 1.0）。
-  /// 没写过这个键 = 没调过 = 按 1.0（完全不透明）处理。
-  static const String keyNavBarOpacity = 'sekainook_nav_opacity';
 }
