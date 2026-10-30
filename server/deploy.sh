@@ -47,7 +47,9 @@ if changed '^server/package\.json$'; then
 fi
 
 # 2) 前端构建
-if [ -z "${OLD}" ] || [ -z "${NEW}" ] || changed '^(app/|src/|public/)'; then
+# 除了前端源码，构建配置本身（deploy.sh / 根 package.json）变了也要重建 ——
+# 否则改完构建参数（比如 --no-web-resources-cdn）推送上去，前端产物还是旧的。
+if [ -z "${OLD}" ] || [ -z "${NEW}" ] || changed '^(app/|src/|public/|server/deploy\.sh$|package\.json$)'; then
   echo "[deploy] 前端源码有变化 → 构建 Flutter Web（约 1~2 分钟）"
   cd "${ROOT}/app"
   if [ ! -d .dart_tool ]; then
@@ -55,7 +57,10 @@ if [ -z "${OLD}" ] || [ -z "${NEW}" ] || changed '^(app/|src/|public/)'; then
     flutter pub get
   fi
   # --no-wasm-dry-run 跳过 wasm 兼容性试编译，省 10~20 秒
-  flutter build web --release --no-pub --no-wasm-dry-run \
+  # --no-web-resources-cdn：canvaskit 改为从本站 canvaskit/ 加载。
+  #   不加这个开关时 Flutter 会去 www.gstatic.com 拉 canvaskit.js + canvaskit.wasm（7.3MB），
+  #   国内基本拉不动 —— 页面会长时间白屏/“卡死”，刷新也一样。这是测试站卡顿的头号嫌疑。
+  flutter build web --release --no-pub --no-wasm-dry-run --no-web-resources-cdn \
     --dart-define=API_BASE=http://140.143.240.238
   cd "${ROOT}"
   rm -rf web

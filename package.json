@@ -4,17 +4,18 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": ">=22.6"
+    "node": ">=22.18"
   },
   "scripts": {
     "dev": "vite",
     "dev:api": "wrangler pages dev public --port 8788",
     "build": "wrangler types && tsc --noEmit && vite build",
     "preview": "vite preview",
-    "deploy:legacy-react": "npm run build && wrangler pages deploy",
+    "deploy:legacy-react": "npm run build && wrangler pages deploy dist --project-name sekainook --branch main",
     "deploy": "node -e \"console.error('❌ npm run deploy 会把 React 旧版盖回线上 Flutter 版本。\\n   只在需要回滚 React 时用 npm run deploy:legacy-react。'); process.exit(1)\"",
-    "web:build": "cd app && flutter build web --release --no-pub --dart-define=API_BASE=https://sn.starrymiku.com",
+    "web:build": "cd app && flutter build web --release --no-pub --no-web-resources-cdn --dart-define=API_BASE=https://sn.starrymiku.com && node ../scripts/stamp-web-version.mjs",
     "web:deploy": "npm run web:build && wrangler pages deploy app/build/web --project-name sekainook --branch main",
+    "release:check": "node scripts/release-check.mjs",
     "db:migrate:local": "wrangler d1 migrations apply sekainook --local",
     "db:migrate:remote": "wrangler d1 migrations apply sekainook --remote",
     "changelog:sync": "node scripts/changelog-sync.mjs sync",
