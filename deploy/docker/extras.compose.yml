@@ -1,0 +1,57 @@
+# ===================================================================
+# 附加自建服务 · 1Panel 编排项目（可选）
+#
+# 用法：1Panel → 容器 → 编排 → 创建编排，名称填 extras
+#
+# 和 sekainook.compose.yml 分开成两个项目，是为了升级/重启互不影响：
+# SekaiNook 要重启时不该连带把监控、笔记一起重启。
+#
+# 铁律：端口只绑 127.0.0.1，公网一律走 1Panel 的 OpenResty 反代；
+#       每个服务都要 mem_limit，4G 内存经不起某个服务吃满。
+# ===================================================================
+
+name: extras
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # -----------------------------------------------------------------
+  # Uptime Kuma —— 站点可用性监控（掉线推 Telegram / 邮件 /  Bark）
+  # 访问：先只走内网 http://10.8.0.1:18001（WireGuard），
+  #       或让 1Panel 建一个 8080 的网站反代到 127.0.0.1:18001
+  # -----------------------------------------------------------------
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "127.0.0.1:18001:3001"
+    volumes:
+      - ./data/uptime-kuma:/app/data
+    environment:
+      TZ: Asia/Shanghai
+    mem_limit: 256m
+    cpus: 0.50
+    security_opt:
+      - no-new-privileges:true
+
+# -------------------------------------------------------------------
+# 加新服务照抄上面的块，改五处：服务名 / 容器名 / 镜像 / 端口 / mem_limit。
+#
+# 备选（镜像 tag 写具体大版本更稳）：
+#   memos      neosmemo/memos:stable        18003:5230   128m   笔记，自带 SQLite
+#   alist      xhofe/alist:latest           18005:5244   256m   网盘聚合
+#   ntfy       binwiederhier/ntfy          18080:80     128m   手机推送
+#   gitea      gitea/gitea:1               18002:3000   512m   需 PostgreSQL
+#   miniflux   miniflux/miniflux:latest    18004:8080   128m   需 PostgreSQL
+#
+# 加完：
+#   docker compose ps            # 确认 Up，且没在反复重启
+#   docker stats --no-stream     # 看内存是否贴着 mem_limit
+# 然后去 1Panel → 网站 → 创建网站（选「反向代理」）指向 127.0.0.1:<端口>
+# -------------------------------------------------------------------

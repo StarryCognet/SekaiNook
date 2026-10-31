@@ -1,0 +1,19 @@
+# 构建 SekaiNook 后端镜像时不需要进入 context 的东西
+#
+# 最要紧的一条是 **/node_modules：本机是 Windows，里面的 better-sqlite3 是
+# Windows 二进制，带进 Linux 镜像会直接 ERR_DLOPEN_FAILED。**
+# 镜像里用 RUN npm install 在 Linux 侧重新装。
+
+**/node_modules
+**/.git
+**/.dart_tool
+**/build
+app/build
+web
+data
+.icon-work
+*.log
+*.tar.gz
+*.sha256
+.env
+.env.*

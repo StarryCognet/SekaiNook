@@ -1,0 +1,89 @@
+# ===================================================================
+# SekaiNook 后端 · 1Panel 编排项目
+#
+# 用法：1Panel → 容器 → 编排 → 创建编排
+#   名称：sekainook
+#   把本文件内容整个粘进去 → 确认 → 构建 + 启动
+#
+# 前置条件（三条缺一不可，详见 deploy/reinstall.md）：
+#   1. 代码在 /opt/sekainook（含 server/ functions/ deploy/docker/Dockerfile）
+#   2. /opt/sekainook/.env 存在，至少含 ADMIN_PASSWORD
+#   3. /opt/sekainook/data/ 里已有 sekainook.db 与 r2/
+#
+# ⚠️ 为什么所有路径都写绝对路径：
+#   1Panel 的编排项目目录是 /opt/1panel/docker/compose/sekainook/，
+#   compose 里的 ./ 相对路径会解析到那里，不是 /opt/sekainook。
+# ===================================================================
+
+name: sekainook
+
+services:
+  backend:
+    build:
+      context: /opt/sekainook
+      dockerfile: deploy/docker/Dockerfile
+    image: sekainook-backend:latest
+    container_name: sekainook-backend
+    restart: unless-stopped
+
+    # 只绑宿主机 127.0.0.1 —— 公网访问由 1Panel 的 OpenResty 反代
+    ports:
+      - "127.0.0.1:8788:8788"
+
+    env_file:
+      - /opt/sekainook/.env
+    environment:
+      # 容器内必须 0.0.0.0，否则只监听容器自己的 loopback，映射出来也连不上
+      HOST: 0.0.0.0
+      PORT: "8788"
+      DB_PATH: /app/data/sekainook.db
+      R2_DIR: /app/data/r2
+
+    volumes:
+      - /opt/sekainook/data:/app/data
+
+    # 宿主机 4G，给后端 1.2G 上限（与原 systemd 的 MemoryMax=1200M 对齐），
+    # 留够给 OpenResty 和以后其他服务
+    mem_limit: 1200m
+    cpus: 1.0
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8788/api/ledger/summary').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 25s
+      retries: 3
+
+  # -------------------------------------------------------------------
+  # 前端 + 反向代理：nginx 容器独占宿主机 80
+  # /api/ → 同项目网络内的 sekainook-backend:8788
+  # 静态站 → 挂载 /opt/sekainook/web（由本地 flutter build 上传，不在服务器构建）
+  # -------------------------------------------------------------------
+  web:
+    image: nginx:1.27-alpine
+    container_name: sekainook-web
+    restart: unless-stopped
+
+    ports:
+      - "80:80"
+
+    volumes:
+      - /opt/sekainook/web:/usr/share/nginx/html:ro
+      - /opt/sekainook/deploy/nginx/web-container.conf:/etc/nginx/conf.d/default.conf:ro
+
+    depends_on:
+      - backend
+
+    mem_limit: 64m
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
