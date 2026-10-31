@@ -61,9 +61,11 @@ services:
       retries: 3
 
   # -------------------------------------------------------------------
-  # 前端 + 反向代理：nginx 容器独占宿主机 80
-  # /api/ → 同项目网络内的 sekainook-backend:8788
-  # 静态站 → 挂载 /opt/sekainook/web（由本地 flutter build 上传，不在服务器构建）
+  # 统一入口：nginx 容器独占宿主机 80，一个端口喂三个东西
+  #   /             → 宿主机上的 1Panel 面板（1panel-core 监听 18001）
+  #   /sekainook/   → Flutter Web 静态站（本地 flutter build --base-href /sekainook/）
+  #   /api/         → sekainook-backend:8788（App 的 apiBase 仍是 http://IP，靠这里续命）
+  #   /api/v1|v2/   → 1Panel 自己的 API（前缀更长，优先命中，见 web-container.conf）
   # -------------------------------------------------------------------
   web:
     image: nginx:1.27-alpine
@@ -72,6 +74,12 @@ services:
 
     ports:
       - "80:80"
+
+    # 统一入口：/ 反代给宿主机上的 1Panel（1panel-core 监听 18001），
+    # /sekainook/ 是 Flutter 前端，/api/ 是后端。
+    # 容器内要访问宿主机，靠这条额外 hosts 记录。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
     volumes:
       - /opt/sekainook/web:/usr/share/nginx/html:ro
