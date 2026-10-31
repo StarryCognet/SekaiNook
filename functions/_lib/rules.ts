@@ -59,12 +59,15 @@ export const PAYOUT_MAX_POINTS = 100000;
 
 /** 家庭账本任务（对应 src/config/familyRules.ts） */
 const FAMILY_TASK_RULES: Record<string, ServerTaskRule> = {
-  clean_room: { name: '整理房间', type: 'earning', value: 10, dailyLimit: 2 },
-  wash_dishes: { name: '洗碗', type: 'earning', value: 5, dailyLimit: 2 },
+  // 「每个任务每天只能做一次」（v2.12）：这三条原先给到 2 次，但孩子能把一件事
+  // 拆成两次打卡刷分，2026-10-31 起统一收敛成 1 次；其余任务本来就是 1。
+  // ⚠️ 与 app/lib/config/family_rules.dart、src/config/familyRules.ts 三处同步。
+  clean_room: { name: '整理房间', type: 'earning', value: 10, dailyLimit: 1 },
+  wash_dishes: { name: '洗碗', type: 'earning', value: 5, dailyLimit: 1 },
   do_laundry: { name: '洗衣服', type: 'earning', value: 15, dailyLimit: 1 },
   take_out_trash: { name: '倒垃圾', type: 'earning', value: 5, dailyLimit: 1 },
   finish_homework: { name: '按时完成作业', type: 'earning', value: 20, dailyLimit: 1 },
-  read_book: { name: '课外阅读30分钟', type: 'earning', value: 10, dailyLimit: 2 },
+  read_book: { name: '课外阅读30分钟', type: 'earning', value: 10, dailyLimit: 1 },
   // 只有 19:00-22:00 之间能打卡；晚于 22:00 说明没按时睡，由服务端日结算记 sleep_penalty
   sleep_on_time: {
     name: '按时睡觉',

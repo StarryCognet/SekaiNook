@@ -80,4 +80,28 @@ if changed '^server/backup\.sh$'; then
   echo "[deploy] backup script changed -> nothing to do (cron reads it on each run)"
 fi
 
+# ---------- 6) 版本日志：改了 src/config/changelog.ts → 灌进运行时 SQLite ----------
+# 网页版和 App 都从 GET /api/changelog 读，而它读的是数据库（不是 bundle 里那层兜底）。
+# 不写库的话，新版本在「设置 → 版本日志」里看不到，只有接口挂掉才退回 bundle。
+#
+# 为什么在容器里跑：宿主机没装 node（后端也进了容器），而镜像里既有 node 又有 tsx，
+# 能直接 import .ts 生成 SQL；镜像里没有 sqlite3 CLI，所以执行 SQL 也借容器的 better-sqlite3。
+# 生成失败只告警不中断 —— 版本日志不该卡住部署。
+if changed '^src/config/changelog\.ts$|^scripts/changelog-sync\.mjs$'; then
+  echo "[deploy] changelog changed -> syncing into container SQLite"
+  if docker exec sekainook-backend node scripts/changelog-sync.mjs sync --dry >/dev/null 2>&1; then
+    docker exec sekainook-backend node -e '
+      const fs = require("node:fs");
+      const Database = require("/app/server/node_modules/better-sqlite3");
+      const db = new Database("/app/data/sekainook.db");
+      db.exec(fs.readFileSync("/app/migrations/.changelog-sync.sql", "utf8"));
+      const n = db.prepare("SELECT COUNT(*) AS n FROM changelog").get().n;
+      console.log("[deploy] changelog rows = " + n);
+      db.close();
+    '
+  else
+    echo "[deploy] WARNING: could not generate changelog SQL in container, skipped" >&2
+  fi
+fi
+
 echo "[deploy] done -> http://140.143.240.238/sekainook/"

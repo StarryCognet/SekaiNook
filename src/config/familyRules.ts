@@ -10,12 +10,14 @@ import type { TaskConfig } from '../types/family';
  */
 export const TASK_RULES: TaskConfig[] = [
   // ===== 赚钱区（earning，正数）=====
-  { id: 'clean_room', name: '整理房间', type: 'earning', value: 10, unit: '积分', dailyLimit: 2 },
-  { id: 'wash_dishes', name: '洗碗', type: 'earning', value: 5, unit: '积分', dailyLimit: 2 },
+  // 「每个任务每天只能做一次」（v2.12）：这三条原先 2 次，2026-10-31 起收敛成 1 次。
+  // ⚠️ 与 app/lib/config/family_rules.dart、functions/_lib/rules.ts 三处同步。
+  { id: 'clean_room', name: '整理房间', type: 'earning', value: 10, unit: '积分', dailyLimit: 1 },
+  { id: 'wash_dishes', name: '洗碗', type: 'earning', value: 5, unit: '积分', dailyLimit: 1 },
   { id: 'do_laundry', name: '洗衣服', type: 'earning', value: 15, unit: '积分', dailyLimit: 1 },
   { id: 'take_out_trash', name: '倒垃圾', type: 'earning', value: 5, unit: '积分', dailyLimit: 1 },
   { id: 'finish_homework', name: '按时完成作业', type: 'earning', value: 20, unit: '积分', dailyLimit: 1 },
-  { id: 'read_book', name: '课外阅读30分钟', type: 'earning', value: 10, unit: '积分', dailyLimit: 2 },
+  { id: 'read_book', name: '课外阅读30分钟', type: 'earning', value: 10, unit: '积分', dailyLimit: 1 },
   {
     id: 'sleep_on_time',
     name: '按时睡觉',

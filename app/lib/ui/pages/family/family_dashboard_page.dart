@@ -19,6 +19,8 @@ import '../../../core/api_exception.dart';
 import '../../../core/image_compress.dart';
 import '../../../core/ledger_csv.dart';
 import '../../../core/ledger_export.dart';
+import '../../../core/location_probe.dart';
+import '../../../core/photo_watermark.dart';
 import '../../../core/task_rules.dart';
 import '../../../data/api/upload_api.dart';
 import '../../../data/models/custom_task.dart';
@@ -2515,27 +2517,45 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             }
             Navigator.of(builderContext).pop();
           };
-          Future<void> pick(ImageSource source) async {
+          /// 拍照 → 压缩 → 压水印（任务名 / 拍摄时刻 / 位置）。
+          ///
+          /// **只走相机、不给相册入口**（与孩子端 `_CheckInSheet` 同一口径）：
+          /// 从相册挑旧图打卡等于让「照片」这条证据失效。家长端也不留这个后门。
+          Future<void> pick() async {
             if (picking) return;
             setDialogState(() => picking = true);
-            // 选图会跳到系统的相册 / 相机，回来时这个弹层可能已经被关掉了
+            // 拍照会跳到系统的相机，回来时这个弹层可能已经被关掉了
             void update(VoidCallback change) {
               if (!builderContext.mounted) return;
               setDialogState(change);
             }
 
             try {
-              final compressed =
-                  await pickCompressedImage(ImagePicker(), source: source);
-              if (compressed == null) return;
+              final raw = await pickCompressedImage(
+                ImagePicker(),
+                source: ImageSource.camera,
+              );
+              if (raw == null) return;
+              // 用「拍完回来」的这一刻当拍摄时刻：定位 + 画水印要一两秒
+              final DateTime shotAt = DateTime.now();
+              final String? location = await captureLocationText();
+              final Uint8List? stamped = await applyPhotoWatermark(
+                raw,
+                WatermarkInfo(
+                  title: task.name,
+                  time: shotAt,
+                  location: location,
+                ),
+              );
               update(() {
-                photo = compressed;
+                // 水印失败退回原图：照片有问题可以重拍，不能因此交不上打卡
+                photo = stamped ?? raw;
                 photoError = null;
               });
             } on ImageUnreadableException {
-              update(() => photoError = '这张图读不出来，换一张试试');
+              update(() => photoError = '这张图读不出来，重新拍一张');
             } catch (_) {
-              update(() => photoError = '选图失败，请重试');
+              update(() => photoError = '拍照失败，请重试');
             } finally {
               update(() => picking = false);
             }
@@ -2617,17 +2637,15 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   children: <Widget>[
                     Expanded(
                       child: AppOutlinedButton.icon(
-                        onPressed: picking ? null : () => pick(ImageSource.camera),
+                        onPressed: picking ? null : pick,
                         icon: const GlyphIcon(AppIcons.camera, size: 18),
-                        label: const Text('拍照'),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: AppOutlinedButton.icon(
-                        onPressed: picking ? null : () => pick(ImageSource.gallery),
-                        icon: const GlyphIcon(AppIcons.photos, size: 18),
-                        label: const Text('从相册选'),
+                        label: Text(
+                          picking
+                              ? '处理中…'
+                              : photo == null
+                                  ? '拍照'
+                                  : '重拍',
+                        ),
                       ),
                     ),
                   ],
@@ -2645,7 +2663,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.xs),
                     child: Text(
-                      '这项任务要拍一张照片，或者从相册选一张，才能提交',
+                      '这项任务要现场拍一张照片才能提交（不能用相册里的旧照片）',
                       style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger),
                     ),
                   ),
@@ -2883,7 +2901,7 @@ class _CustomTaskFormState extends State<_CustomTaskForm> {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      '开启后，提交这条任务要先拍照或从相册选一张；关闭则可以直接提交',
+                      '开启后，提交这条任务要现场拍一张照片（不能从相册选）；关闭则可以直接提交',
                       style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
                     ),
                   ],

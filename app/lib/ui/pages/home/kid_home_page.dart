@@ -17,6 +17,8 @@ import '../../../config/family_rules.dart';
 import '../../../config/garden_config.dart';
 import '../../../core/api_client.dart';
 import '../../../core/image_compress.dart';
+import '../../../core/location_probe.dart';
+import '../../../core/photo_watermark.dart';
 import '../../../core/task_rules.dart';
 import '../../../core/time_text.dart';
 import '../../../data/api/ledger_api.dart';
@@ -2102,6 +2104,10 @@ class _CheckInSheetState extends State<_CheckInSheet> {
   bool _uploading = false;
   bool _submitting = false;
 
+  /// 正在「拍照后处理」：定位 + 压水印。这几步要一两秒，
+  /// 期间按钮要冻住，否则用户会连拍几张、后一张把前一张盖掉。
+  bool _processing = false;
+
   @override
   void dispose() {
     _note.dispose();
@@ -2114,20 +2120,47 @@ class _CheckInSheetState extends State<_CheckInSheet> {
   /// 消费 / 罚款写清原因即可。判定与网页版共用 core/task_rules.dart。
   bool get _needPhoto => taskRequiresPhoto(widget.task);
 
-  Future<void> _pick(ImageSource source) async {
+  /// 拍照 → 压缩 → 压水印（任务名 / 拍摄时刻 / 位置）。
+  ///
+  /// **只走相机、不给相册入口**：打卡照片要能证明「此刻真的在做这件事」，
+  /// 从相册挑一张旧照片就失去意义了。所以这里写死 [ImageSource.camera]，
+  /// 界面上也不再放「从相册选」按钮。
+  ///
+  /// 水印失败（解码不了 / 定位超时）不拦打卡：退回没水印的原图。
+  /// 记账优先 —— 照片有问题让用户重拍，比让他卡在这儿交不上强。
+  Future<void> _pick() async {
     try {
-      final Uint8List? compressed =
-          await pickCompressedImage(_picker, source: source);
-      if (compressed == null) return;
+      final Uint8List? raw =
+          await pickCompressedImage(_picker, source: ImageSource.camera);
+      if (raw == null) return;
+      if (!mounted) return;
+      setState(() => _processing = true);
+      // 拍摄时刻取「拍完回到 App」的这一刻：定位和水印绘制要一两秒，
+      // 若等画完再取时间，照片上的时间会晚于真实按下快门的时间。
+      final DateTime shotAt = DateTime.now();
+      final String? location = await captureLocationText();
+      final Uint8List? stamped = await applyPhotoWatermark(
+        raw,
+        WatermarkInfo(
+          title: widget.task.name,
+          time: shotAt,
+          location: location,
+        ),
+      );
       if (!mounted) return;
       setState(() {
-        _photo = compressed;
+        _photo = stamped ?? raw;
         _photoUrl = null;
+        _processing = false;
       });
     } on ImageUnreadableException {
-      if (mounted) _toast('这张图读不出来，换一张试试');
+      if (!mounted) return;
+      setState(() => _processing = false);
+      _toast('这张图读不出来，重新拍一张');
     } catch (_) {
-      if (mounted) _toast('照片选不了，换一张试试');
+      if (!mounted) return;
+      setState(() => _processing = false);
+      _toast('照片处理不了，重新拍一张');
     }
   }
 
@@ -2154,13 +2187,14 @@ class _CheckInSheetState extends State<_CheckInSheet> {
   }
 
   Future<void> _submit() async {
+    if (_processing) return;
     final String note = _note.text.trim();
     if (_isDeduct && note.isEmpty) {
       _toast('写一句原因，好让家长知道为什么扣分', warning: true);
       return;
     }
     if (_needPhoto && _photo == null) {
-      _toast('这项任务要拍一张照片，或者从相册选一张，才能提交', warning: true);
+      _toast('这项任务要拍一张照片才能提交', warning: true);
       return;
     }
     setState(() => _submitting = true);
@@ -2286,15 +2320,15 @@ class _CheckInSheetState extends State<_CheckInSheet> {
               Row(
                 children: <Widget>[
                   AppOutlinedButton.icon(
-                    onPressed: _submitting ? null : () => unawaited(_pick(ImageSource.camera)),
+                    onPressed: _submitting || _processing
+                        ? null
+                        : () => unawaited(_pick()),
                     icon: const GlyphIcon(AppIcons.camera, size: AppFontSize.md),
-                    label: const Text('拍照'),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  AppOutlinedButton.icon(
-                    onPressed: _submitting ? null : () => unawaited(_pick(ImageSource.gallery)),
-                    icon: const GlyphIcon(AppIcons.photos, size: AppFontSize.md),
-                    label: const Text('从相册选'),
+                    label: Text(_processing
+                        ? '处理中…'
+                        : _photo == null
+                            ? '拍照'
+                            : '重拍'),
                   ),
                 ],
               ),
@@ -2302,7 +2336,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
               if (_needPhoto && _photo == null) ...<Widget>[
                 _gapXs,
                 Text(
-                  '这项任务要拍一张照片，或者从相册选一张，才能提交',
+                  '这项任务要现场拍一张照片才能提交（不能用相册里的旧照片）',
                   style: TextStyle(fontSize: AppFontSize.xs, color: palette.danger),
                 ),
               ],
@@ -2387,7 +2421,7 @@ class _CheckInSheetState extends State<_CheckInSheet> {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   AppFilledButton(
-                    onPressed: _submitting || (_needPhoto && _photo == null)
+                    onPressed: _submitting || _processing || (_needPhoto && _photo == null)
                         ? null
                         : () => unawaited(_submit()),
                     child: Text(

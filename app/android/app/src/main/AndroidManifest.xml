@@ -1,6 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 访问线上 Cloudflare Pages API -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 打卡照片的水印要写「在哪儿打的卡」：位置只在拍照那一下取一次，
+         不做后台定位 —— 拒绝授权也能正常打卡，水印上写「位置未获取」。
+         只申请这两个（不需要 ACCESS_BACKGROUND_LOCATION）。 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- 拍照只用 image_picker 的 ACTION_IMAGE_CAPTURE（调系统相机），
+         不直接开 Camera2，因此**不要**声明 android.permission.CAMERA：
+         一旦声明，Android 会要求运行时申请，反而多一道没必要的授权。 -->
+    <uses-feature android:name="android.hardware.location.gps" android:required="false"/>
     <!-- 本地定时提醒：安卓 13+ 要先拿到通知授权；开机后要能重新排上定时任务 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>

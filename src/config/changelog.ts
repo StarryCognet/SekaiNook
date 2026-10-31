@@ -14,10 +14,22 @@ import type { ChangelogEntry } from '../types/changelog';
 export type { ChangelogEntry };
 
 /** 当前版本号（与 CHANGELOG 最新一条保持一致） */
-export const APP_VERSION = '2.11.1';
+export const APP_VERSION = '2.12.0';
 
 /** 版本历史（倒序：最新在前） */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.12.0',
+    date: '2026-10-31 22:52:00',
+    title: '打卡照片只能现拍，自动盖上「时间 + 地点」水印',
+    changes: [
+      '打卡照片只能现场拍：去掉了「从相册选」，拿旧照片交不了差了',
+      '照片右下角自动盖水印：做的是哪件事、拍下的年月日时分秒、当时所处位置的经纬度',
+      '没开定位或拒绝授权也能照常打卡，水印上会写「位置未获取」',
+      '每个任务每天只能做一次：整理房间、洗碗、课外阅读从两次收到一次，其余任务本来就是一次',
+      '家长端记账也是同一套规矩：只能现拍，同样带水印',
+    ],
+  },
   {
     version: '2.11.1',
     date: '2026-10-30 18:10:00',

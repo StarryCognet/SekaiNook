@@ -38,8 +38,11 @@ abstract final class FamilyRules {
   /// 服务端拿自己那份判断分值，两边不一致时以服务端为准（客户端只是显示）。
   static const List<TaskConfig> taskRules = <TaskConfig>[
     // ── 日常 ──────────────────────────────────────────────
-    TaskConfig(id: 'clean_room', name: '整理房间', type: TaskType.earning, value: 10, dailyLimit: 2),
-    TaskConfig(id: 'wash_dishes', name: '洗碗', type: TaskType.earning, value: 5, dailyLimit: 2),
+    // 「每个任务每天只能做一次」（v2.12）：这三条原先给到 2 次（早晨收拾一遍、
+    // 晚上再收拾一遍 / 两顿饭各洗一次碗 / 早晚各读半小时），但孩子会把一件事
+    // 拆成两次打卡刷分 —— 2026-10-31 起统一收敛成 1 次，其余任务本来就是 1。
+    TaskConfig(id: 'clean_room', name: '整理房间', type: TaskType.earning, value: 10, dailyLimit: 1),
+    TaskConfig(id: 'wash_dishes', name: '洗碗', type: TaskType.earning, value: 5, dailyLimit: 1),
     TaskConfig(id: 'do_laundry', name: '洗衣服', type: TaskType.earning, value: 15, dailyLimit: 1),
     TaskConfig(id: 'take_out_trash', name: '倒垃圾', type: TaskType.earning, value: 5, dailyLimit: 1),
     TaskConfig(
@@ -51,7 +54,7 @@ abstract final class FamilyRules {
       mandatory: true,
       missPenalty: -10,
     ),
-    TaskConfig(id: 'read_book', name: '课外阅读30分钟', type: TaskType.earning, value: 10, dailyLimit: 2),
+    TaskConfig(id: 'read_book', name: '课外阅读30分钟', type: TaskType.earning, value: 10, dailyLimit: 1),
     TaskConfig(
       id: 'wash_face',
       name: '洗脸刷牙',

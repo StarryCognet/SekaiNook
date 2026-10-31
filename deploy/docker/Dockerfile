@@ -61,6 +61,13 @@ COPY server ./server
 # 迁移脚本（容器里手工应用：docker exec -it sekainook-backend sqlite3 ...）
 COPY migrations ./migrations
 
+# 版本日志的播种源 + 生成脚本。
+# 网页版和 App 都从 GET /api/changelog 读，而它读的是运行时 SQLite（不是 bundle 里那份），
+# 所以每次改 src/config/changelog.ts 都得把它写进库。宿主机没有 node，
+# 但镜像里既有 node 又有 tsx（能直接 import .ts），让部署脚本在容器里跑最省事。
+COPY src/config/changelog.ts ./src/config/
+COPY scripts/changelog-sync.mjs ./scripts/
+
 # 数据目录占位，实际会被 compose 的 volume 覆盖
 RUN mkdir -p /app/data
 
