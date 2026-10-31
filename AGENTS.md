@@ -23,10 +23,10 @@
 | | 自建（正式） | Cloudflare（回退） |
 |---|---|---|
 | 地址 | `http://140.143.240.238` | `https://sn.starrymiku.com` |
-| 后端 | `/opt/sekainook`：`server/` 适配层跑 `functions/`，systemd `sekainook.service`（端口 8788），nginx 反代 `/api/` | Pages Functions |
+| 后端 | `/opt/sekainook`：`server/` 适配层跑 `functions/`，**Docker 容器** `sekainook-backend`（127.0.0.1:8788），由 nginx 容器反代 `/api/` | Pages Functions |
 | 数据库 | SQLite `/opt/sekainook/data/sekainook.db` | D1 库 `sekainook` |
 | 图片 | 本地目录 `/opt/sekainook/data/r2/` | R2 桶 `starrymiku` |
-| 前端 | nginx 静态站点 `/opt/sekainook/web` | Pages 项目 `sekainook` |
+| 前端 | nginx 容器 `sekainook-web`（静态文件来自宿主机 `/opt/sekainook/web`，挂在 `/usr/share/nginx/html`） | Pages 项目 `sekainook` |
 | 谁在用 | 网页版 + 2.11.1 起的 App | 还没更新的旧版 App |
 
 - 服务器完整说明（初始化 / nginx / 备份 / 恢复 / 日常命令）见 `docs/国内轻量服务器-后端测试站部署方案.md`。
@@ -37,33 +37,83 @@
 
 ## ⭐ 以后怎么更新
 
-### 通道一：后端 + 网页版 = push 到服务器（一条命令）
+### 先看懂现在跑的是什么（2026-10-31 起的形态，容器化）
 
-服务器上有个裸仓库，**push 即部署**（`post-receive` 钩子 → `server/deploy.sh`）：
+```
+公网 80 ─→ nginx 容器 sekainook-web（配置在 deploy/nginx/web-container.conf）
+            ├── /              → 1Panel 面板（宿主机 127.0.0.1:18001）
+            ├── /sekainook/    → SekaiNook 网页版（Flutter Web，base-href=/sekainook/）
+            ├── /api/v1/ /api/v2/ → 1Panel 自己的 API（前缀更长，优先命中）
+            ├── /api/          → sekainook-backend 容器（127.0.0.1:8788）
+            └── /harness/      → DeepSeek Harness（宿主机 10443）
+公网 10443 ─→ DSH 自带 Caddy（自签 HTTPS，可直连）
+```
+
+- 后端是**容器**：代码 COPY 进镜像（不是挂载），所以**改代码必须重建镜像**，光重启没用。
+- 前端是**静态文件**：`/opt/sekainook/web` 以 bind mount 进 web 容器。
+- 服务器上**没有 Flutter SDK、也没有 Node** —— 构建端全在本机。这不是省事，是故意的：
+  2026-10-30 服务器侧增量编译缓存产出过一版坏掉的 `main.dart.js`（点几次底部 tab 就整页卡死，
+  而同一份源码在本机构建完全正常）。现在构建只在干净的本机做。
+
+### 通道一：改后端（`functions/` `server/` `migrations/`）—— 一条命令
 
 ```powershell
 cd E:\Git\SekaiNook
 git push tencent main
 ```
 
-`deploy.sh` 按本次改动的路径做增量的事：
+`post-receive` 钩子（在 `/opt/sekainook/git-repo/sekainook.git/hooks/`）会 checkout 到
+`/opt/sekainook`，再跑 `server/deploy-container.sh`，按本次 diff 的路径做增量：
 
-1. `server/package.json` 变了 → 装后端依赖
-2. `app/` `src/` `public/`、`server/deploy.sh` 或根 `package.json` 变了 → **`flutter clean` + 构建 Flutter Web**（约 1~2 分钟）→ 更新 `/opt/sekainook/web`
-3. `src/config/changelog.ts` 变了 → 把版本日志写进服务器本地 D1
-4. 重启 `sekainook.service`
+| 改了 | 钩子做什么 |
+|---|---|
+| `server/` `functions/` `migrations/` `deploy/docker/Dockerfile` | 重建镜像 + 重启 backend 容器（30~60 秒） |
+| `deploy/nginx/web-container.conf` | `nginx -t` 校验，**过了才** reload（错了保留旧配置继续跑） |
+| `deploy/docker/sekainook.compose.yml` | `docker compose up -d` |
+| `app/` | 只打印提示（服务器构建不了，见通道二） |
 
-⚠️ **构建前必须 `flutter clean`（已写进 `deploy.sh`）**。2026-10-30 踩过的坑：服务器增量编译缓存
-（`app/.dart_tool`）从 2.11.0 一路增到 2.11.1 后，产出的 `main.dart.js` 是**坏的** ——
-点几次底部 tab 就整页卡死（卡在 CanvasKit/WASM 层，连 DevTools 的 `Debugger.pause` 都断不开），
-而同一份源码在本机构建完全正常。三次对照实验（线上 2.11.0 JS / 本机构建 2.11.1 JS / 服务器构建 2.11.1 JS）
-确认是**服务器侧产物**的问题，不是源码。以后要改构建参数也一样，别让增量缓存带着跨版本的脏状态。
+⚠️ 钩子里必须用 `/bin/sh /opt/sekainook/server/deploy-container.sh` 调用，**不能直接执行脚本**：
+git 在 Windows 上不记录可执行位（`core.filemode=false`），checkout 出来的文件是 644，直接跑会 `Permission denied`。
 
-⚠️ **AI 助手推不了这个**：本机没有 SSH 私钥，`git push tencent` 会 `Permission denied`。
-代码改完、本地验证过之后，让**用户在 PowerShell 里执行**上面那条命令，再去
-`http://140.143.240.238/version.json` 看版本号对不对。
+⚠️ `deploy-container.sh` 里所有终端输出都用英文。它的输出会经 `git push` 回显到 Windows 的 PowerShell
+控制台（GBK 编码），中文会变乱码 —— `server/full-backup.sh` 已经踩过同一个坑。
 
-### 通道二：App = 打包发版
+### 通道二：改前端（`app/`）—— 本机构建 + 上传
+
+```powershell
+cd E:\Git\SekaiNook
+.\server\deploy-web.ps1
+```
+
+它做四件事：`flutter build web --base-href /sekainook/` → 打包 tar → scp 到服务器 → 原地解包并报出版本号。
+
+也可以双击 `server\deploy-web.cmd`（包装器，绕开 PowerShell 执行策略）。
+
+⚠️ `base-href` 必须是 `/sekainook/` —— 这个站挂在子路径下，改成 `/` 会白屏。
+在 MSYS bash 里手敲命令要加 `MSYS_NO_PATHCONV=1`，否则 MSYS 把 `/sekainook/` 转成
+`C:/Users/.../sekainook/`，Flutter 报 `--base-href should start and end with /`。脚本里已处理。
+
+⚠️ **替换 web 产物不能 `mv` 目录**：`/opt/sekainook/web` 是 bind mount，mv 换掉 inode 后容器还服务旧树。
+脚本用的是原地 `find -mindepth 1 -delete` + 解包。
+
+⚠️ **只 push 不跑 `deploy-web.ps1`，网页版不会更新** —— 钩子只会打印一行提示。
+
+### 只改后端 / 只改前端，分别要做什么
+
+| 改了什么 | 要做什么 | 已装的 App 会变吗 |
+|---|---|---|
+| `functions/` `server/` | `git push tencent main` | 会（App 也打这份 API） |
+| `app/`（Flutter） | `git push` + `.\server\deploy-web.ps1` | **不会**，要发新 APK |
+| `deploy/nginx/*.conf` | `git push tencent main` | 不会 |
+| `migrations/` 加表 | `git push` + 在服务器上手动应用 SQL（见下方运维命令） | — |
+| 图标 | 落盘后仍要发新 APK | **不会**，图标在包里 |
+
+- 改了 `functions/` 的表结构 → `migrations/` 也加一份，并确认 CF（D1）与自建（SQLite）两边都能跑。
+  自建的 SQLite **不会**自动套用迁移，得手工执行（命令见下）。
+- 本机推得动：`git remote tencent` 已配 `core.sshCommand` 指向 `C:\Users\zkdwd\.ssh\txysh.pem`
+  （仓库级配置，不动全局 ssh config），AI 助手也能直接 push。
+
+### 通道三：App = 打包发版
 
 ```powershell
 cd E:\Git\SekaiNook
@@ -91,29 +141,54 @@ Invoke-RestMethod https://pub.starrymiku.com/sekainook/latest.json
 - `publish_apk.ps1` 会核对 `https://sn.starrymiku.com/api/changelog` 的版本与本包一致，
   所以 `changelog:sync` 必须排在打包之前。
 
-### 只改前端 / 只改后端时
-
-- **只改 `app/`** → 服务器会自动重建 Web 版；但**已装 App 的人不会变**，要发新版 APK 才会更新。
-- **只改 `functions/` 或 `server/`** → 服务器重启后端就够了；网页版刷新即生效，App 不用动。
-- **改了 `functions/` 的表结构/新接口** → 记得 `migrations/` 也加一份，并确认 CF（D1）与自建（SQLite）
-  两边都能跑；自建侧由 `deploy.sh` 之外的 `sqlite3` 手工应用迁移（见部署文档 §16）。
-
 ### 发完怎么确认
 
 ```powershell
-curl.exe --noproxy '*' http://140.143.240.238/version.json
+# 网页版版本号（构建时 --dart-define 打进去的）
+curl.exe --noproxy '*' http://140.143.240.238/sekainook/version.json
+# 后端活着
 curl.exe --noproxy '*' http://140.143.240.238/api/ledger/summary
+# 容器状态
+ssh -i C:\Users\zkdwd\.ssh\txysh.pem ubuntu@140.143.240.238 "sudo docker ps"
 ```
 
-服务器上常用运维命令：
+服务器上常用运维命令（容器化之后**没有 systemd 单元了**，`systemctl` 那套已作废）：
 
 ```bash
-ssh ubuntu@140.143.240.238
-systemctl status sekainook            # 后端服务
-journalctl -u sekainook -n 50         # 后端日志
-sudo nginx -t && sudo systemctl reload nginx
-sqlite3 /opt/sekainook/data/sekainook.db '.tables'
-ls /opt/sekainook-backups             # 每天 03:00 自动备份（db + r2）
+ssh -i C:\Users\zkdwd\.ssh\txysh.pem ubuntu@140.143.240.238
+
+# --- 容器 ---
+sudo docker ps
+sudo docker compose -f /opt/sekainook/deploy/docker/sekainook.compose.yml ps
+sudo docker logs -f sekainook-backend      # 后端日志
+sudo docker logs -f sekainook-web          # nginx 日志
+
+# --- nginx 配置都在容器里 ---
+sudo docker exec sekainook-web nginx -t
+sudo docker exec sekainook-web nginx -s reload
+
+# --- 数据库（WAL 模式：别只拷 sekainook.db，要连 -wal/-shm 一起）---
+sudo docker exec sekainook-backend ls -l /app/data
+
+# 手动应用迁移（服务器上没有 sqlite3 命令，用容器里的 better-sqlite3）
+sudo docker exec -i sekainook-backend node --input-type=module -e "
+  import Database from 'better-sqlite3';
+  import fs from 'node:fs';
+  const db = new Database('/app/data/sekainook.db');
+  db.exec(fs.readFileSync(0, 'utf8'));
+" < migrations/0008_xxx.sql
+
+# --- 备份（每天 03:00 自动跑，也可手动）---
+sudo bash /opt/sekainook/server/backup.sh
+ls -lh /opt/sekainook/backups
+
+# --- 1Panel / DSH ---
+sudo 1pctl status
+sudo docker ps | grep -i harness
+
+# --- 磁盘 ---
+df -h /
+du -sh /opt/sekainook/data /opt/sekainook/web /var/lib/docker
 ```
 
 ---
