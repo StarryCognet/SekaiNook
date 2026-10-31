@@ -102,19 +102,24 @@ function assertEntries(entries, appVersion) {
 
   // R-8：三方一致 —— APK 的 versionName 来自 app/pubspec.yaml，网页版读的是
   // D1 里的 APP_VERSION，两边漂移就会出现「APK 说 2.7.0、网站说 2.6.0」。
-  try {
-    const pubspec = readFileSync(resolve(APP_DIR, 'pubspec.yaml'), 'utf8');
-    const match = pubspec.match(/^version:\s*(\S+)/m);
-    const pubVersion = match?.[1]?.split('+')[0];
-    if (!pubVersion) {
-      problems.push('app/pubspec.yaml 里没找到 version: 行');
-    } else if (pubVersion !== appVersion) {
-      problems.push(
-        `app/pubspec.yaml 的版本（${pubVersion}）和 APP_VERSION（${appVersion}）对不上 —— 发版前先把两边对齐（记得 +N 一起加）`
-      );
+  //
+  // 服务器上第二遍跑时没有 app/（镜像里只放了 src/config/changelog.ts 和本脚本），
+  // 而本机发版前这条已经校验过了 —— 所以给容器内的调用留一个明确的跳过口子。
+  if (process.env.SEKAINOOK_SKIP_APP_CHECK !== '1') {
+    try {
+      const pubspec = readFileSync(resolve(APP_DIR, 'pubspec.yaml'), 'utf8');
+      const match = pubspec.match(/^version:\s*(\S+)/m);
+      const pubVersion = match?.[1]?.split('+')[0];
+      if (!pubVersion) {
+        problems.push('app/pubspec.yaml 里没找到 version: 行');
+      } else if (pubVersion !== appVersion) {
+        problems.push(
+          `app/pubspec.yaml 的版本（${pubVersion}）和 APP_VERSION（${appVersion}）对不上 —— 发版前先把两边对齐（记得 +N 一起加）`
+        );
+      }
+    } catch (error) {
+      problems.push(`读不到 app/pubspec.yaml：${error instanceof Error ? error.message : String(error)}`);
     }
-  } catch (error) {
-    problems.push(`读不到 app/pubspec.yaml：${error instanceof Error ? error.message : String(error)}`);
   }
 
   if (problems.length > 0) fail(problems);

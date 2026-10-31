@@ -39,7 +39,7 @@ changed() {
 # ---------- 1) 后端：代码/依赖/Dockerfile 变了 → 重建镜像并重启 ----------
 # 注意 server/ 整个目录：package.json（依赖）、index.ts / env.ts 等（代码）都在里面，
 # 而且代码是 COPY 进镜像的（不是挂载），所以任何一处变了都得重建。
-if changed '^(server/|functions/|migrations/|deploy/docker/Dockerfile$)'; then
+if changed '^(server/|functions/|migrations/|scripts/|deploy/docker/Dockerfile$)'; then
   echo "[deploy] backend code changed -> rebuilding image (30-60s)"
   ${DC} up -d --build backend
 else
@@ -89,7 +89,8 @@ fi
 # 生成失败只告警不中断 —— 版本日志不该卡住部署。
 if changed '^src/config/changelog\.ts$|^scripts/changelog-sync\.mjs$'; then
   echo "[deploy] changelog changed -> syncing into container SQLite"
-  if docker exec sekainook-backend node scripts/changelog-sync.mjs sync --dry >/dev/null 2>&1; then
+  # SEKAINOOK_SKIP_APP_CHECK=1：镜像里没有 app/，pubspec 那条校验本机已经做过了
+  if docker exec -e SEKAINOOK_SKIP_APP_CHECK=1 sekainook-backend node scripts/changelog-sync.mjs sync --dry >/dev/null 2>&1; then
     docker exec sekainook-backend node -e '
       const fs = require("node:fs");
       const Database = require("/app/server/node_modules/better-sqlite3");
