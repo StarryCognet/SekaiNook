@@ -206,6 +206,27 @@ $env:HTTP_PROXY=''; $env:HTTPS_PROXY=''; $env:NO_PROXY='*'
 另：`app/tool/publish_apk.ps1` 的 `flutter build apk` 带 `--no-pub`，正是因为隐式 `pub get`
 在同样的代理环境下会 `SocketException: 远程计算机拒绝网络连接` 直接断掉。
 
+### 但 Gradle 编译 APK 是反过来的：得**绕开**代理
+
+`E:\gradle-home\gradle.properties`（本机全局，不随项目走）写死了
+`systemProp.http.proxyHost=127.0.0.1` / `proxyPort=7890`。代理软件正常时没事，可它一旦不通，
+`flutter build apk` 会卡在拉 AGP 上：
+
+```
+Could not resolve com.android.tools.build:gradle:9.0.1
+  > Connect to 127.0.0.1:7890 failed: Connection refused: getsockopt
+```
+
+2026-10-31 实测同一时刻：走代理拉 aliyun 仓库返回 `000`，直连同一 URL 返回 `200`。
+`env -u HTTP_PROXY ...` **不管用** —— 代理写在 `gradle.properties` 里，不是环境变量。
+要么把代理开起来，要么把那 4 行 `systemProp.*.proxy*` 临时注释掉再打包，打完改回来
+（其它项目还指着它）。
+
+⚠️ 另一处要注意：APK 打完后 `wrangler r2 object put` 上传**又要清代理**（见上一段），
+所以一次完整发版里，构建和上传对代理的要求正好相反 —— 分两步跑最省事：
+先构建（可带代理，代理不通就注释 gradle.properties），再
+`env -u HTTP_PROXY ... powershell -File app\tool\publish_apk.ps1 -SkipBuild`（清代理上传）。
+
 ## Cloudflare 那套（回退用，平时不用动）
 
 - **`sn.starrymiku.com` 仍是 Flutter Web**（Pages 项目 `sekainook`）。偶发需要更新时：
