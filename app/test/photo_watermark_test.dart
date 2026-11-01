@@ -9,18 +9,25 @@ import 'package:sekainook_app/core/photo_watermark.dart';
 ///
 /// 文字本身渲染成什么样（字体、断行）只能真机看 —— 但「遮罩没画上」
 /// 这类回归（比如 gradient 的 colors 传错、bar 高度算成负数）这里能拦住。
+///
+/// ⚠️ 必须用 `tester.runAsync` 包住 `applyPhotoWatermark`：
+/// 它内部的 `picture.toImage()` / `toByteData()` 要等引擎 rasterizer 的真实回调，
+/// 而 testWidgets 默认跑在假时钟（FakeAsync）上，那个 Future 永远不会完成 ——
+/// 不包就会卡满 10 分钟超时，看着像业务代码坏了，其实只是测试写法不对。
 void main() {
   testWidgets('水印压到照片底部且不改尺寸', (WidgetTester tester) async {
     final img.Image canvas = img.Image(width: 400, height: 300);
     img.fill(canvas, color: img.ColorRgb8(200, 120, 60));
     final Uint8List source = Uint8List.fromList(img.encodePng(canvas));
 
-    final Uint8List? stamped = await applyPhotoWatermark(
-      source,
-      WatermarkInfo(
-        title: '整理房间',
-        time: DateTime(2026, 10, 31, 22, 37, 18),
-        location: 'N39.91500° E116.40400°',
+    final Uint8List? stamped = await tester.runAsync<Uint8List?>(
+      () => applyPhotoWatermark(
+        source,
+        WatermarkInfo(
+          title: '整理房间',
+          time: DateTime(2026, 10, 31, 22, 37, 18),
+          location: 'N39.91500° E116.40400°',
+        ),
       ),
     );
 
@@ -38,9 +45,11 @@ void main() {
 
   testWidgets('解不出图片时返回 null 而不是抛异常', (WidgetTester tester) async {
     final Uint8List garbage = Uint8List.fromList(<int>[1, 2, 3, 4, 5, 6, 7, 8]);
-    final Uint8List? stamped = await applyPhotoWatermark(
-      garbage,
-      WatermarkInfo(title: '整理房间', time: DateTime(2026, 10, 31)),
+    final Uint8List? stamped = await tester.runAsync<Uint8List?>(
+      () => applyPhotoWatermark(
+        garbage,
+        WatermarkInfo(title: '整理房间', time: DateTime(2026, 10, 31)),
+      ),
     );
     // 调用方（打卡弹窗）靠这个 null 退回原图，绝不能把异常抛到 UI 上
     expect(stamped, isNull);
