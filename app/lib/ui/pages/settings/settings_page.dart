@@ -1324,8 +1324,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 title: '换页动效',
                 // 为什么给这么长一段说明：这 13 个不是「新旧版本」，是同一件事的
                 // 不同手感，没有对错 —— 说清楚「挑顺手的」比列参数有用。
-                description: '底部五个页面切换时的动画。挑一个顺手的就行，看着累就换回第一项；'
-                    '手机开了「减少动态效果」时不论选哪个都不播',
+                description: '底部五个页面切换时的动画。没选过的话默认是「逐层揭开」，'
+                    '挑一个顺手的就行；手机开了「减少动态效果」时不论选哪个都不播',
               ),
               const SizedBox(height: AppSpacing.sm),
               _TransitionPicker(

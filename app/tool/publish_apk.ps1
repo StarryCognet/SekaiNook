@@ -11,6 +11,12 @@ param(
     # 版本日志：会原样写进弹窗。可以不填，App 里仍然能看 D1 里的版本日志。
     [string]$Changelog = '',
 
+    # 改从 UTF-8 文件读版本日志（给了就盖过 -Changelog）。
+    # 为什么要有这条路：本脚本刻意保持纯 ASCII，而中文 -Changelog 从 git-bash
+    # 传给 PowerShell 5.1 会被 GBK 打乱，latest.json 里就存下乱码、更新弹窗直接
+    # 显示它。把文案写进 UTF-8 文件再传这个参数就绕开了命令行编码。
+    [string]$ChangelogFile = '',
+
     # 跳过构建，直接传一个已经打好的包（配合 -ApkPath）
     [switch]$SkipBuild,
 
@@ -41,6 +47,14 @@ Set-Location (Join-Path $PSScriptRoot '..')
 # 构建几分钟、读到 APK 才炸；-SkipBuild 走手工包那条路时检查干脆形同虚设。
 if (-not $env:ANDROID_HOME) {
     throw "没有设 ANDROID_HOME。先执行 `$env:ANDROID_HOME='E:\IDE\Android\Sdk'`（按本机实际路径改）再发版"
+}
+
+# 版本日志优先从文件读（中文走命令行会被 GBK 打乱，见 -ChangelogFile 的注释）
+if ($ChangelogFile) {
+    $resolved = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ChangelogFile)
+    if (-not (Test-Path $resolved)) { throw "找不到版本日志文件：$resolved" }
+    $Changelog = (Get-Content -Raw -Encoding UTF8 $resolved).Trim()
+    Write-Host "[changelog] 从文件读入：$Changelog" -ForegroundColor Cyan
 }
 if (-not $SkipBuild) {
     $keyProps = Join-Path (Get-Location) 'android\app\key.properties'

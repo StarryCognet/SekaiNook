@@ -159,8 +159,9 @@ enum TabTransition {
   /// 退场时长（新页进来时旧页走多久）
   final Duration reverseDuration;
 
-  /// 出厂默认 = 现在线上跑的那一个，老用户升级完观感不变。
-  static const TabTransition defaultTransition = TabTransition.slideFade;
+  /// 出厂默认 = 逐层揭开：新页从上往下揭开并轻轻上移，比整体淡入更有层次。
+  /// 没在设置里选过的人都走这一套；选过的人照旧读自己存的那一个。
+  static const TabTransition defaultTransition = TabTransition.stagger;
 
   /// 从存储里读到的字符串还原（脏值/老值一律回默认，不让设置问题拦住启动）。
   static TabTransition fromId(String? raw) {

@@ -36,15 +36,17 @@ void main() {
     expect(TabTransition.fromId(null), TabTransition.defaultTransition);
     expect(TabTransition.fromId(''), TabTransition.defaultTransition);
     expect(TabTransition.fromId('不存在的东西'), TabTransition.defaultTransition);
-    // 枚举 name（'slideFade'）不是合法 id —— 要是哪天有人拿 name 写盘，这里会红
+    // 枚举 name（'slideFade'）不是合法 id（id 是 'slide-fade'）——
+    // 要是哪天有人拿 name 写盘，这里会红
     expect(
-      TabTransition.fromId(TabTransition.defaultTransition.name),
+      TabTransition.fromId(TabTransition.slideFade.name),
       TabTransition.defaultTransition,
     );
   });
 
-  test('出厂默认就是以前线上跑的那一版', () {
-    expect(TabTransition.defaultTransition, TabTransition.slideFade);
-    expect(TabTransition.defaultTransition.id, 'slide-fade');
+  test('出厂默认是「逐层揭开」，老用户没选过也走它', () {
+    expect(TabTransition.defaultTransition, TabTransition.stagger);
+    expect(TabTransition.defaultTransition.id, 'stagger');
+    expect(TabTransition.defaultTransition.label, '逐层揭开');
   });
 }

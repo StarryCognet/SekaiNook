@@ -27,10 +27,20 @@ class ChangelogEntry {
 }
 
 /// 当前版本号（与 [changelog] 第一条保持一致）。
-const String appVersion = '2.13.0';
+const String appVersion = '2.13.1';
 
 /// 版本历史（倒序：最新在前）。
 const List<ChangelogEntry> changelog = <ChangelogEntry>[
+  ChangelogEntry(
+    version: '2.13.1',
+    date: '2026-11-01 16:35:00',
+    title: '换页动画默认换成「逐层揭开」',
+    changes: <String>[
+      '底部五个页面的默认换页动画换成「逐层揭开」：新页从上往下揭开、内容轻轻上移，比整体淡入有层次',
+      '没去设置里选过的人，升级完就是这一套；选过的人照旧用自己挑的那个',
+      '其余 12 种都还在 设置 → 外观 → 换页动效 里，随时可以改',
+    ],
+  ),
   ChangelogEntry(
     version: '2.13.0',
     date: '2026-11-01 15:40:00',
