@@ -103,6 +103,10 @@ abstract final class AppConstants {
   /// 上一次用的深色主题
   static const String keyThemeDark = 'sekainook_theme_dark';
 
+  /// 换 Tab 时的内容转场（存的是 `TabTransition.id`，不是枚举 name ——
+  /// 以后重命名枚举不该让用户的选择失效）
+  static const String keyTabTransition = 'sekainook_tab_transition';
+
   /// 孩子已看过的驳回记录 id（首页红点用）
   static const String keyKidSeenRejects = 'sekainook_kid_seen_rejects';
 

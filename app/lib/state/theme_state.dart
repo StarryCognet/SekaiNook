@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_constants.dart';
 import '../data/api/settings_api.dart';
 import '../theme/app_theme.dart';
+import '../theme/tab_transition.dart';
 
 /// 主题与全局背景图（对应 Web 版 `src/store/useThemeStore.ts`）。
 ///
@@ -179,6 +180,30 @@ class ThemeState extends ChangeNotifier {
     }
     try {
       await _prefs.setDouble(AppTheme.textScaleKey, next);
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  // ---- 换 Tab 的转场 ----
+
+  /// 底部五个 Tab 之间怎么切过来。
+  ///
+  /// 出厂值就是**以前线上跑的那一个**（见 `TabTransition.defaultTransition`）——
+  /// 老用户升级完观感不变，只有进设置页主动挑了才会换。存本机、不跨设备同步：
+  /// 这是「这台手机的阅读节奏」，跟屏幕大小和手速有关，不该被另一台设备改掉。
+  TabTransition get tabTransition {
+    // 直接读 prefs 而不是缓存字段：值是安全的（脏值由 fromId 兜底回默认），
+    // 缓存就要维护「什么时候该刷」，这里读一次很便宜，省一类 bug。
+    return TabTransition.fromId(
+      _prefs.getString(AppConstants.keyTabTransition),
+    );
+  }
+
+  Future<void> setTabTransition(TabTransition value) async {
+    // 值没变就别写盘、别 notify（L-1）：连点同一档会整树重建
+    if (tabTransition == value) return;
+    try {
+      await _prefs.setString(AppConstants.keyTabTransition, value.id);
     } catch (_) {}
     notifyListeners();
   }

@@ -20,6 +20,7 @@ import '../../state/theme_state.dart';
 import '../../state/update_state.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/motion.dart';
+import '../../theme/tab_transition.dart';
 import '../widgets/motion_widgets.dart';
 import '../widgets/update_dialog.dart';
 import 'app_top_bar.dart';
@@ -50,6 +51,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   /// 走过的页面，返回到上一步用；同一页只换参数（花园菜单、家庭分区）不算新的一步
   final List<String> _backStack = <String>[];
   String _currentLocation = '';
+
+  /// 当前是底部第几格（0-4），以及换格的方向：`1` = 往右翻（新页从右边来）。
+  ///
+  /// 方向必须在这里算好：转场组件只会拿到「新旧两页」，它自己不知道哪一页在左。
+  /// 从「设置」回「首页」应该是往右翻页，而不是每次新页都从右边挤进来。
+  int _tabIndex = 0;
+  int _tabDirection = 1;
 
   /// 一次会话只问一次「要不要更新」，点过「以后再说」也不再追问
   bool _updatePrompted = false;
@@ -184,6 +192,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   /// 记一步页面：整条路径变了才算新的一步
   void _recordLocation(String location) {
     if (location == _currentLocation) return;
+    // 换格方向：新目标在旧目标右边就往右翻，反之往左
+    final int nextIndex = _indexForLocation(location);
+    if (nextIndex != _tabIndex) {
+      _tabDirection = nextIndex > _tabIndex ? 1 : -1;
+      _tabIndex = nextIndex;
+    }
     if (_currentLocation.isNotEmpty &&
         Uri.parse(location).path != Uri.parse(_currentLocation).path) {
       _backStack.add(_currentLocation);
@@ -228,6 +242,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final unread = context.select<NotificationState, int>((state) => state.unreadCount);
     final pending = context.select<FamilyState, int>((state) => state.pendingCount);
     final isParent = context.select<FamilyState, bool>((state) => state.role == FamilyRole.parent);
+    // 换 Tab 的转场由用户在设置里挑（默认就是以前的滑入淡出）
+    final tabTransition = context.select<ThemeState, TabTransition>(
+      (state) => state.tabTransition,
+    );
 
     // 上方一旦压了弹窗（底部面板、确认框、选择列表…），这一页的悬浮顶栏与
     // 胶囊底栏就退场 —— 它们本来是页面内 z 最高的浮层，弹窗只靠半透明遮罩
@@ -279,9 +297,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                         child: SizedBox(
                           width: math.min(constraints.maxWidth, _contentMaxWidth),
                           height: constraints.maxHeight,
-                          child: SlideFadeSwitcher(
+                          child: TabTransitionSwitcher(
                             childKey: ValueKey<String>(location),
-                            offset: 16,
+                            transition: tabTransition,
+                            direction: _tabDirection,
                             child: widget.child,
                           ),
                         ),

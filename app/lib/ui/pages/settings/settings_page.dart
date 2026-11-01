@@ -31,6 +31,7 @@ import '../../../state/update_state.dart';
 import '../../../theme/app_shape.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/motion.dart';
+import '../../../theme/tab_transition.dart';
 import '../../../theme/tokens.dart';
 import '../../widgets/admin_password_prompt.dart';
 import '../../widgets/app_card.dart';
@@ -1316,6 +1317,21 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
+              const SizedBox(height: AppSpacing.sm),
+              Divider(height: 1, color: palette.border),
+              const SizedBox(height: AppSpacing.sm),
+              const _CardHead(
+                title: '换页动效',
+                // 为什么给这么长一段说明：这 13 个不是「新旧版本」，是同一件事的
+                // 不同手感，没有对错 —— 说清楚「挑顺手的」比列参数有用。
+                description: '底部五个页面切换时的动画。挑一个顺手的就行，看着累就换回第一项；'
+                    '手机开了「减少动态效果」时不论选哪个都不播',
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _TransitionPicker(
+                value: theme.tabTransition,
+                onChanged: (TabTransition next) => theme.setTabTransition(next),
+              ),
             ],
           ),
         ),
@@ -2351,6 +2367,115 @@ class _ChoiceRow extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// 换 Tab 转场的单选列表。
+///
+/// 为什么不复用 [_ChoiceRow]：13 个选项横排会被压成三四个字一格，一句手感说明
+/// 根本放不下。这里竖排，一行一个 —— 名字在上、说明在下，右边一颗单选点。
+/// 分组标题按 `TabTransition.group` 自动插入，加新候选不用动这里。
+class _TransitionPicker extends StatelessWidget {
+  const _TransitionPicker({required this.value, required this.onChanged});
+
+  final TabTransition value;
+  final ValueChanged<TabTransition> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final List<Widget> rows = <Widget>[];
+    String? lastGroup;
+    for (int index = 0; index < TabTransition.values.length; index++) {
+      final TabTransition item = TabTransition.values[index];
+      if (item.group != lastGroup) {
+        lastGroup = item.group;
+        rows.add(Padding(
+          padding: EdgeInsets.only(
+            top: index == 0 ? 0 : AppSpacing.sm,
+            bottom: AppSpacing.xs,
+          ),
+          child: Text(
+            item.group,
+            style: TextStyle(
+              fontSize: AppFontSize.xs,
+              fontWeight: FontWeight.w600,
+              color: palette.textTertiary,
+            ),
+          ),
+        ));
+      }
+      final bool selected = item == value;
+      rows.add(Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          curve: AppMotion.standard,
+          decoration: ShapeDecoration(
+            color: selected ? palette.segmentedSelected : palette.surfaceSoft,
+            shape: AppShape.all(
+              AppRadius.md,
+              side: BorderSide(color: selected ? palette.primary : palette.border),
+            ),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: PressInkWell(
+              onTap: () => onChanged(item),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            item.label,
+                            style: TextStyle(
+                              fontSize: AppFontSize.sm,
+                              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                              color: selected
+                                  // 选中行的底是 segmentedSelected：字色按这层底取
+                                  ? palette.onColor(palette.segmentedSelected)
+                                  : palette.text,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            item.hint,
+                            style: TextStyle(
+                              fontSize: AppFontSize.xs,
+                              height: 1.35,
+                              color: palette.textTertiary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    GlyphIcon(
+                      selected ? AppIcons.radioOn : AppIcons.radioOff,
+                      size: 20,
+                      color: selected ? palette.primary : palette.border,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: rows,
     );
   }
 }
