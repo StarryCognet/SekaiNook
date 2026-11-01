@@ -39,7 +39,9 @@ changed() {
 # ---------- 1) 后端：代码/依赖/Dockerfile 变了 → 重建镜像并重启 ----------
 # 注意 server/ 整个目录：package.json（依赖）、index.ts / env.ts 等（代码）都在里面，
 # 而且代码是 COPY 进镜像的（不是挂载），所以任何一处变了都得重建。
-if changed '^(server/|functions/|migrations/|scripts/|deploy/docker/Dockerfile$)'; then
+# src/config/changelog.ts 也算：镜像里那份是「灌库时的播种源」（第 6 步在容器里读它），
+# 不重建的话容器里还是旧版本日志，同步时会把库里刚灌的新版本又删回去。
+if changed '^(server/|functions/|migrations/|scripts/|src/config/|deploy/docker/Dockerfile$)'; then
   echo "[deploy] backend code changed -> rebuilding image (30-60s)"
   ${DC} up -d --build backend
 else
