@@ -27,10 +27,20 @@ class ChangelogEntry {
 }
 
 /// 当前版本号（与 [changelog] 第一条保持一致）。
-const String appVersion = '2.13.2';
+const String appVersion = '2.13.3';
 
 /// 版本历史（倒序：最新在前）。
 const List<ChangelogEntry> changelog = <ChangelogEntry>[
+  ChangelogEntry(
+    version: '2.13.3',
+    date: '2026-11-02 20:15:00',
+    title: '历史记录的切换按钮更好找了',
+    changes: <String>[
+      '历史记录右上角的切换按钮做大了：40 高、带图标和下拉箭头，一眼看得见',
+      '点开是个下拉菜单，四种排列各带一句说明（一天一张卡 / 一条竖线串起 / 两列大图 / 一行一条），当前用的这种打勾，选好会记住',
+      '任务页的「历史记录」入口从任务卡里的小图标变成独占一行的大卡片，写着共多少条记录，更好点',
+    ],
+  ),
   ChangelogEntry(
     version: '2.13.2',
     date: '2026-11-02 19:00:00',

@@ -54,12 +54,12 @@ const int _recordsPageSize = 20;
 /// 四种画法共用同一份「筛选 + 分页」结果，只是摆法不同；右上角那颗按钮按
 /// 日账单 → 时间轴 → 照片流 → 紧凑表 循环，选中的记在本机（换手机才回到默认）。
 enum _HistoryLayout {
-  day('日账单', AppIcons.layers),
-  timeline('时间轴', AppIcons.clock),
-  photos('照片流', AppIcons.photos),
-  table('紧凑表', AppIcons.appsList);
+  day('日账单', AppIcons.layers, '一天一张卡，卡头是当天净额'),
+  timeline('时间轴', AppIcons.clock, '按天分段，一条竖线串起记录'),
+  photos('照片流', AppIcons.photos, '两列大图，翻起来像相册'),
+  table('紧凑表', AppIcons.appsList, '一行一条，点开看详情');
 
-  const _HistoryLayout(this.label, this.icon);
+  const _HistoryLayout(this.label, this.icon, this.hint);
 
   /// 按钮上显示的名字
   final String label;
@@ -67,9 +67,8 @@ enum _HistoryLayout {
   /// 按钮上显示的图标
   final Glyph icon;
 
-  /// 下一次点按钮切到哪个
-  _HistoryLayout get next =>
-      _HistoryLayout.values[(index + 1) % _HistoryLayout.values.length];
+  /// 下拉面板里那句说明
+  final String hint;
 
   /// 读本机存的字符串；不认识（含 null / 旧值）就回默认的日账单
   static _HistoryLayout parse(String? wire) {
@@ -174,8 +173,11 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   _RecordFilter _recordFilter = _RecordFilter.all;
   int _visibleCount = _recordsPageSize;
 
-  /// 历史记录的排列方式（默认日账单 A1；右上角单按钮循环切换，选择落在本机）
+  /// 历史记录的排列方式（默认日账单 A1；右上角下拉里选，选择落在本机）
   _HistoryLayout _historyLayout = _HistoryLayout.day;
+
+  /// 右上角排列下拉的开关
+  final MenuController _layoutMenuController = MenuController();
 
   /// 紧凑表里「展开了备注/照片」的那几行（切布局不清空，切回来还是刚才的样子）
   final Set<String> _expandedRecordIds = <String>{};
@@ -866,50 +868,161 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     }
   }
 
-  /// 右上角那颗按钮：A1 → A2 → A3 → A4 → A1 循环，顺手记住
-  void _cycleHistoryLayout() {
-    final _HistoryLayout next = _historyLayout.next;
-    setState(() => _historyLayout = next);
+  /// 下拉里选中一种排列：立刻应用 + 记住，下次进来还是它
+  void _selectHistoryLayout(_HistoryLayout layout) {
+    if (layout == _historyLayout) return;
+    setState(() => _historyLayout = layout);
     unawaited(
       SharedPreferences.getInstance().then(
         (SharedPreferences prefs) =>
-            prefs.setString(AppConstants.keyHistoryLayout, next.name),
+            prefs.setString(AppConstants.keyHistoryLayout, layout.name),
       ),
     );
   }
 
-  /// 布局切换按钮（胶囊 + 当前布局名，点一下换下一种）
+  /// 右上角的排列下拉：一颗 40 高的按钮，点开四选一（每项带一句说明），选中打勾
   Widget _buildLayoutSwitch() {
     final palette = context.palette;
-    return PressInkWell(
-      onTap: _cycleHistoryLayout,
-      borderRadius: BorderRadius.circular(AppRadius.full),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
+    return MenuAnchor(
+      controller: _layoutMenuController,
+      // 交给 MenuAnchor 自己按可用空间对齐（靠右不够时它会向左翻转），不硬推偏移
+      alignmentOffset: const Offset(0, AppSpacing.sm),
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll<Color>(palette.surface),
+        surfaceTintColor: const WidgetStatePropertyAll<Color>(Colors.transparent),
+        elevation: const WidgetStatePropertyAll<double>(8),
+        padding: const WidgetStatePropertyAll<EdgeInsets>(
+          EdgeInsets.symmetric(vertical: AppSpacing.xs),
         ),
-        decoration: ShapeDecoration(
-          color: palette.primarySoft,
-          shape: AppShape.all(
-            AppRadius.full,
-            side: BorderSide(color: palette.primary.withValues(alpha: 0.22)),
+        shape: WidgetStatePropertyAll<OutlinedBorder?>(
+          AppShape.all(
+            AppRadius.lg,
+            side: BorderSide(color: palette.border),
           ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            GlyphIcon(_historyLayout.icon, size: 13, color: palette.primary),
-            const SizedBox(width: 4),
-            Text(
-              _historyLayout.label,
-              style: TextStyle(
-                fontSize: AppFontSize.xs,
-                fontWeight: FontWeight.w600,
-                color: palette.primary,
+      ),
+      menuChildren: <Widget>[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.sm,
+            AppSpacing.xs,
+            AppSpacing.sm,
+            AppSpacing.sm,
+          ),
+          child: Text(
+            '换一种看历史的方式，选好会记住',
+            style: TextStyle(
+              fontSize: AppFontSize.xs,
+              color: palette.textTertiary,
+            ),
+          ),
+        ),
+        for (final _HistoryLayout layout in _HistoryLayout.values)
+          _buildLayoutMenuItem(layout),
+      ],
+      builder: (BuildContext context, MenuController controller, Widget? child) {
+        return PressInkWell(
+          onTap: () => controller.isOpen ? controller.close() : controller.open(),
+          borderRadius: BorderRadius.circular(AppRadius.full),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 40),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.sm + 2,
+              0,
+              AppSpacing.sm,
+              0,
+            ),
+            decoration: ShapeDecoration(
+              color: palette.primarySoft,
+              shape: AppShape.all(
+                AppRadius.full,
+                side: BorderSide(
+                  color: palette.primary.withValues(alpha: 0.28),
+                ),
               ),
             ),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                GlyphIcon(_historyLayout.icon, size: 17, color: palette.primary),
+                const SizedBox(width: AppSpacing.xs + 1),
+                Text(
+                  _historyLayout.label,
+                  style: TextStyle(
+                    fontSize: AppFontSize.sm,
+                    fontWeight: FontWeight.w600,
+                    color: palette.primary,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                GlyphIcon(AppIcons.chevronDown, size: 17, color: palette.primary),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 下拉里的一行：图标 + 名字 + 一句说明，当前这种打勾
+  Widget _buildLayoutMenuItem(_HistoryLayout layout) {
+    final palette = context.palette;
+    final bool selected = layout == _historyLayout;
+    return MenuItemButton(
+      onPressed: () {
+        _selectHistoryLayout(layout);
+        _layoutMenuController.close();
+      },
+      style: MenuItemButton.styleFrom(
+        padding: EdgeInsets.zero,
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: SizedBox(
+        width: 244,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.sm,
+          ),
+          child: Row(
+            children: <Widget>[
+              GlyphIcon(
+                layout.icon,
+                size: 18,
+                color: selected ? palette.primary : palette.textSecondary,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      layout.label,
+                      style: TextStyle(
+                        fontSize: AppFontSize.sm,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? palette.primary : palette.text,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      layout.hint,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: palette.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                GlyphIcon(AppIcons.checkCircle, size: 16, color: palette.primary),
+            ],
+          ),
         ),
       ),
     );
@@ -924,11 +1037,12 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   // ---- ④-0 必须任务细条（任务页顶部，约 28dp）----
 
-  /// 任务页顶部那条细条：必须任务进度 + 倒计时 + 历史记录入口。
+  /// 任务页顶部那条细条：必须任务进度 + 倒计时。
   ///
   /// 原「状态条」200dp 里每天真正要看的只有这一行 —— 积分和兑换搬去首页后，
   /// 这里只剩「今天还剩几件必须任务」和「没做要扣多少」。
-  /// 待审批入口不再挤在这里（原来只有一颗 32×32 图标），见 [_pendingEntryCard]。
+  /// 待审批入口不再挤在这里（原来只有一颗 32×32 图标），见 [_pendingEntryCard]；
+  /// 历史记录入口同样搬去了独占一行的卡片，见 [_historyEntryCard]。
   Widget _mustStrip({
     required TaskProgress progress,
   }) {
@@ -972,12 +1086,69 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
             ),
           ),
         ),
-        _ledgerEntryIcon(
-          glyph: AppIcons.history,
-          tooltip: '历史记录',
-          onTap: () => _goTab('history'),
-        ),
       ],
+    );
+  }
+
+  /// 任务页的「历史记录」入口：独占一行的整条按钮。
+  ///
+  /// 原来是必须任务细条右侧一颗 32×32 图标 —— 比 44dp 触控下限还小，
+  /// 而且缩在角落里根本不像「能点」。现在整行 56dp，标题 + 条数 + 箭头都摆明。
+  Widget _historyEntryCard(int count) {
+    final palette = context.palette;
+    return PressInkWell(
+      onTap: () => _goTab('history'),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 56),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: ShapeDecoration(
+          color: Color.alphaBlend(
+            palette.primary.withValues(alpha: 0.10),
+            palette.surfaceSoft,
+          ),
+          shape: AppShape.all(
+            AppRadius.md,
+            side: BorderSide(color: palette.primary.withValues(alpha: 0.35)),
+          ),
+        ),
+        child: Row(
+          children: <Widget>[
+            GlyphIcon(AppIcons.history, size: 20, color: palette.primary),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    '历史记录',
+                    style: TextStyle(
+                      fontSize: AppFontSize.md,
+                      fontWeight: FontWeight.w600,
+                      color: palette.text,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    count > 0
+                        ? '共 $count 条 · 每天的收支明细都在这里'
+                        : '每天的收支明细都在这里',
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            GlyphIcon(AppIcons.chevronForward, size: 18, color: palette.primary),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1067,66 +1238,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     return '22:00 前没打卡 · 每件 −$perTask';
   }
 
-  /// 任务页右上角的小圆图标（待审批 / 历史记录）。
-  Widget _ledgerEntryIcon({
-    required Glyph glyph,
-    required VoidCallback onTap,
-    required String tooltip,
-    int count = 0,
-  }) {
-    final palette = context.palette;
-    return Tooltip(
-      message: tooltip,
-      child: PressInkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.full),
-        child: SizedBox(
-          width: 32,
-          height: 32,
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            children: <Widget>[
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: palette.surfaceSoft,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: GlyphIcon(glyph, size: 16, color: palette.textSecondary),
-              ),
-              if (count > 0)
-                Positioned(
-                  top: -2,
-                  right: -4,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    constraints: const BoxConstraints(minWidth: 15),
-                    decoration: BoxDecoration(
-                      color: palette.danger,
-                      borderRadius: BorderRadius.circular(AppRadius.full),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      count > 9 ? '9+' : '$count',
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        height: 1.1,
-                        fontWeight: FontWeight.w700,
-                        color: palette.onColor(palette.danger),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   // ---- ④-a 任务区 ----
 
   Widget _buildTasksArea(FamilyState state, bool isParent) {
@@ -1189,6 +1300,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           _pendingEntryCard(state.pendingCount),
           const SizedBox(height: AppSpacing.md),
         ],
+        // 历史记录入口独占一行：原来只是细条右侧一颗 32×32 小图标，拇指常点空
+        _historyEntryCard(records.length),
+        const SizedBox(height: AppSpacing.md),
         AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
