@@ -56,6 +56,9 @@ abstract final class AppConstants {
 
   // ---- 本地存储键（各设备独立，不跨设备同步）----
 
+  /// 历史记录的排列方式（A1 日账单 / A2 时间轴 / A3 照片流 / A4 紧凑表）
+  static const String keyHistoryLayout = 'sekainook_history_layout';
+
   /// 主题选择
   static const String keyTheme = 'sekainook_theme';
 

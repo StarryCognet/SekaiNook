@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../config/app_constants.dart';
 import '../../../config/family_rules.dart';
@@ -38,6 +39,7 @@ import '../../shell/app_top_bar.dart';
 import '../../widgets/admin_password_prompt.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_sheet.dart';
+import 'record_image_viewer.dart';
 import '../../widgets/format.dart';
 import '../../widgets/motion_widgets.dart';
 import '../../widgets/state_views.dart';
@@ -46,6 +48,37 @@ import '../../widgets/motion/app_buttons.dart';
 
 /// 历史记录每页条数（手机端长列表一次性渲染会卡，改为「加载更多」分页）
 const int _recordsPageSize = 20;
+
+/// 历史记录的排列方式。
+///
+/// 四种画法共用同一份「筛选 + 分页」结果，只是摆法不同；右上角那颗按钮按
+/// 日账单 → 时间轴 → 照片流 → 紧凑表 循环，选中的记在本机（换手机才回到默认）。
+enum _HistoryLayout {
+  day('日账单', AppIcons.layers),
+  timeline('时间轴', AppIcons.clock),
+  photos('照片流', AppIcons.photos),
+  table('紧凑表', AppIcons.appsList);
+
+  const _HistoryLayout(this.label, this.icon);
+
+  /// 按钮上显示的名字
+  final String label;
+
+  /// 按钮上显示的图标
+  final Glyph icon;
+
+  /// 下一次点按钮切到哪个
+  _HistoryLayout get next =>
+      _HistoryLayout.values[(index + 1) % _HistoryLayout.values.length];
+
+  /// 读本机存的字符串；不认识（含 null / 旧值）就回默认的日账单
+  static _HistoryLayout parse(String? wire) {
+    for (final _HistoryLayout layout in _HistoryLayout.values) {
+      if (layout.name == wire) return layout;
+    }
+    return _HistoryLayout.day;
+  }
+}
 
 /// 历史记录状态筛选值：全部 / 待审批 / 已入账 / 已驳回
 enum _RecordFilter {
@@ -90,26 +123,15 @@ class _TaskEntry {
   final bool submitting;
 }
 
-/// 历史记录里的一行：要么是周标题（带本周合计），要么是一条流水。
+/// 历史记录按天分组时的一堆流水（日账单 / 时间轴 / 照片流 / 紧凑表共用）。
 ///
-/// 历史列表要虚拟化，行就必须是「能按下标取」的扁平数据，
-/// 而不是 build 出来的一串 Widget —— 所以周标题也当成一行。
-class _RecordEntry {
-  /// 周标题行。`weekTotal` 由分组那一趟循环累加进来。
-  _RecordEntry.week(this.week)
-      : weekTotal = 0,
-        record = null,
-        recordIndex = null;
+/// [net] 是当天净变化：被驳回的从没入过账，不计进来 —— 跟顶端「本周合计」一个口径。
+class _DayGroup {
+  _DayGroup(this.day);
 
-  /// 流水行。`recordIndex` 是这条在「已显示列表」里的下标（错峰入场的相位）。
-  _RecordEntry.record({required LedgerRecord this.record, required int this.recordIndex})
-      : week = null,
-        weekTotal = 0;
-
-  final DateTime? week;
-  int weekTotal;
-  final LedgerRecord? record;
-  final int? recordIndex;
+  final DateTime day;
+  final List<LedgerRecord> records = <LedgerRecord>[];
+  int net = 0;
 }
 
 /// 核心仪表盘：积分银行 + 任务区 / 待审批区 / 历史记录区
@@ -152,6 +174,12 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   _RecordFilter _recordFilter = _RecordFilter.all;
   int _visibleCount = _recordsPageSize;
 
+  /// 历史记录的排列方式（默认日账单 A1；右上角单按钮循环切换，选择落在本机）
+  _HistoryLayout _historyLayout = _HistoryLayout.day;
+
+  /// 紧凑表里「展开了备注/照片」的那几行（切布局不清空，切回来还是刚才的样子）
+  final Set<String> _expandedRecordIds = <String>{};
+
   /// 任务区的类型切换：赚钱任务 / 消费·罚款。
   ///
   /// 只留一组在屏幕上：一屏 12 条按节奏分完区之后本来就要滚，再把两组叠一起
@@ -174,6 +202,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   void initState() {
     super.initState();
     _now = DateTime.now();
+    unawaited(_restoreHistoryLayout());
     WidgetsBinding.instance.addObserver(this);
     // 预置的两条学习任务（十个英语单词 / 两首古诗）默认出现在任务列表里。
     // ensurePresets 幂等：重复调用不产生重复项，也不会覆盖家长改过 / 删过的任务。
@@ -779,7 +808,7 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
   }
 
   /// 子页顶部那条返回 + 标题（历史记录页把它单独塞进 SliverToBoxAdapter）
-  Widget _buildSubPageHeader(String title, {int count = 0}) {
+  Widget _buildSubPageHeader(String title, {int count = 0, Widget? trailing}) {
     final palette = context.palette;
     return PressInkWell(
       onTap: () => context.go('/family'),
@@ -809,9 +838,76 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
               ),
             ],
             const Spacer(),
+            // 有自定义按钮就给按钮（历史记录页的布局切换），否则维持原来的「返回任务」
+            trailing ??
+                Text(
+                  '返回任务',
+                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---- ④-布局：历史记录的排列方式 ----
+
+  /// 从本机读上次选的排列方式；读失败（隐私模式 / 磁盘满）就保持默认，不打扰用户
+  Future<void> _restoreHistoryLayout() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final _HistoryLayout saved = _HistoryLayout.parse(
+        prefs.getString(AppConstants.keyHistoryLayout),
+      );
+      if (!mounted || saved == _historyLayout) return;
+      setState(() => _historyLayout = saved);
+    } catch (_) {
+      // 本地存储不可用时不影响功能，默认日账单
+    }
+  }
+
+  /// 右上角那颗按钮：A1 → A2 → A3 → A4 → A1 循环，顺手记住
+  void _cycleHistoryLayout() {
+    final _HistoryLayout next = _historyLayout.next;
+    setState(() => _historyLayout = next);
+    unawaited(
+      SharedPreferences.getInstance().then(
+        (SharedPreferences prefs) =>
+            prefs.setString(AppConstants.keyHistoryLayout, next.name),
+      ),
+    );
+  }
+
+  /// 布局切换按钮（胶囊 + 当前布局名，点一下换下一种）
+  Widget _buildLayoutSwitch() {
+    final palette = context.palette;
+    return PressInkWell(
+      onTap: _cycleHistoryLayout,
+      borderRadius: BorderRadius.circular(AppRadius.full),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
+        decoration: ShapeDecoration(
+          color: palette.primarySoft,
+          shape: AppShape.all(
+            AppRadius.full,
+            side: BorderSide(color: palette.primary.withValues(alpha: 0.22)),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            GlyphIcon(_historyLayout.icon, size: 13, color: palette.primary),
+            const SizedBox(width: 4),
             Text(
-              '返回任务',
-              style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+              _historyLayout.label,
+              style: TextStyle(
+                fontSize: AppFontSize.xs,
+                fontWeight: FontWeight.w600,
+                color: palette.primary,
+              ),
             ),
           ],
         ),
@@ -1896,7 +1992,10 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
                 if (record.imageUrl != null && record.imageUrl!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.xs),
-                    child: _RecordThumb(url: record.imageUrl!),
+                    child: _RecordThumb(
+                      url: record.imageUrl!,
+                      onTap: () => unawaited(_openImageViewer(record, true)),
+                    ),
                   ),
                 const SizedBox(height: AppSpacing.sm),
                 // 320dp + 大字号：「通过」「驳回」两颗按钮并排会溢出，交给 Wrap
@@ -1981,13 +2080,9 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
 
   /// 历史记录页的滚动结构：整页只有**一条** CustomScrollView。
   ///
-  /// 2.9.8 之前这里是「一个 Column 塞进外层 ListView」：500 条流水全部一次性
-  /// build，每加一页就重排整张表。现在行交给 [SliverList.builder]，
-  /// 屏幕外的行不建；周合计也在分组那一趟循环里累加，不再按周重扫全表。
-  ///
-  /// 卡片用 [DecoratedSliver] 而不是 [AppCard]：AppCard 是 box 组件，
-  /// 无法包住一个 sliver 列表（硬套就得多一层可滚区域）。底色 / 圆角 / 描边
-  /// 与 AppCard 完全同源（`palette.cardColor` + `AppShape.all(AppRadius.lg)`）。
+  /// 结构分三层：页头（右上角挂布局切换按钮）→ 筛选条（四种排列共用）→
+  /// 列表本体。列表按 [_historyLayout] 分派：日账单 / 时间轴 / 照片流 / 紧凑表，
+  /// 四种都吃同一份「筛选 + 分页」结果，切换不动数据、不重新请求。
   Widget _buildRecordsScroller(
     FamilyState state,
     bool isParent,
@@ -1999,7 +2094,6 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     final filtered = _filteredRecords(state.records);
     final visible = filtered.take(_visibleCount).toList(growable: false);
     final remaining = filtered.length - visible.length;
-    final entries = _groupedRecordEntries(visible);
 
     return CustomScrollView(
       // 内容不满一屏也要能下拉刷新
@@ -2009,75 +2103,40 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           padding: padding.copyWith(bottom: 0),
           sliver: SliverMainAxisGroup(
             slivers: <Widget>[
-              SliverToBoxAdapter(child: _buildSubPageHeader('历史记录')),
-              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
-              DecoratedSliver(
-                decoration: ShapeDecoration(
-                  color: palette.cardColor(hasBackground: hasBackground),
-                  shape: AppShape.all(
-                    AppRadius.lg,
-                    side: BorderSide(color: palette.border),
-                  ),
-                ),
-                // 卡内边距对齐 AppCard 的 EdgeInsets.all(AppSpacing.md)
-                sliver: SliverPadding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  sliver: SliverMainAxisGroup(
-                    slivers: <Widget>[
-                      SliverToBoxAdapter(
-                        child: _buildRecordsToolbar(filtered, isParent),
-                      ),
-                      if (filtered.isEmpty)
-                        SliverToBoxAdapter(child: _buildRecordsEmpty())
-                      else ...<Widget>[
-                        const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
-                        SliverList.builder(
-                          itemCount: entries.length,
-                          itemBuilder: (BuildContext context, int index) {
-                            final entry = entries[index];
-                            final week = entry.week;
-                            if (week != null) {
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  top: index == 0 ? 0 : AppSpacing.md,
-                                  bottom: AppSpacing.xs,
-                                ),
-                                child: _weekHeader(week, entry.weekTotal),
-                              );
-                            }
-                            // index 取模：首屏 0..19 错峰，之后「加载更多」追加的条目也从头错峰
-                            return EnterBox(
-                              index: entry.recordIndex! % _recordsPageSize,
-                              child: _recordRow(entry.record!, isParent),
-                            );
-                          },
-                        ),
-                        if (remaining > 0)
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: AppSpacing.sm),
-                              child: SizedBox(
-                                width: double.infinity,
-                                child: AppOutlinedButton(
-                                  onPressed: () => setState(
-                                    () => _visibleCount += _recordsPageSize,
-                                  ),
-                                  child: Text(
-                                    '加载更多（还有 $remaining 条）',
-                                    style: TextStyle(
-                                      fontFeatures: kTabularNumbers,
-                                      color: palette.textSecondary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ],
-                  ),
+              SliverToBoxAdapter(
+                child: _buildSubPageHeader(
+                  '历史记录',
+                  // 右上角那颗按钮：点一下换下一种排列（A1 → A2 → A3 → A4 → A1）
+                  trailing: _buildLayoutSwitch(),
                 ),
               ),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+              // 筛选条与「导出 CSV」放在卡片外面：四种排列共用，列表本身也更完整
+              SliverToBoxAdapter(child: _buildRecordsToolbar(filtered, isParent)),
+              if (filtered.isEmpty)
+                SliverToBoxAdapter(
+                  child: AppCard(padding: EdgeInsets.zero, child: _buildRecordsEmpty()),
+                )
+              else ..._historySlivers(visible, isParent, hasBackground),
+              if (remaining > 0)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.sm),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: AppOutlinedButton(
+                        onPressed: () => setState(() => _visibleCount += _recordsPageSize),
+                        child: Text(
+                          '加载更多（还有 $remaining 条）',
+                          style: TextStyle(
+                            fontFeatures: kTabularNumbers,
+                            color: palette.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -2085,6 +2144,1044 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
           child: SizedBox(height: AppSpacing.xl + AppNavBar.contentInset(context)),
         ),
       ],
+    );
+  }
+
+  // ---- 历史记录：四种排列 ----
+
+  /// 卡片的底色 / 圆角 / 描边与 AppCard 同源（AppCard 是 box 组件，包不住 sliver 列表）
+  ShapeDecoration _historyCardDecoration({required bool hasBackground}) {
+    final palette = context.palette;
+    return ShapeDecoration(
+      color: palette.cardColor(hasBackground: hasBackground),
+      shape: AppShape.all(AppRadius.lg, side: BorderSide(color: palette.border)),
+    );
+  }
+
+  List<Widget> _historySlivers(
+    List<LedgerRecord> visible,
+    bool isParent,
+    bool hasBackground,
+  ) {
+    return switch (_historyLayout) {
+      _HistoryLayout.day => _dayLayoutSlivers(visible, isParent),
+      _HistoryLayout.timeline =>
+        _timelineLayoutSlivers(visible, isParent, hasBackground),
+      _HistoryLayout.photos => _photosLayoutSlivers(visible, isParent),
+      _HistoryLayout.table =>
+        _tableLayoutSlivers(visible, isParent, hasBackground),
+    };
+  }
+
+  /// 「今天 / 昨天 / 前天 / M 月 d 日」
+  String _dayLabel(DateTime day) {
+    final DateTime today = DateTime(_now.year, _now.month, _now.day);
+    final int diff = today.difference(DateTime(day.year, day.month, day.day)).inDays;
+    if (diff == 0) return '今天';
+    if (diff == 1) return '昨天';
+    if (diff == 2) return '前天';
+    return '${day.month} 月 ${day.day} 日';
+  }
+
+  /// 星期几（日期本身在 [_dayLabel] 里，这里只补星期，避免「周四 周四」那种重复）
+  String _daySub(DateTime day) {
+    const List<String> names = <String>['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    return names[day.weekday - 1];
+  }
+
+  /// 行内只显示 HH:mm —— [_formatTime] 带「今天 / 昨天」前缀，那是给列表外用的
+  String _clock(DateTime at) {
+    final DateTime local = at.toLocal();
+    final String h = local.hour.toString().padLeft(2, '0');
+    final String m = local.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  /// 把流水按自然日切成「一天一组」，组内保持后端给的倒序
+  List<_DayGroup> _groupByDay(List<LedgerRecord> records) {
+    final List<_DayGroup> groups = <_DayGroup>[];
+    for (final LedgerRecord record in records) {
+      final DateTime at = record.createdAt;
+      final DateTime day = DateTime(at.year, at.month, at.day);
+      if (groups.isEmpty || groups.last.day != day) {
+        groups.add(_DayGroup(day));
+      }
+      groups.last.records.add(record);
+      // 被驳回的从没入过账，不算当日净额
+      if (record.status != LedgerStatus.rejected) {
+        groups.last.net += record.amount;
+      }
+    }
+    return groups;
+  }
+
+  /// 状态圆点：只表达「这条记录处于什么状态」。
+  /// 收支正负由金额颜色表达 —— 否则 -20 的罚款（已入账）会和「已驳回」一样是红点。
+  Widget _statusDot(LedgerStatus status) {
+    final palette = context.palette;
+    final Color color = switch (status) {
+      LedgerStatus.pending => palette.warning,
+      LedgerStatus.rejected => palette.danger,
+      LedgerStatus.approved => palette.success,
+    };
+    // 待审批画成空心环：实心的橙点和「已驳回」的红点在小尺寸下几乎分不开。
+    final bool hollow = status == LedgerStatus.pending;
+    return Container(
+      width: hollow ? 7 : 6,
+      height: hollow ? 7 : 6,
+      decoration: ShapeDecoration(
+        color: hollow ? Colors.transparent : color,
+        shape: AppShape.all(
+          AppRadius.full,
+          side: hollow
+              ? BorderSide(color: color, width: 1.5)
+              : BorderSide.none,
+        ),
+      ),
+    );
+  }
+
+  /// A1 日账单：一天一张卡，卡头是日期 + 当日净额，卡内是「时间 / 事项 / 金额」
+  List<Widget> _dayLayoutSlivers(List<LedgerRecord> visible, bool isParent) {
+    final palette = context.palette;
+    final List<_DayGroup> groups = _groupByDay(visible);
+    return <Widget>[
+      for (final (i, group) in groups.indexed) ...<Widget>[
+        if (i > 0) const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+        SliverToBoxAdapter(
+          child: EnterBox(
+            index: i % 8,
+            child: AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _dayCardHeader(group),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: palette.border.withValues(alpha: 0.5),
+                  ),
+                  for (final LedgerRecord record in group.records)
+                    _dayRow(record, isParent),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    ];
+  }
+
+  Widget _dayCardHeader(_DayGroup group) {
+    final palette = context.palette;
+    final bool positive = group.net >= 0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm + 2,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
+      child: Row(
+        children: <Widget>[
+          Text(
+            _dayLabel(group.day),
+            style: TextStyle(
+              fontSize: AppFontSize.sm,
+              fontWeight: FontWeight.w700,
+              color: palette.text,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              _daySub(group.day),
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+            ),
+          ),
+          Text(
+            _formatAmount(group.net),
+            style: TextStyle(
+              fontSize: AppFontSize.xs,
+              fontWeight: FontWeight.w700,
+              fontFeatures: kTabularNumbers,
+              color: positive ? palette.success : palette.danger,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dayRow(LedgerRecord record, bool isParent) {
+    final palette = context.palette;
+    final bool positive = record.amount >= 0;
+    final bool rejected = record.status == LedgerStatus.rejected;
+    // 待审批还没入账，用次亮色 —— 免得看起来已经到账。
+    final Color amountColor = switch (record.status) {
+      LedgerStatus.rejected => palette.textTertiary,
+      LedgerStatus.pending => palette.textSecondary,
+      _ => positive ? palette.success : palette.danger,
+    };
+    final bool hasImage = record.imageUrl != null && record.imageUrl!.isNotEmpty;
+    return PressInkWell(
+      onTap: () => unawaited(_showRecordActions(record, isParent)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.md, 7, AppSpacing.md, 7),
+        child: Row(
+          children: <Widget>[
+            SizedBox(
+              width: 40,
+              child: Text(
+                _clock(record.createdAt),
+                style: TextStyle(
+                  fontSize: AppFontSize.xs,
+                  color: palette.textTertiary,
+                  fontFeatures: kTabularNumbers,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(
+                          record.taskName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: AppFontSize.sm,
+                            fontWeight: FontWeight.w600,
+                            color: rejected ? palette.textTertiary : palette.text,
+                            decoration: rejected
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                      ),
+                      // 三种状态都给一个点：待审批橙、已驳回红、已入账绿。
+                      // 光靠金额变灰/划线在深色下几乎看不出来。
+                      if (record.status != null) ...<Widget>[
+                        const SizedBox(width: 4),
+                        _statusDot(record.status!),
+                      ],
+                    ],
+                  ),
+                  if (record.note != null && record.note!.isNotEmpty)
+                    Text(
+                      record.note!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: AppFontSize.xs,
+                        color: palette.textTertiary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (hasImage) ...<Widget>[
+              const SizedBox(width: AppSpacing.sm),
+              _RecordThumb(
+                url: record.imageUrl!,
+                size: 28,
+                radius: AppRadius.sm,
+                onTap: () => unawaited(_openImageViewer(record, isParent)),
+              ),
+            ],
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              _formatAmount(record.amount),
+              style: TextStyle(
+                fontSize: AppFontSize.sm,
+                fontWeight: FontWeight.w700,
+                fontFeatures: kTabularNumbers,
+                color: amountColor,
+                decoration: rejected ? TextDecoration.lineThrough : null,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A2 时间轴：左侧时间列 + 一根竖线，按天分段
+  List<Widget> _timelineLayoutSlivers(
+    List<LedgerRecord> visible,
+    bool isParent,
+    bool hasBackground,
+  ) {
+    final List<_DayGroup> groups = _groupByDay(visible);
+    final List<Widget> children = <Widget>[];
+    for (final (i, group) in groups.indexed) {
+      children.add(_timelineDateHeader(group, first: i == 0));
+      for (final LedgerRecord record in group.records) {
+        children.add(_timelineRow(record, isParent));
+      }
+    }
+    return <Widget>[
+      DecoratedSliver(
+        decoration: _historyCardDecoration(hasBackground: hasBackground),
+        sliver: SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.xs,
+            AppSpacing.md,
+            AppSpacing.sm,
+          ),
+          sliver: SliverList.list(children: children),
+        ),
+      ),
+    ];
+  }
+
+  Widget _timelineDateHeader(_DayGroup group, {required bool first}) {
+    final palette = context.palette;
+    final bool positive = group.net >= 0;
+    return Padding(
+      padding: EdgeInsets.only(
+        top: first ? AppSpacing.sm : AppSpacing.md,
+        bottom: AppSpacing.xs,
+      ),
+      child: Row(
+        children: <Widget>[
+          Text(
+            _dayLabel(group.day),
+            style: TextStyle(
+              fontSize: AppFontSize.xs,
+              fontWeight: FontWeight.w600,
+              color: palette.textSecondary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            _daySub(group.day),
+            style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+          ),
+          const Spacer(),
+          Text(
+            _formatAmount(group.net),
+            style: TextStyle(
+              fontSize: AppFontSize.xs,
+              fontWeight: FontWeight.w600,
+              fontFeatures: kTabularNumbers,
+              color: positive ? palette.success : palette.danger,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _timelineRow(LedgerRecord record, bool isParent) {
+    final palette = context.palette;
+    final bool rejected = record.status == LedgerStatus.rejected;
+    final Color dotColor = switch (record.status) {
+      LedgerStatus.pending => palette.warning,
+      LedgerStatus.rejected => palette.danger,
+      _ => palette.success,
+    };
+    final bool hasImage = record.imageUrl != null && record.imageUrl!.isNotEmpty;
+    final Color amountColor = switch (record.status) {
+      LedgerStatus.rejected => palette.textTertiary,
+      LedgerStatus.pending => palette.textSecondary,
+      _ => dotColor,
+    };
+    return PressInkWell(
+      onTap: () => unawaited(_showRecordActions(record, isParent)),
+      // SliverList 给子项的高度是无约束的，Row 的 stretch 会塌成 0：
+      // 这里给一个固定行高，竖线才能上下贯通成一条时间轴。
+      child: SizedBox(
+        height: 62,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            SizedBox(
+              width: 44,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 10, right: AppSpacing.xs),
+                child: Text(
+                  _clock(record.createdAt),
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: AppFontSize.xs,
+                    color: palette.textTertiary,
+                    fontFeatures: kTabularNumbers,
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 16,
+              child: Stack(
+                alignment: Alignment.topCenter,
+                children: <Widget>[
+                  Positioned(
+                    top: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 2,
+                      color: palette.border.withValues(alpha: 0.55),
+                    ),
+                  ),
+                  Positioned(
+                    top: 14,
+                    child: Container(
+                      width: 7,
+                      height: 7,
+                      decoration: ShapeDecoration(
+                        color: dotColor,
+                        shape: AppShape.all(AppRadius.full),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.sm,
+                  4,
+                  AppSpacing.xs,
+                  4,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            record.taskName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: AppFontSize.sm,
+                              fontWeight: FontWeight.w600,
+                              color: rejected
+                                  ? palette.textTertiary
+                                  : palette.text,
+                              decoration: rejected
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          _formatAmount(record.amount),
+                          style: TextStyle(
+                            fontSize: AppFontSize.sm,
+                            fontWeight: FontWeight.w700,
+                            fontFeatures: kTabularNumbers,
+                            color: amountColor,
+                            decoration:
+                                rejected ? TextDecoration.lineThrough : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (record.note != null && record.note!.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 2),
+                      Text(
+                        record.note!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppFontSize.xs,
+                          color: palette.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            if (hasImage)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                child: _RecordThumb(
+                  url: record.imageUrl!,
+                  size: 40,
+                  onTap: () => unawaited(_openImageViewer(record, isParent)),
+                ),
+              ),
+            const SizedBox(width: AppSpacing.xs),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A3 照片流：按天 2 列 3:4 的图卡，没图的记录用语义色块占位
+  List<Widget> _photosLayoutSlivers(List<LedgerRecord> visible, bool isParent) {
+    final List<_DayGroup> groups = _groupByDay(visible);
+    final List<Widget> slivers = <Widget>[];
+    for (final (i, group) in groups.indexed) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: i == 0 ? 0 : AppSpacing.md,
+              bottom: AppSpacing.sm,
+            ),
+            child: Row(
+              children: <Widget>[
+                Text(
+                  _dayLabel(group.day),
+                  style: TextStyle(
+                    fontSize: AppFontSize.sm,
+                    fontWeight: FontWeight.w700,
+                    color: context.palette.text,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  _daySub(group.day),
+                  style: TextStyle(
+                    fontSize: AppFontSize.xs,
+                    color: context.palette.textTertiary,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  _formatAmount(group.net),
+                  style: TextStyle(
+                    fontSize: AppFontSize.xs,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: kTabularNumbers,
+                    color: group.net >= 0
+                        ? context.palette.success
+                        : context.palette.danger,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      slivers.add(
+        SliverGrid(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: AppSpacing.sm,
+            crossAxisSpacing: AppSpacing.sm,
+            childAspectRatio: 3 / 4,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            (BuildContext context, int index) =>
+                _photoCard(group.records[index], isParent),
+            childCount: group.records.length,
+          ),
+        ),
+      );
+    }
+    return slivers;
+  }
+
+  Widget _photoCard(LedgerRecord record, bool isParent) {
+    final palette = context.palette;
+    final bool positive = record.amount >= 0;
+    final bool rejected = record.status == LedgerStatus.rejected;
+    final bool hasImage = record.imageUrl != null && record.imageUrl!.isNotEmpty;
+    final Color tone = rejected
+        ? palette.textTertiary
+        : (positive ? palette.success : palette.danger);
+    return PressInkWell(
+      onTap: () => hasImage
+          ? unawaited(_openImageViewer(record, isParent))
+          : unawaited(_showRecordActions(record, isParent)),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            if (hasImage)
+              Image.network(
+                record.imageUrl!,
+                headers: AppConstants.imageHeaders,
+                fit: BoxFit.cover,
+                cacheWidth: 480,
+                errorBuilder: (_, _, _) => Container(
+                  color: tone.withValues(alpha: 0.12),
+                  child: Center(
+                    child: GlyphIcon(AppIcons.imageBroken, size: 22, color: tone),
+                  ),
+                ),
+              )
+            else
+              Container(
+                color: tone.withValues(alpha: 0.12),
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      GlyphIcon(
+                        positive ? AppIcons.trendUp : AppIcons.trendDown,
+                        size: 22,
+                        color: tone,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            // 顶部信息条：任务名 + 金额。
+            // 放顶部是为了避开照片自带的拍照水印（任务名 / 时间 / 坐标都烧在图片底部），
+            // 叠在一起会糊成一团。
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.sm,
+                  AppSpacing.sm,
+                  AppSpacing.sm,
+                  20,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[
+                      Colors.black.withValues(alpha: 0.80),
+                      Colors.black.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        record.taskName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: AppFontSize.xs,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          shadows: <Shadow>[
+                            Shadow(color: Color(0x99000000), blurRadius: 6),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      _formatAmount(record.amount),
+                      style: TextStyle(
+                        fontSize: AppFontSize.xs,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: kTabularNumbers,
+                        color: Colors.white,
+                        shadows: const <Shadow>[
+                          Shadow(color: Color(0x99000000), blurRadius: 6),
+                        ],
+                        decoration:
+                            rejected ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A4 紧凑表：一行一条，点行展开备注 / 缩略图 / 操作
+  List<Widget> _tableLayoutSlivers(
+    List<LedgerRecord> visible,
+    bool isParent,
+    bool hasBackground,
+  ) {
+    final palette = context.palette;
+    final List<_DayGroup> groups = _groupByDay(visible);
+    final List<Widget> children = <Widget>[];
+    for (final group in groups) {
+      children.add(
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
+          child: Row(
+            children: <Widget>[
+              Text(
+                _dayLabel(group.day),
+                style: TextStyle(
+                  fontSize: AppFontSize.xs,
+                  fontWeight: FontWeight.w600,
+                  color: palette.textSecondary,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                _daySub(group.day),
+                style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
+              ),
+              const Spacer(),
+              Text(
+                _formatAmount(group.net),
+                style: TextStyle(
+                  fontSize: AppFontSize.xs,
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: kTabularNumbers,
+                  color: group.net >= 0 ? palette.success : palette.danger,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      for (final LedgerRecord record in group.records) {
+        children.add(_tableRow(record, isParent));
+      }
+    }
+    return <Widget>[
+      DecoratedSliver(
+        decoration: _historyCardDecoration(hasBackground: hasBackground),
+        sliver: SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.xs,
+            AppSpacing.md,
+            AppSpacing.xs,
+          ),
+          sliver: SliverList.list(children: children),
+        ),
+      ),
+    ];
+  }
+
+  Widget _tableRow(LedgerRecord record, bool isParent) {
+    final palette = context.palette;
+    final bool positive = record.amount >= 0;
+    final bool rejected = record.status == LedgerStatus.rejected;
+    // 待审批还没入账，用次亮色 —— 免得看起来已经到账。
+    final Color amountColor = switch (record.status) {
+      LedgerStatus.rejected => palette.textTertiary,
+      LedgerStatus.pending => palette.textSecondary,
+      _ => positive ? palette.success : palette.danger,
+    };
+    final bool expanded = _expandedRecordIds.contains(record.id);
+    final bool hasImage = record.imageUrl != null && record.imageUrl!.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        PressInkWell(
+          onTap: () => setState(() {
+            if (!_expandedRecordIds.remove(record.id)) {
+              _expandedRecordIds.add(record.id);
+            }
+          }),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Row(
+              children: <Widget>[
+                SizedBox(
+                  width: 38,
+                  child: Text(
+                    _clock(record.createdAt),
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.textTertiary,
+                      fontFeatures: kTabularNumbers,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                _statusDot(record.status ?? LedgerStatus.approved),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(
+                    record.taskName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: rejected ? palette.textTertiary : palette.text,
+                            decoration: rejected
+                                ? TextDecoration.lineThrough
+                                : null,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  _formatAmount(record.amount),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: kTabularNumbers,
+                    color: amountColor,
+                    decoration: rejected ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                AnimatedRotation(
+                  turns: expanded ? 0.25 : -0.25,
+                  duration: const Duration(milliseconds: 160),
+                  child: GlyphIcon(
+                    AppIcons.chevronBack,
+                    size: 14,
+                    color: palette.textTertiary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (expanded)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                if (record.note != null && record.note!.isNotEmpty)
+                  Text(
+                    record.note!,
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.textSecondary,
+                    ),
+                  ),
+                if (hasImage)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _RecordThumb(
+                        url: record.imageUrl!,
+                        size: 56,
+                        onTap: () => unawaited(_openImageViewer(record, isParent)),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.xs),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: _recordActionButtons(record, isParent),
+                ),
+              ],
+            ),
+          ),
+        Divider(
+          height: 1,
+          thickness: 1,
+          color: palette.border.withValues(alpha: 0.4),
+        ),
+      ],
+    );
+  }
+
+  /// 一条流水能做的动作（家长的通过 / 驳回 / 删除，孩子的撤回 / 重新提交）
+  List<Widget> _recordActionButtons(
+    LedgerRecord record,
+    bool isParent, {
+    VoidCallback? before,
+  }) {
+    final palette = context.palette;
+    final LedgerStatus? status = record.status;
+    return <Widget>[
+      if (!isParent && status == LedgerStatus.pending)
+        AppOutlinedButton.icon(
+          onPressed: () {
+            before?.call();
+            unawaited(_confirmWithdraw(record));
+          },
+          icon: const GlyphIcon(AppIcons.undo, size: 16),
+          label: const Text('撤回'),
+        ),
+      if (!isParent && status == LedgerStatus.rejected)
+        AppOutlinedButton(
+          onPressed: () {
+            before?.call();
+            unawaited(_resubmit(record.id));
+          },
+          child: const Text('重新提交'),
+        ),
+      if (isParent && status == LedgerStatus.pending) ...<Widget>[
+        AppFilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: palette.success,
+            foregroundColor: palette.onColor(palette.success),
+          ),
+          onPressed: () async {
+            before?.call();
+            await _approve(record);
+          },
+          icon: const GlyphIcon(AppIcons.checkCircle, size: 16),
+          label: const Text('通过'),
+        ),
+        AppOutlinedButton.icon(
+          onPressed: () {
+            before?.call();
+            unawaited(_startReject(record));
+          },
+          icon: const GlyphIcon(AppIcons.close, size: 16),
+          label: const Text('驳回'),
+        ),
+      ],
+      if (isParent)
+        AppOutlinedButton.icon(
+          onPressed: () {
+            before?.call();
+            unawaited(_confirmDelete(record));
+          },
+          style: OutlinedButton.styleFrom(foregroundColor: palette.danger),
+          icon: const GlyphIcon(AppIcons.delete, size: 16),
+          label: const Text('删除'),
+        ),
+    ];
+  }
+
+  /// 点一行流水弹出的操作面板：看大图、看备注、做动作都在这里，列表因此能排得紧凑
+  Future<void> _showRecordActions(LedgerRecord record, bool isParent) {
+    final bool hasImage = record.imageUrl != null && record.imageUrl!.isNotEmpty;
+    return showAppSheet<void>(
+      context: context,
+      builder: (BuildContext sheetContext) {
+        final palette = sheetContext.palette;
+        final bool positive = record.amount >= 0;
+        final bool rejected = record.status == LedgerStatus.rejected;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      record.taskName,
+                      style: TextStyle(
+                        fontSize: AppFontSize.lg,
+                        fontWeight: FontWeight.w600,
+                        color: palette.text,
+                      ),
+                    ),
+                  ),
+                  _statusPill(record),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Row(
+                children: <Widget>[
+                  Text(
+                    _formatTime(record.createdAt),
+                    style: TextStyle(
+                      fontSize: AppFontSize.xs,
+                      color: palette.textTertiary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    _formatAmount(record.amount),
+                    style: TextStyle(
+                      fontSize: AppFontSize.lg,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: kTabularNumbers,
+                      color: rejected
+                          ? palette.textTertiary
+                          : (positive ? palette.success : palette.danger),
+                      decoration: rejected ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                ],
+              ),
+              if (record.note != null && record.note!.isNotEmpty) ...<Widget>[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  record.note!,
+                  style: TextStyle(
+                    fontSize: AppFontSize.sm,
+                    color: palette.textSecondary,
+                  ),
+                ),
+              ],
+              if (hasImage) ...<Widget>[
+                const SizedBox(height: AppSpacing.md),
+                PressInkWell(
+                  onTap: () {
+                    Navigator.of(sheetContext).maybePop();
+                    unawaited(_openImageViewer(record, isParent));
+                  },
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Image.network(
+                      record.imageUrl!,
+                      headers: AppConstants.imageHeaders,
+                      height: 148,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      cacheWidth: 640,
+                      errorBuilder: (_, _, _) => Container(
+                        height: 148,
+                        color: palette.softColor(
+                          hasBackground: context.select<ThemeState, bool>(
+                            (state) => state.background.isNotEmpty,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: GlyphIcon(
+                          AppIcons.imageBroken,
+                          size: 22,
+                          color: palette.textTertiary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: _recordActionButtons(
+                  record,
+                  isParent,
+                  before: () => Navigator.of(sheetContext).maybePop(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// 打开沉浸式全屏查看器：把「同一天有图的流水」一起带进去，左右可翻
+  Future<void> _openImageViewer(LedgerRecord record, bool isParent) {
+    final List<LedgerRecord> records = context.read<FamilyState>().records;
+    final int index = records.indexWhere((LedgerRecord r) => r.id == record.id);
+    return showRecordImageViewer(
+      context: context,
+      records: records,
+      initialIndex: index < 0 ? 0 : index,
+      isParent: isParent,
+      onDelete: _confirmDelete,
     );
   }
 
@@ -2142,201 +3239,12 @@ class _FamilyDashboardPageState extends State<FamilyDashboardPage>
     );
   }
 
-  // ---- 历史记录：按周分组 ----
-
-  /// 把流水按「自然周（周一 00:00 起）」切成「周标题 + 行」的扁平序列。
-  ///
-  /// 流水本身按时间倒序返回，所以同一周的记录一定连续，只需比较上一周即可；
-  /// 万一后端换了排序口径，最坏情况也只是同一个周标题出现两次（不会串周）。
-  ///
-  /// 周合计在这一次循环里累加：原来每个周标题都把整份 records 传进去重扫一遍
-  /// （40 周 × 500 条 ≈ 2 万次迭代，还顺带造 4 万个临时 DateTime）。
-  List<_RecordEntry> _groupedRecordEntries(List<LedgerRecord> records) {
-    final entries = <_RecordEntry>[];
-    _RecordEntry? header;
-    for (final (i, record) in records.indexed) {
-      final week = _weekStartOf(record.createdAt);
-      if (header == null || header.week != week) {
-        header = _RecordEntry.week(week);
-        entries.add(header);
-      }
-      // 被驳回的不算进本周净变化（那笔钱从没入过账）
-      if (record.status != LedgerStatus.rejected) {
-        header.weekTotal += record.amount;
-      }
-      entries.add(_RecordEntry.record(record: record, recordIndex: i));
-    }
-    return entries;
-  }
-
-  /// 周标题：左边「本周 / 上周 / M月d日那周」，右边本周净变化。
-  Widget _weekHeader(DateTime week, int total) {
-    final palette = context.palette;
-    return Row(
-      children: <Widget>[
-        Text(
-          _weekLabel(week),
-          style: TextStyle(
-            fontSize: AppFontSize.xs,
-            fontWeight: FontWeight.w600,
-            color: palette.textSecondary,
-          ),
-        ),
-        const Spacer(),
-        Text(
-          _formatAmount(total),
-          style: TextStyle(
-            fontSize: AppFontSize.xs,
-            fontWeight: FontWeight.w600,
-            fontFeatures: kTabularNumbers,
-            color: total >= 0 ? palette.success : palette.danger,
-          ),
-        ),
-      ],
-    );
-  }
-
-  static DateTime _weekStartOf(DateTime at) {
-    final day = DateTime(at.year, at.month, at.day);
-    return day.subtract(Duration(days: day.weekday - 1));
-  }
-
-  String _weekLabel(DateTime week) {
-    final now = _now;
-    final thisWeek = _weekStartOf(now);
-    final diff = thisWeek.difference(week).inDays;
-    if (diff == 0) return '本周';
-    if (diff == 7) return '上周';
-    return '${week.month} 月 ${week.day} 日那周';
-  }
-
   /// 切换筛选条件后回到第一页，避免出现「筛完还剩 40 条已渲染」
   void _onFilterChanged(_RecordFilter filter) {
     setState(() {
       _recordFilter = filter;
       _visibleCount = _recordsPageSize;
     });
-  }
-
-  /// 单条流水
-  Widget _recordRow(LedgerRecord record, bool isParent) {
-    final palette = context.palette;
-    final positive = record.amount >= 0;
-    final status = record.status;
-    // 被驳回的钱从没入过账：金额走灰，别再用绿色 +30 假装它到账了
-    final bool rejected = status == LedgerStatus.rejected;
-    final Color amountColor = rejected
-        ? palette.textTertiary
-        : (positive ? palette.success : palette.danger);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Container(
-            width: 32,
-            height: 32,
-            alignment: Alignment.center,
-            decoration: ShapeDecoration(
-              color: (positive ? palette.success : palette.danger).withValues(alpha: 0.12),
-              shape: AppShape.all(AppRadius.md),
-            ),
-            child: GlyphIcon(
-              positive ? AppIcons.trendUp : AppIcons.trendDown,
-              size: 16,
-              color: positive ? palette.success : palette.danger,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  record.taskName,
-                  style: TextStyle(
-                    fontSize: AppFontSize.sm,
-                    fontWeight: FontWeight.w600,
-                    color: palette.text,
-                  ),
-                ),
-                Text(
-                  _formatTime(record.createdAt),
-                  style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
-                ),
-                if (record.note != null && record.note!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.xs),
-                    child: Text(
-                      record.note!,
-                      style: TextStyle(fontSize: AppFontSize.xs, color: palette.textSecondary),
-                    ),
-                  ),
-                if (record.imageUrl != null && record.imageUrl!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.xs),
-                    child: _RecordThumb(url: record.imageUrl!),
-                  ),
-                const SizedBox(height: AppSpacing.xs),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.xs,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: <Widget>[
-                    // 小孩撤回自己待审批的申请
-                    if (!isParent && status == LedgerStatus.pending)
-                      AppOutlinedButton.icon(
-                        onPressed: () => unawaited(_confirmWithdraw(record)),
-                        icon: const GlyphIcon(AppIcons.undo, size: 16),
-                        label: const Text('撤回'),
-                      ),
-                    // 驳回后重新提交：孩子对自己申请的补救动作 ——
-                    // 家长端不给这个按钮，只留一句只读说明
-                    if (!isParent && status == LedgerStatus.rejected)
-                      AppOutlinedButton(
-                        onPressed: () => unawaited(_resubmit(record.id)),
-                        child: const Text('重新提交'),
-                      ),
-                    if (isParent && status == LedgerStatus.rejected)
-                      Text(
-                        '已驳回 · 孩子可重新提交',
-                        style: TextStyle(fontSize: AppFontSize.xs, color: palette.textTertiary),
-                      ),
-                    // 删除（仅家长）：含图片时后端一并删除 R2 图片
-                    if (isParent)
-                      AppOutlinedButton.icon(
-                        onPressed: () => unawaited(_confirmDelete(record)),
-                        style: OutlinedButton.styleFrom(foregroundColor: palette.danger),
-                        icon: const GlyphIcon(AppIcons.delete, size: 16),
-                        label: const Text('删除'),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: <Widget>[
-              _statusPill(record),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                _formatAmount(record.amount),
-                style: TextStyle(
-                  fontSize: AppFontSize.md,
-                  fontWeight: FontWeight.w700,
-                  color: amountColor,
-                  fontFeatures: kTabularNumbers,
-                  // 驳回后金额划掉，一眼看出「这笔不算」
-                  decoration: rejected ? TextDecoration.lineThrough : null,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 
   /// 流水状态标签
@@ -2937,70 +3845,88 @@ class _CustomTaskFormState extends State<_CustomTaskForm> {
 }
 
 /// 流水 / 待审批条目上的图片缩略图（点击看大图）
+///
+/// [onTap] 由调用方给：传了就走「沉浸式全屏查看器」（历史记录页现在都走这个），
+/// 没传（或旧的待审批卡片）保持原来的居中浮层。
 class _RecordThumb extends StatelessWidget {
-  const _RecordThumb({required this.url});
+  const _RecordThumb({
+    required this.url,
+    this.size = 48,
+    this.radius = AppRadius.sm,
+    this.onTap,
+  });
 
   final String url;
+  final double size;
+  final double radius;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final bool hasBackground =
+        context.select<ThemeState, bool>((state) => state.background.isNotEmpty);
     return PressInkWell(
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      onTap: () => showFloatingDialog<void>(
-        context: context,
-        // 不要再自己套一层 Dialog：showFloatingDialog 已经给了浮层与遮罩，
-        // 嵌套 Dialog 会得到两层背景、两次点击遮罩才关得掉。
-        // 这里只把「能放大看」的内容交出去 —— 图片限在这一圈内，
-        // 四周留白点一下就落在遮罩上，所以关得掉。
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560, maxHeight: 720),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                child: InteractiveViewer(
-                  maxScale: 4,
-                  child: Image.network(
-                    url,
-                    headers: AppConstants.imageHeaders,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stack) => Padding(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      child: GlyphIcon(
-                        AppIcons.imageBroken,
-                        size: 32,
-                        color: palette.textTertiary,
-                      ),
+      borderRadius: BorderRadius.circular(radius),
+      onTap: onTap ?? () => _showLegacyDialog(context),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: Image.network(
+          url,
+          headers: AppConstants.imageHeaders,
+          width: size,
+          height: size,
+          // 只按显示尺寸解码：像素尺寸 × 3 倍屏，别把整张打卡照片解码进内存
+          cacheWidth: (size * 3).round(),
+          cacheHeight: (size * 3).round(),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stack) => Container(
+            width: size,
+            height: size,
+            alignment: Alignment.center,
+            color: palette.softColor(hasBackground: hasBackground),
+            child: GlyphIcon(
+              AppIcons.photos,
+              size: (size * 0.38).clamp(12, 24),
+              color: palette.textTertiary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 老的居中浮层（只有还没换过来的调用点会走到这里）
+  void _showLegacyDialog(BuildContext context) {
+    final palette = context.palette;
+    showFloatingDialog<void>(
+      context: context,
+      // 不要再自己套一层 Dialog：showFloatingDialog 已经给了浮层与遮罩，
+      // 嵌套 Dialog 会得到两层背景、两次点击遮罩才关得掉。
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560, maxHeight: 720),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              child: InteractiveViewer(
+                maxScale: 4,
+                child: Image.network(
+                  url,
+                  headers: AppConstants.imageHeaders,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stack) => Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: GlyphIcon(
+                      AppIcons.imageBroken,
+                      size: 32,
+                      color: palette.textTertiary,
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        child: Image.network(
-          url,
-          headers: AppConstants.imageHeaders,
-          width: 48,
-          height: 48,
-          // 只按显示尺寸解码：48 逻辑像素 × 3 倍屏，别把整张打卡照片解码进内存
-          cacheWidth: 144,
-          cacheHeight: 144,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stack) => Container(
-            width: 48,
-            height: 48,
-            alignment: Alignment.center,
-            color: palette.softColor(
-              hasBackground:
-                  context.select<ThemeState, bool>((state) => state.background.isNotEmpty),
-            ),
-            child: GlyphIcon(AppIcons.photos, size: 18, color: palette.textTertiary),
           ),
         ),
       ),

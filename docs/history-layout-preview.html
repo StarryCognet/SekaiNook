@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SekaiNook · 历史记录排版 &amp; 图片查看 选型器</title>
+<style>
+/* ==========================================================================
+   文档外壳（跟 App 无关，只是一张"选型台"）
+   ========================================================================== */
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  --page:#f7f2ef; --panel:#fffdfc; --ink:#2a2224; --muted:#6b5b5d;
+  --line:#e8dcda; --accent:#8d4959; --accent-soft:#fbebee;
+  background:var(--page); color:var(--ink);
+  font:14px/1.62 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Noto Sans SC",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+body[data-theme="dark"]{
+  --page:#141011; --panel:#1e1719; --ink:#f0e4e5; --muted:#a99b9d;
+  --line:#392e30; --accent:#ffb1c0; --accent-soft:#3a2229;
+}
+button{font:inherit;color:inherit}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;background:var(--accent-soft);color:var(--accent);padding:1px 5px;border-radius:5px}
+
+.topbar{
+  position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:14px;
+  padding:10px 24px;background:color-mix(in srgb,var(--page) 86%,transparent);
+  backdrop-filter:saturate(160%) blur(12px);border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:13px;letter-spacing:.02em}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 16%,transparent)}
+.top-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+.tbtn{
+  cursor:pointer;border:1px solid var(--line);background:var(--panel);
+  padding:5px 13px;border-radius:999px;font-size:12.5px;font-weight:500;
+}
+.tbtn:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.tbtn.ghost{background:transparent;color:var(--muted)}
+.remember{font-size:11.5px;color:var(--muted);opacity:0;transition:opacity .25s}
+.remember.on{opacity:1}
+
+.wrap{max-width:1360px;margin:0 auto;padding:26px 24px 90px}
+.hero{max-width:960px;padding:6px 0 22px}
+.kicker{font-size:11.5px;font-weight:700;letter-spacing:.16em;color:var(--accent)}
+h1{font-size:30px;line-height:1.3;margin:8px 0 10px;letter-spacing:-.01em;font-weight:700}
+.lead{margin:0;color:var(--muted);font-size:14.5px;line-height:1.75}
+.lead b{color:var(--ink)}
+.picks{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.pick-chip{
+  display:inline-flex;align-items:center;gap:7px;font-size:12.5px;padding:5px 12px;border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));
+  background:color-mix(in srgb,var(--accent-soft) 70%,var(--panel));color:var(--accent);font-weight:600;
+}
+.pick-chip i{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block}
+
+.studio{display:grid;grid-template-columns:452px minmax(0,1fr);gap:44px;align-items:start}
+.stage{display:flex;flex-direction:column;align-items:center}
+.segs{
+  display:inline-flex;padding:4px;gap:2px;border-radius:999px;margin-bottom:18px;
+  background:color-mix(in srgb,var(--ink) 6%,transparent);
+}
+.segs button{
+  cursor:pointer;border:0;background:transparent;padding:7px 18px;border-radius:999px;
+  font-size:13px;font-weight:600;color:var(--muted);transition:.18s;
+}
+.segs button.on{background:var(--panel);color:var(--ink);box-shadow:0 1px 3px rgba(40,20,25,.14)}
+.stage-foot{margin-top:16px;text-align:center;font-size:12px;color:var(--muted);max-width:404px;line-height:1.7}
+
+/* 手机外壳 */
+.phone{
+  padding:10px;border-radius:52px;background:linear-gradient(160deg,#2a1e21,#0d0809 70%);
+  box-shadow:0 34px 70px -22px rgba(38,14,20,.45),0 0 0 1px rgba(255,255,255,.06) inset,0 0 0 1px rgba(255,255,255,.16);
+  position:relative;flex:0 0 auto;
+}
+.phone-screen{
+  width:390px;height:844px;border-radius:42px;overflow:hidden;position:relative;
+  display:flex;flex-direction:column;
+  background:var(--bg);color:var(--text);
+  /* 玫瑰粉（出厂主题）真实色值，由 Flutter ColorScheme.fromSeed(#D8C0C3) 导出 */
+  --bg:#fff8f7; --surface:#fff0f1; --soft:#f5e4e6;
+  --text:#22191b; --text2:#524345; --text3:#6b5b5d; --border:#d6c2c4;
+  --primary:#8d4959; --primary-soft:#ffd9df; --on-primary:#fffaf9;
+  --success:#759b0f; --success-ink:#526c0b;
+  --danger:#e94560; --danger-ink:#ba374d;
+  --warning:#f55723; --warning-ink:#ab3d19;
+}
+body[data-theme="dark"] .phone-screen{
+  --bg:#191113; --surface:#22191b; --soft:#312829;
+  --text:#efdee0; --text2:#d6c2c4; --text3:#bba7aa; --border:#524345;
+  --primary:#ffb1c0; --primary-soft:#713342; --on-primary:#3a1220;
+  --success:#759b0f; --success-ink:#a9c94a;
+  --danger:#e94560; --danger-ink:#eb5870;
+  --warning:#f55723; --warning-ink:#f7794f;
+}
+
+.phone-screen::after{
+  content:"";position:absolute;left:50%;bottom:7px;transform:translateX(-50%);
+  width:134px;height:5px;border-radius:999px;z-index:70;pointer-events:none;
+  background:color-mix(in srgb,var(--text) 30%,transparent);
+}
+/* 右栏 */
+.panel{position:sticky;top:76px;height:calc(100vh - 96px);display:flex;flex-direction:column;gap:14px}
+.panel-head h2{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}
+.panel-head p{margin:0;color:var(--muted);font-size:13px;line-height:1.7}
+.demobtn{
+  margin-top:12px;cursor:pointer;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));
+  background:var(--panel);color:var(--accent);font-weight:600;font-size:13px;
+  padding:8px 16px;border-radius:999px;
+}
+.demobtn:hover{background:var(--accent-soft)}
+.opts{display:flex;flex-direction:column;gap:10px;overflow-y:auto;padding:2px 4px 4px 2px;flex:1;scrollbar-width:thin}
+.opt{
+  text-align:left;cursor:pointer;border:1px solid var(--line);background:var(--panel);
+  border-radius:16px;padding:14px 16px;transition:.16s;position:relative;
+}
+.opt:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+.opt.on{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent);
+  background:color-mix(in srgb,var(--accent-soft) 55%,var(--panel));
+}
+.opt-top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.opt-id{
+  font:600 10.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.05em;
+  color:var(--muted);background:color-mix(in srgb,var(--ink) 7%,transparent);
+  padding:4px 6px;border-radius:6px;
+}
+.opt-name{font-weight:700;font-size:14.5px}
+.opt-tag{
+  margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+  padding:2px 8px;border-radius:999px;color:var(--accent);
+  border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));
+}
+.opt-desc{margin:0 0 8px;font-size:12.5px;color:var(--muted);line-height:1.65}
+.opt-points{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.opt-points li{font-size:12px;color:var(--muted);line-height:1.6;padding-left:14px;position:relative}
+.opt-points li::before{content:"";position:absolute;left:3px;top:8px;width:4px;height:4px;border-radius:50%;background:color-mix(in srgb,var(--ink) 35%,transparent)}
+.opt-points li.pro::before{background:var(--success,#759b0f)}
+.opt-points li.con::before{background:#e94560}
+.opt-foot{
+  margin-top:9px;padding-top:9px;border-top:1px dashed var(--line);
+  display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--muted);
+}
+.opt-foot code{font-size:11px}
+.opt-check{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--accent);opacity:0}
+.opt.on .opt-check{opacity:1}
+.outbox{border:1px solid var(--line);background:var(--panel);border-radius:16px;padding:12px 14px;flex:0 0 auto}
+.outbox-head{display:flex;align-items:center;margin-bottom:6px}
+.outbox-head b{font-size:12.5px}
+.outbox-head button{
+  margin-left:auto;cursor:pointer;border:1px solid var(--line);background:transparent;
+  font-size:11.5px;padding:3px 11px;border-radius:999px;color:var(--accent);font-weight:600;
+}
+.outbox-head button:hover{background:var(--accent-soft)}
+.outText{
+  margin:0;white-space:pre-wrap;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color:var(--ink);max-height:120px;overflow:auto;
+}
+.outbox-note{margin:6px 0 0;font-size:11px;color:var(--muted)}
+
+/* ==========================================================================
+   手机里的 App（1:1 复刻 Flutter 设计令牌：色值 / 12·14·16 字号 / 4·8·16 间距
+   / 8·12·16 圆角 / 超椭圆）
+   ========================================================================== */
+.phone-screen .card,.phone-screen .thumb,.phone-screen .pcard,.phone-screen .daycard{
+  border-radius:16px;
+}
+@supports (corner-shape:squircle){
+  .phone-screen .card,.phone-screen .daycard,.phone-screen .pcard,.phone-screen .vsheet{
+    border-radius:16px;corner-shape:squircle;
+  }
+  .phone-screen .thumb{border-radius:8px;corner-shape:squircle}
+  .phone-screen .pill{border-radius:999px;corner-shape:round}
+}
+
+.statusbar{
+  flex:0 0 54px;display:flex;align-items:center;padding:0 26px;position:relative;
+  font-size:14px;font-weight:600;letter-spacing:.01em;
+}
+.statusbar .sb-island{
+  position:absolute;left:50%;top:11px;transform:translateX(-50%);
+  width:104px;height:28px;border-radius:999px;background:#0b0708;
+}
+.statusbar .sb-icons{margin-left:auto;display:flex;align-items:center;gap:5px}
+.statusbar .sb-icons span{display:block;background:var(--text);border-radius:1px;opacity:.85}
+.sb-network{width:15px;height:9px;clip-path:polygon(0 100%,100% 0,100% 100%)}
+.sb-wifi{width:13px;height:9px;clip-path:polygon(50% 100%,0 30%,100% 30%)}
+.sb-batt{width:19px;height:9px;border-radius:2px;opacity:.85!important;background:transparent!important;border:1.4px solid var(--text);position:relative}
+.sb-batt::after{content:"";position:absolute;inset:1.5px;width:11px;background:var(--text);border-radius:1px}
+
+.subhd{flex:0 0 50px;display:flex;align-items:center;gap:8px;padding:0 12px 0 8px}
+.back{
+  width:40px;height:40px;border-radius:999px;border:0;background:transparent;cursor:pointer;
+  display:grid;place-items:center;color:var(--text);
+}
+.back:hover{background:var(--soft)}
+.subhd h1{font-size:20px;font-weight:600;margin:0;letter-spacing:0}
+.subhd .count{margin-left:auto;font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums}
+
+.filters{flex:0 0 auto;display:flex;gap:8px;padding:2px 16px 12px;overflow-x:auto;scrollbar-width:none}
+.filters::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto;border:1px solid var(--border);background:transparent;color:var(--text2);
+  font-size:13px;font-weight:500;padding:5px 13px;border-radius:8px;cursor:pointer;transition:.15s;
+}
+.chip.on{background:var(--primary-soft);border-color:transparent;color:var(--text);font-weight:600}
+.chip:not(.on):hover{background:var(--soft)}
+
+.scroll{flex:1 1 auto;overflow-y:auto;padding:0 16px 34px;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+
+/* 通用：卡片 / 行 / 图标块 / 状态 / 金额 */
+.card{background:var(--surface);border:1px solid var(--border);padding:16px}
+.pad{padding:16px}
+.wk{display:flex;align-items:center;margin:18px 0 4px}
+.wk:first-child{margin-top:2px}
+.wk span{font-size:12px;font-weight:600;color:var(--text3)}
+.wk b{margin-left:auto;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.pos-ink{color:var(--success-ink)}
+.neg-ink{color:var(--danger-ink)}
+
+.r{display:flex;align-items:flex-start;gap:8px;padding:10px 0}
+.ic{width:32px;height:32px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto}
+.ic.pos{background:color-mix(in srgb,var(--success) 12%,var(--surface));color:var(--success-ink)}
+.ic.neg{background:color-mix(in srgb,var(--danger) 12%,var(--surface));color:var(--danger-ink)}
+.ic svg{width:16px;height:16px}
+.rx{flex:1 1 auto;min-width:0}
+.nm{font-size:14px;font-weight:600;color:var(--text);line-height:1.4}
+.tm{font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums;line-height:1.5}
+.nt{font-size:12px;color:var(--text2);line-height:1.55;margin-top:2px}
+.thumb{
+  margin-top:6px;padding:0;border:0;background:transparent;cursor:pointer;display:block;
+  width:48px;height:48px;border-radius:8px;overflow:hidden;position:relative;
+}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb::after{content:"";position:absolute;inset:0;box-shadow:0 0 0 1px rgba(0,0,0,.06) inset;border-radius:8px}
+.thumb:active{transform:scale(.96)}
+.ops{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.opbtn{
+  border:1px solid transparent;background:transparent;color:var(--text3);cursor:pointer;
+  font-size:12px;font-weight:500;padding:3px 9px;border-radius:8px;transition:.15s;
+}
+.opbtn:hover{background:var(--soft);color:var(--text2)}
+.opbtn.danger{color:var(--text3);border-color:transparent}
+.opbtn.danger:hover{background:color-mix(in srgb,var(--danger) 10%,transparent);color:var(--danger-ink)}
+.rend{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.pill{
+  font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;line-height:1.5;
+  border:1px solid transparent;background:color-mix(in srgb,var(--success) 12%,var(--surface));
+  color:var(--text);border-color:color-mix(in srgb,var(--success) 40%,transparent);
+}
+.pill.wait{background:color-mix(in srgb,var(--warning) 12%,var(--surface));border-color:color-mix(in srgb,var(--warning) 40%,transparent)}
+.pill.bad{background:color-mix(in srgb,var(--danger) 12%,var(--surface));border-color:color-mix(in srgb,var(--danger) 40%,transparent)}
+.amt{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.amt.pos{color:var(--success-ink)}
+.amt.neg{color:var(--danger-ink)}
+.amt.rej{color:var(--text3);text-decoration:line-through}
+
+.more{
+  width:100%;margin-top:14px;border:1px solid var(--border);background:transparent;color:var(--text2);
+  font-size:13px;font-weight:500;padding:8px 0;border-radius:999px;cursor:pointer;
+}
+.more:hover{background:var(--soft)}
+
+/* ── 方案 B：日账单分组卡 ─────────────────────────────────── */
+.daycard{background:var(--surface);border:1px solid var(--border);margin-bottom:12px;overflow:hidden}
+.dayhead{display:flex;align-items:baseline;gap:8px;padding:11px 16px 8px;border-bottom:1px solid var(--border)}
+.dayhead b{font-size:13px;font-weight:700}
+.dayhead .dt{font-size:11.5px;color:var(--text3)}
+.dayhead .daytot{margin-left:auto;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.drow{display:flex;align-items:center;gap:12px;padding:11px 16px;position:relative}
+.drow + .drow::before{content:"";position:absolute;left:60px;right:16px;top:0;height:1px;background:color-mix(in srgb,var(--border) 75%,transparent)}
+.dico{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto}
+.dico.pos{background:color-mix(in srgb,var(--success) 13%,var(--surface));color:var(--success-ink)}
+.dico.neg{background:color-mix(in srgb,var(--danger) 12%,var(--surface));color:var(--danger-ink)}
+.dico svg{width:17px;height:17px}
+.dmid{flex:1 1 auto;min-width:0}
+.dname{font-size:14px;font-weight:600;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dmeta{font-size:11.5px;color:var(--text3);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dthumb{width:40px;height:40px;border-radius:8px;overflow:hidden;border:0;padding:0;background:transparent;cursor:pointer;flex:0 0 auto}
+.dthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.dright{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.dright .amt{font-size:15px}
+.dright .st{font-size:10.5px;color:var(--text3)}
+
+/* ── 方案 C：时间轴 ───────────────────────────────────────── */
+.tl{padding:2px 0 0}
+.tlweek{
+  display:flex;align-items:center;gap:8px;margin:14px 0 2px;padding-left:12px;
+  font-size:11.5px;font-weight:700;color:var(--text3);letter-spacing:.02em;
+}
+.tlweek::after{content:"";flex:1;height:1px;background:var(--border)}
+.tlweek:first-child{margin-top:0}
+.tldate{
+  display:flex;align-items:center;gap:8px;margin:15px 0 2px;padding-left:12px;
+  font-size:12px;font-weight:700;color:var(--text2);letter-spacing:.01em;
+}
+.tldate::after{content:"";flex:1;height:1px;background:var(--border)}
+.tldate:first-child{margin-top:0}
+.tlrow{display:flex;align-items:flex-start;gap:0;min-height:62px}
+.tltime{
+  flex:0 0 44px;text-align:right;padding-top:11px;font-size:11px;color:var(--text3);
+  font-variant-numeric:tabular-nums;line-height:1.3;
+}
+.tlrail{flex:0 0 34px;position:relative;align-self:stretch;display:flex;justify-content:center}
+.tlrail::before{content:"";position:absolute;top:0;bottom:-2px;width:2px;border-radius:2px;background:color-mix(in srgb,var(--border) 55%,var(--text3))}
+.tlrow:last-child .tlrail::before{display:none}
+.tlrail .node{
+  width:26px;height:26px;border-radius:999px;margin-top:8px;position:relative;z-index:1;
+  display:grid;place-items:center;background:var(--surface);
+  box-shadow:0 0 0 4px var(--bg);
+}
+.tlrail .node svg{width:14px;height:14px}
+.tlrail .node.pos{background:color-mix(in srgb,var(--success) 14%,var(--surface));color:var(--success-ink)}
+.tlrail .node.neg{background:color-mix(in srgb,var(--danger) 13%,var(--surface));color:var(--danger-ink)}
+.tlbody{flex:1 1 auto;min-width:0;padding:9px 0 12px}
+.tlname{font-size:14px;font-weight:600;line-height:1.35}
+.tlsub{font-size:11.5px;color:var(--text3);margin-top:1px}
+.tlnote{font-size:12px;color:var(--text2);margin-top:3px;line-height:1.5}
+.tlright{flex:0 0 auto;padding-top:10px;text-align:right}
+.tlright .amt{display:block;font-size:15px}
+.tlright .st{font-size:10.5px;color:var(--text3)}
+.tlphotos{display:flex;gap:6px;margin-top:6px}
+.tlphotos .thumb{width:38px;height:38px;margin:0}
+
+/* ── 方案 D：照片流 ───────────────────────────────────────── */
+.pgroup-title{display:flex;align-items:baseline;gap:6px;margin:16px 0 8px;font-size:12px;color:var(--text3)}
+.pgroup-title:first-child{margin-top:0}
+.pgroup-title b{font-size:12.5px;color:var(--text2);font-weight:700}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}
+.pcard{
+  position:relative;border:0;padding:0;background:var(--soft);cursor:pointer;text-align:left;
+  aspect-ratio:3/4;border-radius:16px;overflow:hidden;color:#fff;
+}
+.pcard img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.pcard .pveil{position:absolute;inset:0;background:linear-gradient(to top,rgba(10,6,7,.78) 0%,rgba(10,6,7,.34) 38%,rgba(10,6,7,0) 68%)}
+.pcard .pmeta{position:absolute;left:11px;right:11px;bottom:10px;display:flex;align-items:flex-end;gap:6px}
+.pcard .pname{font-size:12.5px;font-weight:600;line-height:1.35;text-shadow:0 1px 6px rgba(0,0,0,.5)}
+.pcard .pamt{margin-left:auto;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;text-shadow:0 1px 6px rgba(0,0,0,.5)}
+.pcard .pbadge{
+  position:absolute;top:9px;left:9px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:999px;
+  background:rgba(20,12,14,.5);backdrop-filter:blur(6px);color:#fff;
+}
+.pcard.plain{background:var(--surface);border:1px solid var(--border);color:var(--text);aspect-ratio:3/4;display:flex;flex-direction:column;justify-content:space-between;padding:12px}
+.pcard.plain .pico{width:32px;height:32px;border-radius:11px;display:grid;place-items:center}
+.pcard.plain .pico svg{width:16px;height:16px}
+.pcard.plain .pico.pos{background:color-mix(in srgb,var(--success) 13%,var(--surface));color:var(--success-ink)}
+.pcard.plain .pico.neg{background:color-mix(in srgb,var(--danger) 12%,var(--surface));color:var(--danger-ink)}
+.pcard.plain .pname{color:var(--text);text-shadow:none;font-size:12.5px}
+.pcard.plain .pmeta{position:static;align-items:flex-end}
+.pcard.plain .pamt{text-shadow:none;font-size:14px}
+.pcard.plain .ptime{font-size:10.5px;color:var(--text3)}
+
+/* ── 方案 E：紧凑账单表 ───────────────────────────────────── */
+.tbl{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.thead{display:flex;gap:10px;padding:9px 16px;font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.03em;border-bottom:1px solid var(--border)}
+.thead .c1{width:46px;flex:0 0 auto}
+.thead .c2{flex:1}
+.thead .c3{width:64px;text-align:right;flex:0 0 auto}
+.twrap{position:relative}
+.tday{display:flex;align-items:baseline;gap:7px;padding:11px 16px 7px;font-size:11px;color:var(--text3);background:color-mix(in srgb,var(--soft) 45%,var(--surface));border-bottom:1px solid var(--border)}
+.tday b{font-size:12px;font-weight:700;color:var(--text2)}
+.trow{
+  display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;position:relative;
+  border-bottom:1px solid color-mix(in srgb,var(--border) 65%,transparent);
+}
+.trow:last-child{border-bottom:0}
+.trow:hover{background:color-mix(in srgb,var(--soft) 55%,transparent)}
+.trow .c1{width:46px;flex:0 0 auto;font-size:11.5px;color:var(--text3);font-variant-numeric:tabular-nums}
+.trow .c2{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:7px}
+.trow .dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto}
+.dot.ok{background:var(--success)}
+.dot.wait{background:var(--warning)}
+.dot.bad{background:var(--danger)}
+.trow .tn{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow .mini{width:20px;height:20px;border-radius:5px;overflow:hidden;flex:0 0 auto}
+.trow .mini img{width:100%;height:100%;object-fit:cover;display:block}
+.trow .c3{width:64px;flex:0 0 auto;text-align:right;font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.tdetail{padding:0 16px 12px;margin-top:-2px}
+.tdetail .box{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:12px;color:var(--text2);line-height:1.6}
+.tdetail .row2{display:flex;gap:8px;margin-top:8px;align-items:center}
+.tdetail .thumb{width:44px;height:44px;margin:0}
+
+/* ==========================================================================
+   图片查看器（覆盖手机屏；每个方案一套）
+   ========================================================================== */
+.viewer{position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;opacity:0;transition:opacity .2s ease}
+.viewer.on{opacity:1}
+.vmask{position:absolute;inset:0;background:rgba(22,15,17,.62);backdrop-filter:blur(2px)}
+.vmask.soft{background:rgba(18,12,14,.86);backdrop-filter:blur(16px) saturate(120%)}
+.vmask.dim{background:rgba(14,9,11,.55)}
+.vclose{
+  width:36px;height:36px;border-radius:999px;border:0;cursor:pointer;display:grid;place-items:center;
+  background:rgba(255,255,255,.14);color:#fff;font-size:20px;line-height:1;backdrop-filter:blur(8px);
+}
+.vclose:hover{background:rgba(255,255,255,.24)}
+
+/* 0. 现状：居中浮层 */
+.vcenter{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;pointer-events:none}
+.vcenter .vimgwrap{
+  pointer-events:auto;max-width:358px;border-radius:16px;overflow:hidden;
+  box-shadow:0 24px 60px rgba(0,0,0,.45);transform:scale(.94);transition:transform .2s cubic-bezier(.2,.9,.25,1);
+}
+.viewer.on .vcenter .vimgwrap{transform:scale(1)}
+.vcenter img{display:block;width:100%;height:auto;object-fit:contain}
+.vhintbar{position:absolute;left:0;right:0;bottom:22px;text-align:center;font-size:11.5px;color:rgba(255,255,255,.72)}
+
+/* 1. 沉浸式全屏 */
+.vblack{position:absolute;inset:0;background:#080506;display:flex;flex-direction:column;color:#fff}
+.vstatus{flex:0 0 44px;display:flex;align-items:center;padding:0 26px;font-size:13px;font-weight:600}
+.vstatus .sb-icons span{background:#fff}
+.vstatus .vicons{width:68px;height:12px;display:block;margin-left:auto}
+.vtop{display:flex;align-items:center;gap:10px;padding:4px 16px 10px}
+.vdate{font-size:12.5px;color:rgba(255,255,255,.72);font-variant-numeric:tabular-nums}
+.vcount{margin-left:auto;font-size:12px;color:rgba(255,255,255,.55)}
+.vstage{flex:1 1 auto;position:relative;display:flex;align-items:center;justify-content:center;padding:0 6px;min-height:0}
+.vimg{max-width:100%;max-height:100%;object-fit:contain;display:block;transition:transform .22s ease;transform-origin:center}
+.vimg.zoom{transform:scale(2.1)}
+.vnav{
+  position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:999px;
+  border:0;cursor:pointer;background:rgba(255,255,255,.12);color:#fff;font-size:20px;
+  display:grid;place-items:center;backdrop-filter:blur(10px);
+}
+.vnav.prev{left:10px}.vnav.next{right:10px}
+.vnav:disabled{opacity:.25;cursor:default}
+.vinfo{flex:0 0 auto;padding:14px 20px 22px;background:linear-gradient(to top,rgba(18,10,12,.92),rgba(18,10,12,.55));border-top:1px solid rgba(255,255,255,.07)}
+.vname{font-size:16px;font-weight:700;display:flex;align-items:baseline;gap:10px}
+.vname .amt{margin-left:auto;color:#b9d36a}
+.vmeta{font-size:11.5px;color:rgba(255,255,255,.6);margin-top:2px}
+.vnote{font-size:12.5px;color:rgba(255,255,255,.82);margin-top:7px;line-height:1.55}
+.vacts{display:flex;gap:8px;margin-top:13px}
+.vbtn{
+  flex:1;cursor:pointer;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);
+  color:#fff;font-size:12.5px;font-weight:600;padding:8px 0;border-radius:999px;
+}
+.vbtn.danger{border-color:rgba(233,69,96,.45);background:rgba(233,69,96,.16);color:#ff9aab}
+.vhint{font-size:10.5px;color:rgba(255,255,255,.42);margin-top:8px;text-align:center}
+
+/* 2. 底部大卡 */
+.vsheet{
+  position:absolute;left:10px;right:10px;bottom:10px;border-radius:28px;overflow:hidden;
+  background:var(--surface);color:var(--text);box-shadow:0 -12px 50px rgba(0,0,0,.35);
+  transform:translateY(26px);transition:transform .26s cubic-bezier(.22,.9,.24,1);
+}
+.viewer.on .vsheet{transform:translateY(0)}
+.vgrab{height:18px;display:grid;place-items:center}
+.vgrab i{width:36px;height:4px;border-radius:999px;background:var(--border);display:block}
+.vtipbar{text-align:center;font-size:10.5px;color:var(--text3);padding:2px 0 8px}
+.vsheet img{width:100%;height:238px;object-fit:cover;object-position:center 42%;display:block;background:var(--soft)}
+.vsbody{padding:12px 16px 12px}
+.vsbody .vname{color:var(--text)}
+.vsbody .vname .amt{color:var(--success-ink)}
+.vsbody .vmeta{color:var(--text3)}
+.vsbody .vnote{color:var(--text2)}
+.vsbody .vacts{margin-top:12px}
+.vbtn.plain{background:transparent;border-color:var(--border);color:var(--text2)}
+.vbtn.plain.dangerb{border-color:color-mix(in srgb,var(--danger) 40%,var(--border));color:var(--danger-ink)}
+
+/* 3. 轻量灯箱 + 缩略条 */
+.vlb{position:absolute;inset:0;display:flex;flex-direction:column;padding:44px 14px 18px;color:#fff}
+.vlb .vtop{display:flex;align-items:center;padding:0 2px 10px}
+.vlb .vstage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:0}
+.vlb .vimg{max-height:100%;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.5)}
+.vlb .vthumbs{flex:0 0 auto;display:flex;gap:8px;justify-content:center;padding-top:16px}
+.vthumb{
+  width:46px;height:46px;border-radius:8px;overflow:hidden;padding:0;border:2px solid transparent;
+  cursor:pointer;background:transparent;opacity:.55;transition:.15s;
+}
+.vthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.vthumb.on{border-color:#fff;opacity:1}
+.vlb .vfoot{text-align:center;font-size:11px;color:rgba(255,255,255,.5);margin-top:10px}
+
+/* 响应式 */
+@media (max-width:1080px){
+  .studio{grid-template-columns:1fr;gap:30px;justify-items:center}
+  .panel{position:static;height:auto;max-height:none;width:100%;max-width:640px}
+  .opts{overflow:visible}
+}
+</style>
+</head>
+<body data-theme="light">
+
+<header class="topbar">
+  <div class="brand"><span class="dot"></span> SekaiNook · 设计选型</div>
+  <div class="top-actions">
+    <span class="remember" id="rememberTip">已记住你的选择</span>
+    <button class="tbtn" id="themeBtn">深色</button>
+    <button class="tbtn ghost" id="resetBtn">重置</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div class="kicker">HISTORY · 任务历史记录</div>
+    <h1>历史记录怎么排，照片怎么放大看</h1>
+    <p class="lead">
+      左边是<b>真能点的手机原型</b>：色值、字号、间距、圆角全部取自 App 的玫瑰粉主题
+      （<code>ColorScheme.fromSeed(#D8C0C3)</code> 导出的真实色板），所以选中的样子就是改完 Flutter 后的样子。
+      右边换方案，手机立刻跟着变；筛选项、缩略图、加载更多都能点。选好后把下面的摘要复制给我。
+    </p>
+    <div class="picks">
+      <span class="pick-chip" id="pickList"><i></i><span>列表：—</span></span>
+      <span class="pick-chip" id="pickImage"><i></i><span>图片：—</span></span>
+    </div>
+  </section>
+
+  <div class="studio">
+    <div class="stage">
+      <div class="segs" id="groupSeg">
+        <button data-group="list" class="on">列表排列</button>
+        <button data-group="image">图片查看</button>
+      </div>
+      <div class="phone"><div class="phone-screen" id="screen"></div></div>
+      <div class="stage-foot" id="stageFoot">
+        手机里可以真的操作：切换筛选、点缩略图打开大图、点「加载更多」。
+      </div>
+    </div>
+
+    <aside class="panel">
+      <div class="panel-head">
+        <h2 id="panelTitle">列表排列 · 5 个方案</h2>
+        <p id="panelSub">点一个方案，左边手机立刻换——选中的就是最终要落到 Flutter 的版本。</p>
+        <button class="demobtn" id="demoPhotoBtn">▶ 在手机里打开一张示例照片</button>
+      </div>
+      <div class="outbox">
+        <div class="outbox-head"><b>选型结果</b><button id="copyBtn">复制</button></div>
+        <pre class="outText" id="outText"></pre>
+        <p class="outbox-note">选择记在这台电脑的 localStorage，刷新不丢；点右上「重置」清空。</p>
+      </div>
+      <div class="opts" id="opts"></div>
+    </aside>
+  </div>
+</main>
+
+<script>
+/* ==========================================================================
+   1. 签到照片（内联 SVG 占位，模拟家长拍的打卡照）
+   ========================================================================== */
+const PHOTOS = (() => {
+  const defs = `<defs>
+    <radialGradient id="v" cx="50%" cy="42%" r="80%">
+      <stop offset=".5" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#2a1410" stop-opacity=".42"/>
+    </radialGradient>
+  </defs>`;
+  const scenes = {
+    clean: `
+      <rect width="360" height="480" fill="#f2e5d6"/>
+      <rect y="300" width="360" height="180" fill="#ddc0a2"/>
+      <rect x="38" y="58" width="124" height="152" rx="6" fill="#bcd8ea"/>
+      <rect x="38" y="58" width="124" height="152" rx="6" fill="none" stroke="#c9b39b" stroke-width="9"/>
+      <line x1="100" y1="58" x2="100" y2="210" stroke="#c9b39b" stroke-width="6"/>
+      <line x1="38" y1="134" x2="162" y2="134" stroke="#c9b39b" stroke-width="6"/>
+      <rect x="196" y="228" width="164" height="122" rx="10" fill="#c08b5c"/>
+      <rect x="202" y="196" width="148" height="70" rx="12" fill="#fdfaf6"/>
+      <rect x="202" y="196" width="148" height="24" rx="10" fill="#e9d9c8"/>
+      <rect x="212" y="242" width="58" height="34" rx="9" fill="#f4ede3"/>
+      <ellipse cx="150" cy="404" rx="128" ry="44" fill="#d9a39d" opacity=".85"/>
+      <circle cx="302" cy="122" r="26" fill="#f6d9a6" opacity=".85"/>
+      <rect x="298" y="150" width="8" height="62" fill="#b98356"/>
+      <rect x="282" y="210" width="40" height="10" rx="4" fill="#b98356"/>`,
+    dishes: `
+      <rect width="360" height="480" fill="#e9edef"/>
+      <rect y="212" width="360" height="268" fill="#cfd4d8"/>
+      <rect x="46" y="246" width="268" height="124" rx="16" fill="#8e979e"/>
+      <rect x="58" y="258" width="244" height="100" rx="12" fill="#6b757c"/>
+      <ellipse cx="180" cy="334" rx="84" ry="26" fill="#f7f4ee"/>
+      <path d="M108 306 q72 76 144 0" stroke="#e4dfd5" stroke-width="11" fill="none" stroke-linecap="round"/>
+      <circle cx="116" cy="298" r="15" fill="#fff" opacity=".92"/>
+      <circle cx="148" cy="284" r="10" fill="#fff" opacity=".85"/>
+      <circle cx="246" cy="300" r="13" fill="#fff" opacity=".9"/>
+      <path d="M180 216 v-56 q0 -22 -32 -22" stroke="#aab3b9" stroke-width="14" fill="none" stroke-linecap="round"/>`,
+    book: `
+      <rect width="360" height="480" fill="#e9dccb"/>
+      <rect y="286" width="360" height="194" fill="#c9895e"/>
+      <rect x="28" y="246" width="304" height="44" rx="6" fill="#efdfc9"/>
+      <path d="M56 342 q92 -26 152 -6 q60 -20 152 6 l0 86 q-92 -22 -152 0 q-60 -22 -152 -6 z" fill="#fdfbf7" stroke="#d8c4a8" stroke-width="3"/>
+      <line x1="208" y1="336" x2="208" y2="426" stroke="#d8c4a8" stroke-width="3"/>
+      <g stroke="#cbbcA9" stroke-width="4" stroke-linecap="round">
+        <line x1="82" y1="364" x2="176" y2="359"/>
+        <line x1="82" y1="382" x2="182" y2="377"/>
+        <line x1="82" y1="400" x2="166" y2="395"/>
+        <line x1="224" y1="359" x2="278" y2="364"/>
+        <line x1="224" y1="377" x2="286" y2="382"/>
+      </g>
+      <circle cx="308" cy="120" r="86" fill="#f8d9a0" opacity=".32"/>
+      <rect x="292" y="150" width="8" height="104" fill="#b98356"/>
+      <path d="M262 150 h64 l-8 26 h-48 z" fill="#e0b071"/>`,
+    homework: `
+      <rect width="360" height="480" fill="#efe7dc"/>
+      <rect y="300" width="360" height="180" fill="#d9b48f"/>
+      <rect x="56" y="226" width="238" height="158" rx="6" fill="#fffdf9" transform="rotate(-3 175 305)"/>
+      <g stroke="#a7b6c4" stroke-width="5" stroke-linecap="round" transform="rotate(-3 175 305)">
+        <line x1="82" y1="262" x2="262" y2="262"/>
+        <line x1="82" y1="288" x2="242" y2="288"/>
+        <line x1="82" y1="314" x2="268" y2="314"/>
+        <line x1="82" y1="340" x2="196" y2="340"/>
+      </g>
+      <g transform="rotate(26 268 262)">
+        <rect x="262" y="180" width="15" height="132" rx="6" fill="#e8b44a"/>
+        <path d="M262 312 l7.5 26 l7.5 -26 z" fill="#e8dcc6"/>
+        <path d="M266 330 l3.5 8 l3.5 -8 z" fill="#3a3336"/>
+      </g>
+      <rect x="84" y="392" width="58" height="26" rx="7" fill="#f2a9b2"/>
+      <rect x="84" y="392" width="22" height="26" rx="7" fill="#e8e2da"/>`,
+    award: `
+      <rect width="360" height="480" fill="#3d1c24"/>
+      <rect y="392" width="360" height="88" fill="#2a1218"/>
+      <circle cx="180" cy="228" r="128" fill="#f2b64a" opacity=".13"/>
+      <path d="M126 148 h108 v44 a54 54 0 0 1 -108 0 z" fill="#e8b24a"/>
+      <path d="M126 156 h-26 a38 38 0 0 0 34 40" stroke="#e8b24a" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <path d="M234 156 h26 a38 38 0 0 1 -34 40" stroke="#e8b24a" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <rect x="171" y="238" width="18" height="34" fill="#c9902f"/>
+      <rect x="128" y="270" width="104" height="26" rx="7" fill="#b57820"/>
+      <rect x="148" y="296" width="64" height="12" rx="6" fill="#8f5c14"/>
+      <g fill="#fff" opacity=".55">
+        <circle cx="74" cy="118" r="4"/><circle cx="292" cy="94" r="3"/>
+        <circle cx="316" cy="188" r="4"/><circle cx="52" cy="236" r="3"/>
+        <circle cx="240" cy="70" r="2.5"/>
+      </g>`
+  };
+  const out = {};
+  for (const k of Object.keys(scenes)) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="480" viewBox="0 0 360 480">${defs}${scenes[k]}<rect width="360" height="480" fill="url(#v)"/></svg>`;
+    out[k] = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+  return out;
+})();
+
+/* ==========================================================================
+   2. 数据（照 App 真实任务表 / 分值 / 状态）
+   ========================================================================== */
+const RECORDS = [
+  {id:'r1', dayKey:'2026-11-02', dayLabel:'今天', date:'11 月 2 日', dow:'周日', week:'本周', time:'09:12',
+   name:'整理房间', amount:10, status:'credited', note:'被子叠好了，书桌也收了', photo:'clean'},
+  {id:'r2', dayKey:'2026-11-01', dayLabel:'昨天', date:'11 月 1 日', dow:'周六', week:'本周', time:'21:40',
+   name:'按时完成作业', amount:20, status:'credited', note:'数学卷子写完，自己检查了一遍', photo:'homework'},
+  {id:'r3', dayKey:'2026-11-01', dayLabel:'昨天', date:'11 月 1 日', dow:'周六', week:'本周', time:'20:05',
+   name:'洗碗', amount:5, status:'credited', note:'', photo:'dishes'},
+  {id:'r4', dayKey:'2026-11-01', dayLabel:'昨天', date:'11 月 1 日', dow:'周六', week:'本周', time:'19:30',
+   name:'课外阅读30分钟', amount:10, status:'credited', note:'读了《夏洛的网》3 章', photo:'book'},
+  {id:'r5', dayKey:'2026-10-31', dayLabel:'前天', date:'10 月 31 日', dow:'周五', week:'本周', time:'22:10',
+   name:'未按时作息（晚于 22:00）', amount:-20, status:'credited', note:'', photo:null},
+  {id:'r6', dayKey:'2026-10-31', dayLabel:'前天', date:'10 月 31 日', dow:'周五', week:'本周', time:'21:05',
+   name:'看iPad 30分钟', amount:-10, status:'credited', note:'', photo:null},
+  {id:'r7', dayKey:'2026-10-31', dayLabel:'前天', date:'10 月 31 日', dow:'周五', week:'本周', time:'15:00',
+   name:'参加比赛', amount:20, status:'credited', note:'跳绳比赛拿了第三名', photo:'award'},
+  {id:'r8', dayKey:'2026-10-30', dayLabel:'10 月 30 日', date:'10 月 30 日', dow:'周四', week:'本周', time:'20:40',
+   name:'洗头', amount:5, status:'pending', note:'已经洗过头啦', photo:'clean'},
+  {id:'r9', dayKey:'2026-10-30', dayLabel:'10 月 30 日', date:'10 月 30 日', dow:'周四', week:'本周', time:'18:00',
+   name:'玩手机 30分钟', amount:-10, status:'pending', note:'', photo:null},
+  {id:'r10', dayKey:'2026-10-26', dayLabel:'10 月 26 日', date:'10 月 26 日', dow:'周日', week:'上周', time:'10:20',
+   name:'整理房间', amount:10, status:'rejected', note:'照片里看不出收拾后的样子', photo:'clean'},
+  {id:'r11', dayKey:'2026-10-26', dayLabel:'10 月 26 日', date:'10 月 26 日', dow:'周日', week:'上周', time:'09:00',
+   name:'获奖', amount:50, status:'credited', note:'英语口语比赛一等奖', photo:'award'},
+  {id:'r12', dayKey:'2026-10-22', dayLabel:'10 月 22 日', date:'10 月 22 日', dow:'周三', week:'上周', time:'12:00',
+   name:'工作一天', amount:500, status:'credited', note:'', photo:null},
+  {id:'r13', dayKey:'2026-10-21', dayLabel:'10 月 21 日', date:'10 月 21 日', dow:'周二', week:'上周', time:'20:15',
+   name:'按时睡觉', amount:10, status:'credited', note:'', photo:null}
+];
+const STATUS_LABEL = {credited:'已入账', pending:'待审批', rejected:'已驳回'};
+const STATUS_CLASS = {credited:'', pending:'wait', rejected:'bad'};
+const FILTERS = [
+  {id:'all', label:'全部'}, {id:'pending', label:'待审批'},
+  {id:'credited', label:'已入账'}, {id:'rejected', label:'已驳回'}
+];
+
+/* ==========================================================================
+   3. 方案清单
+   ========================================================================== */
+const LIST_OPTIONS = [
+  {
+    id:'baseline', code:'A0', name:'当前实现（对照）', tag:'现状',
+    desc:'周分组 + 一张大卡；左边 32 图标块，中间名称/时间/备注/缩略图/按钮全堆在一列，右边状态标签 + 金额。',
+    pros:['功能完整：撤回、驳回、删除都在行内'],
+    cons:['中间一列忽长忽短，行高不齐，扫金额要跨过一堆东西','周标题只有 12px 灰字，翻长列表时找不到锚点','家长端每行常驻「删除」按钮，视觉噪音大'],
+    flutter:'DecoratedSliver + SliverMainAxisGroup（family_dashboard_page.dart:1957）'
+  },
+  {
+    id:'day', code:'A1', name:'日账单分组卡', tag:'稳妥',
+    desc:'一天一张卡：卡头是日期 + 当日净额，卡内用 1px 分割线；右侧只留缩略图 40×40、状态小字和金额。像银行 App 的流水。',
+    pros:['行高固定，一屏 7~8 条，扫金额一眼到底','日期成了卡头，翻页有锚点；当日净额顺手可见'],
+    cons:['卡壳比现状多一层，太空的一天只有 1 行会显得散','需要后端/前端新增按天聚合'],
+    flutter:'records 按 _dayStart 分组 → 每天一个 AppCard + Column + Divider(height:1)'
+  },
+  {
+    id:'timeline', code:'A2', name:'时间轴 · 竖线节点', tag:'好看',
+    desc:'左侧一列时间（09:12），中间一条竖线串起圆点，右侧是任务、备注和照片。周分隔是竖线上的一条小标签。读起来像日记。',
+    pros:['时间流向最清楚，特别适合「孩子每天在做什么」','竖线把一周连成一条，翻列表有节奏'],
+    cons:['横向被时间列吃掉 44px，长任务名（「未按时作息（晚于 22:00）」）会截断','竖线要自己画，滚动时的连接处要处理'],
+    flutter:'Row(44 时间列 + 竖线 Container(width:1.5) + 内容)，节点用 26 圆点'
+  },
+  {
+    id:'photos', code:'A3', name:'照片流 · 媒体网格', tag:'孩子端',
+    desc:'有照片的打卡变成 2 列照片卡：上面盖一层底部渐变，压任务名和金额；没照片的记录用色块卡。按天分组，日期是 12px 小标题。',
+    pros:['打卡照片本身就是最好的记录，视觉最有温度','孩子刷自己的照片墙，比看数字积极'],
+    cons:['一屏只 4~6 条，金额/状态几乎扫不了，对账要切到别的方案','筛选「待审批」后网格会一块空一块实，不好看'],
+    flutter:'SliverGrid.builder(crossAxisCount:2, childAspectRatio:3/4) + AspectRatio'
+  },
+  {
+    id:'table', code:'A4', name:'紧凑账单 · 单行表', tag:'家长对账',
+    desc:'一行一条：日期、状态圆点、任务名、金额右对齐；点一行展开备注、照片和操作。信息密度最高。',
+    pros:['一屏 10 条以上，最容易和导出 CSV 的表格对上','备注/照片收进展开层，列表本身非常干净'],
+    cons:['孩子端会觉得冷，像记账软件','展开状态要维护，导出/筛选时要记住哪些行是开的'],
+    flutter:'ListView.builder + AnimatedSize 展开行；行 44~48 高'
+  }
+];
+
+const IMAGE_OPTIONS = [
+  {
+    id:'baseline', code:'B0', name:'当前实现（对照）', tag:'现状',
+    desc:'点缩略图 → 遮罩上浮出一张居中的图（最大 358×720），圆角 16，InteractiveViewer 双指缩放 4 倍；点四周遮罩关闭。',
+    pros:['轻、稳定，不挡列表太久'],
+    cons:['图被压进手机竖屏中间，四周留白大，照片不够「大」','看不到任务名/备注/金额，想确认是哪一条得退出去看','没有关闭按钮，只能靠点遮罩（新手经常点图不生效）'],
+    flutter:'showFloatingDialog + InteractiveViewer(maxScale:4)（family_dashboard_page.dart:2940）'
+  },
+  {
+    id:'immersive', code:'B1', name:'沉浸式全屏', tag:'推荐',
+    desc:'纯黑全屏：顶部日期 + 关闭，中间图片铺满（双击放大 2 倍，左右箭头/滑动切换当天其它照片），底部一条信息区：任务名、备注、时间、状态、金额 + 「保存」「删除」。',
+    pros:['照片最大，最有相册感；信息与操作都在底部，不用退回列表','当天多张照片可以直接左右翻，不用关掉再点'],
+    cons:['底部信息区吃掉 ~180px 高度','纯黑与 App 的暖色主题有割裂感，进入/退出要做出过渡'],
+    flutter:'Navigator.push 全屏页（黑色 scaffold）+ PageView + InteractiveViewer + 底部 SafeArea 信息条'
+  },
+  {
+    id:'sheet', code:'B2', name:'底部大卡', tag:'稳妥',
+    desc:'从底部升起一张大卡（顶角 28）：图 3:2 通栏，下面白底信息区，信息与操作都在卡里；点遮罩或下拉关闭，列表背景压暗但仍可见。',
+    pros:['保留页面上下文：知道自己从哪条记录点进来的','信息、金额、删除全在一张卡里，家长审照片顺手'],
+    cons:['图最多占 60% 高度，比全屏小','打开时有「遮罩 + 卡片」两段位移，动效要调好'],
+    flutter:'showModalBottomSheet(isScrollControlled:true) + DraggableScrollableSheet'
+  },
+  {
+    id:'lightbox', code:'B3', name:'轻量灯箱 + 缩略条', tag:'同天对比',
+    desc:'背景压暗并轻微模糊，图片居中带圆角；底部一排当天其它照片的缩略条和页码，点缩略图切换；点遮罩关闭。',
+    pros:['同一天多张照片对比最快（一排缩略图直接扫）','背景还看得见，不像全屏那样「跳出去」'],
+    cons:['竖屏上圆角图仍然偏小，沉浸感一般','缩略条占底部，图又更小一点'],
+    flutter:'Stack 遮罩 + BlurFilter（慎用，1.31.6 毛玻璃回滚过）+ 底部横向 ListView'
+  }
+];
+
+/* ==========================================================================
+   4. 状态（localStorage 记住）
+   ========================================================================== */
+const STORE_KEY = 'sekainook.historyDemo.v2';
+const DEFAULT_STATE = {list:'baseline', image:'baseline', group:'list', theme:'light', filter:'all', visible:8, expanded:{}};
+let state = loadState();
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return {...DEFAULT_STATE};
+    const parsed = JSON.parse(raw);
+    return {...DEFAULT_STATE, ...parsed, filter:'all', expanded:{}};
+  }catch(e){ return {...DEFAULT_STATE}; }
+}
+let saveTimer = null;
+function saveState(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify({list:state.list, image:state.image, group:state.group, theme:state.theme})); }catch(e){}
+  const tip = document.getElementById('rememberTip');
+  tip.classList.add('on');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>tip.classList.remove('on'), 1500);
+}
+
+/* ==========================================================================
+   5. 小工具
+   ========================================================================== */
+const esc = (s)=>String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = (n)=> n>=0 ? '+'+n : ''+n;
+const amountClass = (r)=> r.status==='rejected' ? 'rej' : (r.amount>=0 ? 'pos' : 'neg');
+const arrowUp = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>`;
+const arrowDown = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
+const chevronLeft = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>`;
+const checkIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>`;
+const iconFor = (r)=> r.amount>=0 ? arrowUp : arrowDown;
+const statusText = (r)=> STATUS_LABEL[r.status];
+const statusClass = (r)=> r.status==='rejected' ? 'bad' : (r.status==='pending' ? 'wait' : '');
+const thumbHTML = (r, cls='thumb')=> r.photo
+  ? `<button class="${cls}" data-photo="${r.id}" aria-label="看大图"><img src="${PHOTOS[r.photo]}" alt=""></button>`
+  : '';
+const photoCount = (dayKey)=> RECORDS.filter(r=>r.dayKey===dayKey && r.photo).length;
+
+/* ==========================================================================
+   6. 列表渲染（5 个方案）
+   ========================================================================== */
+function filteredRecords(){
+  return state.filter==='all' ? RECORDS : RECORDS.filter(r=>r.status===state.filter);
+}
+function groupBy(list, key){
+  const out = [];
+  for(const item of list){
+    const k = key(item);
+    let g = out[out.length-1];
+    if(!g || g.key!==k) out.push(g={key:k, items:[]});
+    g.items.push(item);
+  }
+  return out;
+}
+const sumAmount = (items)=> items.filter(r=>r.status!=='rejected').reduce((a,r)=>a+r.amount,0);
+
+function renderList(){
+  const all = filteredRecords();
+  const shown = all.slice(0, state.visible);
+  if(!shown.length){
+    return `<div class="card pad" style="text-align:center;padding:46px 16px;color:var(--text3);font-size:13px">
+      该状态下暂无记录<br><span style="font-size:12px">换个筛选条件看看</span></div>`;
+  }
+  if(state.list==='day') return renderDay(shown);
+  if(state.list==='timeline') return renderTimeline(shown);
+  if(state.list==='photos') return renderPhotos(shown);
+  if(state.list==='table') return renderTable(shown);
+  return renderBaseline(shown);
+}
+
+/* A0 现状 */
+function renderBaseline(shown){
+  const groups = groupBy(shown, r=>r.week);
+  let html = `<div class="card pad">`;
+  for(const g of groups){
+    // 周合计按整周算，不跟着「加载更多」的截断变
+    const total = sumAmount(RECORDS.filter(r=>r.week===g.key));
+    html += `<div class="wk"><span>${esc(g.key)}</span><b class="${total>=0?'pos-ink':'neg-ink'}">${fmt(total)}</b></div>`;
+    for(const r of g.items){
+      html += `<div class="r">
+        <div class="ic ${r.amount>=0?'pos':'neg'}">${iconFor(r)}</div>
+        <div class="rx">
+          <div class="nm">${esc(r.name)}</div>
+          <div class="tm">${esc(r.time)}</div>
+          ${r.note?`<div class="nt">${esc(r.note)}</div>`:''}
+          ${r.photo?thumbHTML(r):''}
+          <div class="ops">${opsFor(r)}</div>
+        </div>
+        <div class="rend">
+          <span class="pill ${statusClass(r)}">${statusText(r)}</span>
+          <span class="amt ${amountClass(r)}">${fmt(r.amount)}</span>
+        </div>
+      </div>`;
+    }
+  }
+  return html + `</div>`;
+}
+
+/* A1 日账单 */
+function renderDay(shown){
+  const days = groupBy(shown, r=>r.dayKey);
+  let html = '';
+  for(const d of days){
+    const r0 = d.items[0];
+    const total = sumAmount(RECORDS.filter(r=>r.dayKey===d.key));
+    html += `<div class="daycard">
+      <div class="dayhead"><b>${esc(r0.dayLabel)}</b><span class="dt">${esc(r0.dayLabel===r0.date ? r0.dow : r0.date)}</span>
+        <span class="daytot ${total>=0?'pos-ink':'neg-ink'}">${fmt(total)}</span></div>`;
+    for(const r of d.items){
+      html += `<div class="drow">
+        <div class="dico ${r.amount>=0?'pos':'neg'}">${iconFor(r)}</div>
+        <div class="dmid">
+          <div class="dname">${esc(r.name)}</div>
+          <div class="dmeta">${r.note ? esc(r.note) : '—'}</div>
+        </div>
+        ${r.photo?thumbHTML(r,'dthumb'):''}
+        <div class="dright">
+          <span class="amt ${amountClass(r)}">${fmt(r.amount)}</span>
+          <span class="st">${esc(r.time)} · ${statusText(r)}</span>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  return html;
+}
+
+/* A2 时间轴 */
+function renderTimeline(shown){
+  const days = groupBy(shown, r=>r.dayKey);
+  let html = `<div class="tl">`;
+  for(const d of days){
+    const r0 = d.items[0];
+    const label = r0.dayLabel===r0.date ? `${r0.date} · ${r0.dow}` : `${r0.dayLabel} · ${r0.date} · ${r0.dow}`;
+    html += `<div class="tldate">${esc(label)}</div>`;
+    const items = [...d.items].sort((a,b)=> a.time.localeCompare(b.time));
+    for(const r of items){
+      html += `<div class="tlrow">
+        <div class="tltime">${esc(r.time)}</div>
+        <div class="tlrail"><span class="node ${r.amount>=0?'pos':'neg'}">${iconFor(r)}</span></div>
+        <div class="tlbody">
+          <div class="tlname">${esc(r.name)}</div>
+          <div class="tlsub">${statusText(r)}${r.status==='rejected' ? ' · 孩子可重新提交' : ''}</div>
+          ${r.note?`<div class="tlnote">${esc(r.note)}</div>`:''}
+          ${r.photo?`<div class="tlphotos">${thumbHTML(r)}</div>`:''}
+        </div>
+        <div class="tlright">
+          <span class="amt ${amountClass(r)}">${fmt(r.amount)}</span>
+        </div>
+      </div>`;
+    }
+  }
+  return html + `</div>`;
+}
+
+/* A3 照片流 */
+function renderPhotos(shown){
+  const days = groupBy(shown, r=>r.dayKey);
+  let html = '';
+  for(const d of days){
+    const r0 = d.items[0];
+    html += `<div class="pgroup-title"><b>${esc(r0.dayLabel)}</b><span>${esc(r0.dayLabel===r0.date ? r0.dow : r0.date)}</span></div><div class="pgrid">`;
+    for(const r of d.items){
+      if(r.photo){
+        html += `<button class="pcard" data-photo="${r.id}">
+          <img src="${PHOTOS[r.photo]}" alt="">
+          <div class="pveil"></div>
+          <span class="pbadge">${statusText(r)}</span>
+          <div class="pmeta"><span class="pname">${esc(r.name)}</span><span class="pamt">${fmt(r.amount)}</span></div>
+        </button>`;
+      }else{
+        html += `<div class="pcard plain">
+          <div class="pico ${r.amount>=0?'pos':'neg'}">${iconFor(r)}</div>
+          <div>
+            <div class="pname">${esc(r.name)}</div>
+            <div class="ptime">${esc(r.time)} · ${statusText(r)}</div>
+          </div>
+          <div class="pmeta"><span class="pname" style="font-size:11px;color:var(--text3)">${r.photo?'':'无照片'}</span><span class="pamt ${amountClass(r)}">${fmt(r.amount)}</span></div>
+        </div>`;
+      }
+    }
+    html += `</div>`;
+  }
+  return html;
+}
+
+/* A4 紧凑表 */
+function renderTable(shown){
+  const days = groupBy(shown, r=>r.dayKey);
+  let html = `<div class="tbl">
+    <div class="thead"><span class="c1">时间</span><span class="c2">任务</span><span class="c3">金额</span></div>`;
+  for(const d of days){
+    const r0 = d.items[0];
+    html += `<div class="tday"><b>${esc(r0.dayLabel)}</b><span>${esc(r0.dayLabel===r0.date ? r0.dow : r0.date)}</span></div>`;
+    for(const r of d.items){
+      const open = !!state.expanded[r.id];
+      html += `<div class="trow" data-expand="${r.id}">
+        <span class="c1">${esc(r.time)}</span>
+        <span class="c2"><i class="dot ${statusClass(r)||'ok'}"></i><span class="tn">${esc(r.name)}</span>
+          ${r.photo?`<span class="mini"><img src="${PHOTOS[r.photo]}" alt=""></span>`:''}</span>
+        <span class="c3 ${amountClass(r)}" style="color:var(--${r.status==='rejected'?'text3':(r.amount>=0?'success-ink':'danger-ink')})">${fmt(r.amount)}</span>
+      </div>`;
+      if(open){
+        html += `<div class="tdetail"><div class="box">
+          <div>${statusText(r)}${r.note?'：'+esc(r.note):'（没有备注）'}</div>
+          <div class="row2">${r.photo?thumbHTML(r):''}${opsFor(r, true)}</div>
+        </div></div>`;
+      }
+    }
+  }
+  return html + `</div>`;
+}
+
+function opsFor(r, plain){
+  if(r.status==='pending') return `<button class="opbtn">撤回</button>`;
+  if(r.status==='rejected') return `<button class="opbtn">重新提交</button>`;
+  return `<button class="opbtn ${plain?'danger':'danger'}">删除</button>`;
+}
+
+/* 页脚：加载更多 */
+function moreHTML(){
+  const all = filteredRecords().length;
+  const rest = all - Math.min(all, state.visible);
+  return rest>0
+    ? `<button class="more" id="moreBtn">加载更多（还有 ${rest} 条）</button>`
+    : `<div style="text-align:center;font-size:11.5px;color:var(--text3);padding:16px 0 0">没有更多了</div>`;
+}
+
+/* ==========================================================================
+   7. 手机屏幕
+   ========================================================================== */
+const screenEl = document.getElementById('screen');
+function renderScreen(){
+  const all = filteredRecords();
+  const list = renderList();
+  screenEl.innerHTML = `
+    <div class="statusbar">
+      <span>9:41</span><span class="sb-island"></span>
+      <span class="sb-icons">
+        <span class="sb-network"></span><span class="sb-wifi"></span><span class="sb-batt"></span>
+      </span>
+    </div>
+    <div class="subhd">
+      <button class="back" id="backBtn">${chevronLeft}</button>
+      <h1>历史记录</h1>
+      <span class="count">${all.length} 条</span>
+    </div>
+    <div class="filters">
+      ${FILTERS.map(f=>`<button class="chip ${state.filter===f.id?'on':''}" data-filter="${f.id}">${f.label}</button>`).join('')}
+    </div>
+    <div class="scroll" id="scrollArea">${list}${moreHTML()}</div>`;
+}
+
+/* ==========================================================================
+   8. 图片查看器（4 个方案）
+   ========================================================================== */
+let viewer = null;
+function galleryOf(rec){
+  return RECORDS.filter(r=>r.dayKey===rec.dayKey && r.photo);
+}
+function openViewer(recId){
+  closeViewer(true);
+  const rec = RECORDS.find(r=>r.id===recId);
+  if(!rec || !rec.photo) return;
+  const gallery = galleryOf(rec);
+  const idx = Math.max(0, gallery.findIndex(r=>r.id===recId));
+  viewer = document.createElement('div');
+  viewer.className = 'viewer';
+  viewer.dataset.variant = state.image;
+  viewer.dataset.recId = recId;
+  viewer.innerHTML = viewerHTML(rec, gallery, idx);
+  screenEl.appendChild(viewer);
+  requestAnimationFrame(()=>viewer.classList.add('on'));
+  bindViewer(rec, gallery, idx);
+}
+function closeViewer(instant){
+  if(!viewer) return;
+  const v = viewer; viewer = null;
+  if(instant){ v.remove(); return; }
+  v.classList.remove('on');
+  setTimeout(()=>v.remove(), 220);
+}
+function viewerHTML(rec, gallery, idx){
+  const count = `${idx+1} / ${gallery.length}`;
+  const img = PHOTOS[rec.photo];
+  const amtCls = rec.amount>=0 ? 'pos' : 'neg';
+  const info = `
+    <div class="vname"><span>${esc(rec.name)}</span>
+      <span class="amt ${amtCls}" style="${state.image==='immersive'?'':'color:var(--'+(rec.amount>=0?'success-ink':'danger-ink')+')'}">${fmt(rec.amount)}</span></div>
+    <div class="vmeta">${esc(rec.date)} ${esc(rec.dow)} · ${esc(rec.time)} · ${statusText(rec)}</div>
+    ${rec.note?`<div class="vnote">${esc(rec.note)}</div>`:''}`;
+  if(state.image==='immersive'){
+    return `
+    <div class="vblack">
+      <div class="vstatus"><span>9:41</span>
+        <svg class="vicons" viewBox="0 0 68 12" fill="none" aria-hidden="true">
+          <rect x="0" y="8" width="3" height="4" rx="1" fill="#fff"/>
+          <rect x="5" y="5.5" width="3" height="6.5" rx="1" fill="#fff"/>
+          <rect x="10" y="3" width="3" height="9" rx="1" fill="#fff"/>
+          <rect x="15" y="0.5" width="3" height="11.5" rx="1" fill="#fff" opacity=".35"/>
+          <path d="M22.5 4.3a8 8 0 0 1 10.4 0" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M24.8 7.2a4.7 4.7 0 0 1 5.8 0" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="27.7" cy="10" r="1.1" fill="#fff"/>
+          <rect x="38.5" y="1" width="21" height="10" rx="3" stroke="#fff" stroke-opacity=".45" stroke-width="1"/>
+          <rect x="40.5" y="3" width="13" height="6" rx="1.6" fill="#fff"/>
+          <path d="M61.8 5v2.6" stroke="#fff" stroke-opacity=".45" stroke-width="1.6" stroke-linecap="round"/>
+        </svg></div>
+      <div class="vtop">
+        <button class="vclose" data-close>✕</button>
+        <span class="vdate">${esc(rec.date)} ${esc(rec.dow)}</span>
+        <span class="vcount">${count}</span>
+      </div>
+      <div class="vstage" data-stage>
+        <img class="vimg" src="${img}" alt="">
+        <button class="vnav prev" data-prev ${idx<=0?'disabled':''}>‹</button>
+        <button class="vnav next" data-next ${idx>=gallery.length-1?'disabled':''}>›</button>
+      </div>
+      <div class="vinfo">
+        ${info}
+        <div class="vacts"><button class="vbtn">保存到相册</button><button class="vbtn danger">删除</button></div>
+        <div class="vhint">双击放大 · 左右滑换图 · 下滑关闭</div>
+      </div>
+    </div>`;
+  }
+  if(state.image==='sheet'){
+    return `
+    <div class="vmask dim" data-close></div>
+    <div class="vsheet">
+      <div class="vgrab"><i></i></div>
+      <div class="vtipbar">点遮罩 / 下拉关闭</div>
+      <img src="${img}" alt="">
+      <div class="vsbody">
+        ${info}
+        <div class="vacts">
+          <button class="vbtn plain">保存</button>
+          <button class="vbtn plain dangerb">删除</button>
+        </div>
+
+      </div>
+    </div>`;
+  }
+  if(state.image==='lightbox'){
+    const thumbs = gallery.length>1
+      ? `<div class="vthumbs">${gallery.map((r,i)=>`<button class="vthumb ${i===idx?'on':''}" data-thumb="${i}"><img src="${PHOTOS[r.photo]}" alt=""></button>`).join('')}</div>`
+      : '';
+    return `
+    <div class="vmask soft" data-close></div>
+    <div class="vlb">
+      <div class="vtop"><span class="vdate">${esc(rec.date)} ${esc(rec.dow)}</span><span class="vcount">${count}</span><button class="vclose" data-close style="margin-left:auto">✕</button></div>
+      <div class="vstage"><img class="vimg" src="${img}" alt=""></div>
+      ${thumbs}
+      <div class="vfoot">${gallery.length>1?'点缩略图切换 · 点背景关闭':'点背景关闭'}</div>
+    </div>`;
+  }
+  /* baseline：居中浮层 */
+  return `
+    <div class="vmask" data-close></div>
+    <div class="vcenter"><div class="vimgwrap"><img src="${img}" alt=""></div></div>
+    <div class="vhintbar">点四周空白 / 按 Esc 关闭 · 真机支持双指缩放</div>`;
+}
+function bindViewer(rec, gallery, idx){
+  const v = viewer;
+  const closeBtns = v.querySelectorAll('[data-close]');
+  closeBtns.forEach(b=>b.addEventListener('click', (e)=>{ e.stopPropagation(); closeViewer(); }));
+  const stage = v.querySelector('[data-stage]');
+  if(stage){
+    stage.addEventListener('click', (e)=>{ if(e.target===stage) closeViewer(); });
+  }
+  const img = v.querySelector('.vimg');
+  if(img){
+    img.addEventListener('click', e=>e.stopPropagation());
+    img.addEventListener('dblclick', ()=>img.classList.toggle('zoom'));
+  }
+  const prev = v.querySelector('[data-prev]');
+  const next = v.querySelector('[data-next]');
+  if(prev) prev.addEventListener('click', ()=>openViewer(gallery[idx-1].id));
+  if(next) next.addEventListener('click', ()=>openViewer(gallery[idx+1].id));
+  v.querySelectorAll('[data-thumb]').forEach(t=>{
+    t.addEventListener('click', ()=>openViewer(gallery[+t.dataset.thumb].id));
+  });
+  /* 下滑关闭：沉浸式 / 底部卡 */
+  let startY = null;
+  const target = v.querySelector('.vstage') || v.querySelector('.vsheet');
+  if(target){
+    target.addEventListener('pointerdown', e=>{ startY = e.clientY; });
+    target.addEventListener('pointerup', e=>{
+      if(startY!=null && e.clientY - startY > 90){ startY=null; closeViewer(); }
+      startY = null;
+    });
+  }
+}
+
+/* ==========================================================================
+   9. 右栏方案卡
+   ========================================================================== */
+const optsEl = document.getElementById('opts');
+function renderOptions(){
+  const isList = state.group==='list';
+  const options = isList ? LIST_OPTIONS : IMAGE_OPTIONS;
+  const current = isList ? state.list : state.image;
+  optsEl.innerHTML = options.map(o=>{
+    const on = o.id===current;
+    return `<div class="opt ${on?'on':''}" data-opt="${o.id}" role="button" tabindex="0">
+      <div class="opt-top">
+        <span class="opt-id">${o.code}</span>
+        <span class="opt-name">${o.name}</span>
+        <span class="opt-tag">${o.tag}</span>
+      </div>
+      <p class="opt-desc">${o.desc}</p>
+      <ul class="opt-points">
+        ${o.pros.map(p=>`<li class="pro">${p}</li>`).join('')}
+        ${o.cons.map(p=>`<li class="con">${p}</li>`).join('')}
+      </ul>
+      <div class="opt-foot"><code>${o.flutter}</code><span class="opt-check">✓ 已选</span></div>
+    </div>`;
+  }).join('');
+  optsEl.querySelectorAll('[data-opt]').forEach(el=>{
+    el.addEventListener('click', ()=>selectOption(el.dataset.opt));
+    el.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectOption(el.dataset.opt); } });
+  });
+}
+function selectOption(id){
+  if(state.group==='list'){
+    state.list = id;
+    renderScreen();
+  }else{
+    state.image = id;
+    if(viewer){
+      const recId = viewer.dataset.recId;
+      if(recId) openViewer(recId);
+    }
+  }
+  renderOptions();
+  updatePicks();
+  saveState();
+}
+
+/* ==========================================================================
+   10. 顶部摘要 / 底部输出
+   ========================================================================== */
+function currentListOption(){ return LIST_OPTIONS.find(o=>o.id===state.list); }
+function currentImageOption(){ return IMAGE_OPTIONS.find(o=>o.id===state.image); }
+function updatePicks(){
+  const l = currentListOption(), im = currentImageOption();
+  document.getElementById('pickList').lastElementChild.textContent = `列表：${l.code} ${l.name}`;
+  document.getElementById('pickImage').lastElementChild.textContent = `图片：${im.code} ${im.name}`;
+  document.getElementById('outText').textContent =
+`列表排列：${l.code} ${l.name}
+图片查看：${im.code} ${im.name}
+Flutter 落点：
+  · ${l.flutter}
+  · ${im.flutter}
+备注：色值取 rose 主题（浅色 / 深色各一套），间距 4/8/16/24，圆角 8/12/16/28。`;
+  document.getElementById('panelTitle').textContent = state.group==='list' ? '列表排列 · 5 个方案' : '图片查看 · 4 个方案';
+  document.getElementById('panelSub').textContent = state.group==='list'
+    ? '点一个方案，左边手机立刻换——选中的就是最终要落到 Flutter 的版本。'
+    : '手机里点任意缩略图看效果；「▶ 打开示例照片」可以直接预览当前图片方案。';
+  document.getElementById('demoPhotoBtn').style.display = state.group==='image' ? '' : 'none';
+}
+
+/* ==========================================================================
+   11. 事件
+   ========================================================================== */
+document.getElementById('groupSeg').addEventListener('click', e=>{
+  const btn = e.target.closest('[data-group]');
+  if(!btn) return;
+  state.group = btn.dataset.group;
+  document.querySelectorAll('#groupSeg button').forEach(b=>b.classList.toggle('on', b.dataset.group===state.group));
+  renderOptions(); updatePicks(); saveState();
+});
+
+screenEl.addEventListener('click', e=>{
+  const filter = e.target.closest('[data-filter]');
+  if(filter){
+    state.filter = filter.dataset.filter;
+    state.visible = 8;
+    renderScreen();
+    return;
+  }
+  if(e.target.closest('#moreBtn')){
+    state.visible += 6;
+    renderScreen();
+    return;
+  }
+  const exp = e.target.closest('[data-expand]');
+  if(exp && state.list==='table'){
+    const id = exp.dataset.expand;
+    state.expanded[id] = !state.expanded[id];
+    renderScreen();
+    return;
+  }
+  const ph = e.target.closest('[data-photo]');
+  if(ph){
+    openViewer(ph.dataset.photo);
+    return;
+  }
+});
+
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') closeViewer();
+});
+
+document.getElementById('themeBtn').addEventListener('click', ()=>{
+  state.theme = state.theme==='light' ? 'dark' : 'light';
+  applyTheme(); saveState();
+});
+function applyTheme(){
+  document.body.dataset.theme = state.theme;
+  document.getElementById('themeBtn').textContent = state.theme==='light' ? '深色' : '浅色';
+  if(viewer && viewer.dataset.variant !== state.image) openViewer(viewer.dataset.recId);
+}
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  state = {...DEFAULT_STATE};
+  try{ localStorage.removeItem(STORE_KEY); }catch(e){}
+  document.getElementById('rememberTip').classList.remove('on');
+  document.querySelectorAll('#groupSeg button').forEach(b=>b.classList.toggle('on', b.dataset.group==='list'));
+  applyTheme(); renderOptions(); updatePicks(); renderScreen();
+});
+document.getElementById('demoPhotoBtn').addEventListener('click', ()=>{
+  const rec = RECORDS.find(r=>r.photo);
+  if(rec) openViewer(rec.id);
+});
+document.getElementById('copyBtn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('copyBtn');
+  const text = document.getElementById('outText').textContent;
+  try{
+    await navigator.clipboard.writeText(text);
+    btn.textContent = '已复制 ✓';
+  }catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); btn.textContent = '已复制 ✓'; }catch(_){ btn.textContent = '复制失败'; }
+    ta.remove();
+  }
+  setTimeout(()=>btn.textContent='复制', 1600);
+});
+
+/* ==========================================================================
+   12. 启动（支持 URL 参数直接定位方案，方便截图 / 分享）
+   ?list=day&image=immersive&group=image&theme=dark&filter=pending&open=r2
+   ========================================================================== */
+const QS = new URLSearchParams(location.search);
+if(LIST_OPTIONS.some(o=>o.id===QS.get('list'))) state.list = QS.get('list');
+if(IMAGE_OPTIONS.some(o=>o.id===QS.get('image'))) state.image = QS.get('image');
+if(QS.get('group')==='image') state.group = 'image';
+if(QS.get('theme')==='dark') state.theme = 'dark';
+if(FILTERS.some(f=>f.id===QS.get('filter'))) state.filter = QS.get('filter');
+
+if(state.group!=='list' && state.group!=='image') state.group='list';
+if([...QS.keys()].length) saveState();   /* 用链接打开时也顺带记住 */
+applyTheme();
+document.querySelectorAll('#groupSeg button').forEach(b=>b.classList.toggle('on', b.dataset.group===state.group));
+renderOptions();
+updatePicks();
+renderScreen();
+if(QS.get('open')) setTimeout(()=>openViewer(QS.get('open')), 80);
+</script>
+</body>
+</html>
